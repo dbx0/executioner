@@ -1,0 +1,23 @@
+id = "rustscan"
+name = "RustScan"
+description = "Fast port scanner written in Rust with optional nmap integration"
+category = "scanning"
+accepts = ["ip", "domain"]
+
+[params]
+port_range = { type = "string", placeholder = "1-65535", default = "1-65535", label = "Port range", description = "Port range (e.g. '1-65535')" }
+nmap_flags = { type = "string", placeholder = "-sV -sC", default = "", ui = "textarea", label = "Nmap flags", description = "Additional nmap flags passed after '--' (e.g. '-sV -sC')" }
+
+[command]
+program = "rustscan"
+args = ["-a", "{{ target.value }}", "-r", "{{ params.port_range }}", "{{ params.nmap_flags? }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "Open\\s+(?<host>\\S+):(?<port>\\d+)"
+
+[[emit.facts]]
+kind = "port"
+data = { port = "{{ record.port }}", host = "{{ record.host }}", protocol = "tcp", state = "open" }

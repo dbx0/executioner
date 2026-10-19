@@ -1,0 +1,19 @@
+id = "httpx"
+name = "httpx"
+description = "HTTP toolkit for probing web servers — extracts status, title, technologies"
+category = "web"
+accepts = ["url", "domain", "subdomain"]
+
+[command]
+program = "httpx"
+args = ["-u", "{{ target.value }}", "-json", "-silent", "-nc"]
+timeout_ms = 120000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$"
+
+[[emit.facts]]
+kind = "http_service"
+data = { url = "{{ record.url }}", status_code = "{{ record.status_code }}", title = "{{ record.title }}" }

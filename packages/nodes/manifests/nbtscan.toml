@@ -1,0 +1,19 @@
+id = "nbtscan"
+name = "Nbtscan"
+description = "Scans NetBIOS name information from target hosts"
+category = "network"
+accepts = ["ip", "domain", "cidr"]
+
+[command]
+program = "nbtscan"
+args = ["{{ target.value }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "(?:^|\\n)(?<ip>\\d+\\.\\d+\\.\\d+\\.\\d+)\\s+(?<netbios_name>\\S+)"
+
+[[emit.facts]]
+kind = "raw_output"
+data = { ip = "{{ record.ip }}", netbios_name = "{{ record.netbios_name }}" }

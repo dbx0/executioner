@@ -1,0 +1,24 @@
+id = "searchsploit"
+name = "Searchsploit"
+description = "Search the Exploit-DB database for known exploits and vulnerabilities"
+category = "network"
+accepts = ["domain", "subdomain", "ip", "cidr", "url"]
+
+[params]
+query = { type = "string", placeholder = "apache 2.4", required = true, label = "Query", description = "Search query (e.g. 'apache 2.4', 'OpenSSH 7.2')" }
+exact_title = { type = "bool", default = false, label = "Exact title", description = "Match exact title (--exact)" }
+cve = { type = "string", placeholder = "CVE-2021-44228", default = "", label = "CVE", description = "Search by CVE ID (e.g. 'CVE-2021-44228')" }
+
+[command]
+program = "searchsploit"
+args = ["--json", "{{ params.exact_title | --exact }}", "{{ params.cve | --cve }}", "{{ params.cve? }}", "{{ params.query }}"]
+timeout_ms = 300000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$.RESULTS_EXPLOIT"
+
+[[emit.facts]]
+kind = "vulnerability"
+data = { title = "{{ record.Title }}", type = "{{ record.Type }}", platform = "{{ record.Platform }}" }

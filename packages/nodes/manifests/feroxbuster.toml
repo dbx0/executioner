@@ -1,0 +1,30 @@
+id = "feroxbuster"
+name = "Feroxbuster"
+description = "Fast, recursive content discovery tool with JSON output"
+category = "web"
+accepts = ["url"]
+
+[params]
+wordlist = { type = "string", placeholder = "/usr/share/wordlists/dirb/common.txt", default = "/usr/share/wordlists/dirb/common.txt" }
+depth = { type = "number", placeholder = "2", default = 2 }
+threads = { type = "number", placeholder = "50", default = 50 }
+filter_status = { type = "string", placeholder = "404,403", default = "404" }
+
+[command]
+program = "feroxbuster"
+args = ["--url", "{{ target.value }}", "--wordlist", "{{ params.wordlist }}", "--depth", "{{ params.depth }}", "--threads", "{{ params.threads }}", "--json", "--output", "/dev/stdout", "--silent", "--no-state", "--filter-status", "{{ params.filter_status }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$"
+
+[[emit.targets]]
+kind = "url"
+value = "{{ record.url }}"
+parent = "input"
+
+[[emit.facts]]
+kind = "http_service"
+data = { url = "{{ record.url }}", status = "{{ record.status }}" }

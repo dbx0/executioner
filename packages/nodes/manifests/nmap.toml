@@ -1,0 +1,24 @@
+id = "nmap"
+name = "Nmap"
+description = "TCP port scan, parsed from normal output"
+category = "scan"
+accepts = ["ip", "domain"]
+
+[params]
+ports = { type = "string", placeholder = "1-1000, 80,443 or -", default = "1-1000", label = "Port range", description = "Port range (e.g. '1-1000', '80,443', '-')" }
+scan_type = { type = "enum", values = ["-sS", "-sV", "-sC", "-A", "-sT", "-sU"], default = "-sV", label = "Scan type", description = "Scan type flag" }
+timing = { type = "enum", values = ["-T0", "-T1", "-T2", "-T3", "-T4", "-T5"], default = "-T3", label = "Timing", description = "Timing template" }
+
+[command]
+program = "nmap"
+args = ["{{ params.scan_type }}", "{{ params.timing }}", "-p", "{{ params.ports }}", "{{ target.value }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "(?<port>\\d+)/tcp\\s+open\\s+(?<service>\\S+)"
+
+[[emit.facts]]
+kind = "port"
+data = { port = "{{ record.port }}", service = "{{ record.service }}", protocol = "tcp" }

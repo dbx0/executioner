@@ -1,0 +1,17 @@
+{
+  "name": "@exe/db",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "scripts": { "build": "tsc -b" },
+  "dependencies": {
+    "@exe/protocol": "workspace:*",
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": { "@types/better-sqlite3": "^9.6.0" }
+}

@@ -1,0 +1,22 @@
+id = "gowitness"
+name = "Gowitness"
+description = "Web screenshot tool — captures screenshots of web pages"
+category = "web"
+accepts = ["url", "domain", "subdomain", "ip"]
+
+[params]
+screenshot_path = { type = "string", placeholder = "/tmp/gowitness", default = "/tmp/gowitness", label = "Screenshot directory", description = "Directory to save screenshots" }
+
+[command]
+program = "gowitness"
+args = ["single", "--url", "{{ target.value }}", "--screenshot-path", "{{ params.screenshot_path }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "(?<screenshot_file>/[^\\s]+\\.(?:png|jpg|jpeg))"
+
+[[emit.facts]]
+kind = "screenshot"
+data = { path = "{{ record.screenshot_file }}" }

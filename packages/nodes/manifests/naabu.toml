@@ -1,0 +1,24 @@
+id = "naabu"
+name = "Naabu"
+description = "Fast port scanner by ProjectDiscovery with JSON output"
+category = "scanning"
+accepts = ["ip", "domain"]
+
+[params]
+ports = { type = "string", placeholder = "80,443,8080-8090", default = "", label = "Ports", description = "Comma-separated ports or ranges (e.g. '80,443,8080-8090')" }
+top_ports = { type = "number", placeholder = "100", default = 0, label = "Top ports", description = "Scan top N most common ports (e.g. 100, 1000)" }
+rate = { type = "number", placeholder = "1000", default = 1000, label = "Rate", description = "Packets per second rate limit" }
+
+[command]
+program = "naabu"
+args = ["-host", "{{ target.value }}", "-json", "-silent", "-rate", "{{ params.rate }}", "{{ params.ports | -p }}", "{{ params.ports? }}", "{{ params.top_ports | -top-ports }}", "{{ params.top_ports? }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$"
+
+[[emit.facts]]
+kind = "port"
+data = { port = "{{ record.port }}", host = "{{ record.ip }}", protocol = "{{ record.protocol }}", state = "open" }

@@ -1,0 +1,23 @@
+id = "dalfox"
+name = "Dalfox"
+description = "Fast XSS scanner and parameter analysis tool"
+category = "web"
+accepts = ["url"]
+
+[params]
+timeout = { type = "number", placeholder = "10", default = 10, label = "Timeout", description = "Request timeout in seconds" }
+skip_bav = { type = "bool", default = false, label = "Skip BAV", description = "Skip BAV (Blind XSS) analysis" }
+
+[command]
+program = "dalfox"
+args = ["url", "{{ target.value }}", "--format", "json", "--timeout", "{{ params.timeout }}", "{{ params.skip_bav | --skip-bav }}"]
+timeout_ms = 600000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$"
+
+[[emit.facts]]
+kind = "vulnerability"
+data = { type = "{{ record.type }}", param = "{{ record.param }}", payload = "{{ record.payload }}", severity = "{{ record.severity }}" }

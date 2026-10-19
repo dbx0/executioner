@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "./src", "outDir": "./dist" },
+  "references": [
+    { "path": "../protocol" },
+    { "path": "../graph" },
+    { "path": "../nodes" },
+    { "path": "../db" },
+    { "path": "../project" },
+    { "path": "../pty" }
+  ],
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
+}

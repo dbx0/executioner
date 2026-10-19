@@ -1,0 +1,24 @@
+id = "gobuster"
+name = "Gobuster"
+description = "Directory/file brute-forcer for web servers"
+category = "web"
+accepts = ["url"]
+
+[params]
+wordlist = { type = "string", placeholder = "/usr/share/wordlists/dirb/common.txt", default = "/usr/share/wordlists/dirb/common.txt", label = "Wordlist", description = "Path to wordlist file" }
+extensions = { type = "string", placeholder = "php,html,txt", default = "", label = "Extensions", description = "File extensions to search for (e.g. 'php,html,txt')" }
+threads = { type = "number", placeholder = "10", default = 10, label = "Threads", description = "Number of concurrent threads" }
+
+[command]
+program = "gobuster"
+args = ["dir", "-u", "{{ target.value }}", "-w", "{{ params.wordlist }}", "-o", "/dev/stdout", "{{ params.extensions | -x }}", "{{ params.extensions? }}", "-t", "{{ params.threads }}"]
+timeout_ms = 300000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "(?<path>/\\S*)\\s+\\(Status:\\s*(?<status>\\d+)\\)(?:\\s+\\[Size:\\s*(?<size>\\d+)\\])?"
+
+[[emit.facts]]
+kind = "raw_output"
+data = { path = "{{ record.path }}", status = "{{ record.status }}" }

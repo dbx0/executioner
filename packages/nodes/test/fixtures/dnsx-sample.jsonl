@@ -1,0 +1,2 @@
+{"host":"example.com","status_code":"NOERROR","a":["93.184.216.34"],"resolver":"1.1.1.1"}
+{"host":"www.example.com","status_code":"NOERROR","a":["93.184.216.35"]}

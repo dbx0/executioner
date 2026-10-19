@@ -1,0 +1,19 @@
+id = "nikto"
+name = "Nikto"
+description = "Web server scanner — checks for dangerous files, outdated software, and misconfigurations"
+category = "web"
+accepts = ["url", "domain"]
+
+[command]
+program = "nikto"
+args = ["-h", "{{ target.value }}", "-Format", "json", "-output", "/dev/stdout"]
+timeout_ms = 300000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$.vulnerabilities"
+
+[[emit.facts]]
+kind = "vulnerability"
+data = { id = "{{ record.id }}", msg = "{{ record.msg }}", url = "{{ record.url }}" }

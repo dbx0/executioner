@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/protocol" },
+    { "path": "./packages/nodes" },
+    { "path": "./packages/db" },
+    { "path": "./packages/project" },
+    { "path": "./packages/engine" }
+  ]
+}

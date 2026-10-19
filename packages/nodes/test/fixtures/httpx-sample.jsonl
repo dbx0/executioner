@@ -1,0 +1,2 @@
+{"url":"https://example.com","status_code":200,"title":"Example Domain","tech":["Nginx"],"webserver":"nginx"}
+{"url":"https://example.com/login","status_code":302,"title":"Login"}

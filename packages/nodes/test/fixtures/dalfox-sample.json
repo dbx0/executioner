@@ -1,0 +1,16 @@
+[
+  {
+    "type": "reflected",
+    "param": "q",
+    "payload": "<script>alert(1)</script>",
+    "evidence": "<input value=\"<script>alert(1)</script>\">",
+    "severity": "High"
+  },
+  {
+    "type": "reflected",
+    "param": "name",
+    "payload": "\"><img src=x onerror=alert(1)>",
+    "evidence": "<div>\"><img src=x onerror=alert(1)></div>",
+    "severity": "Medium"
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "report": {
+    "mtr": { "src": "workstation", "dst": "example.com", "tos": "0x0", "tests": 10 },
+    "hubs": [
+      { "count": 1, "host": "192.168.1.1", "Loss%": 0.0, "Snt": 10, "Last": 0.5, "Avg": 0.6, "Best": 0.4, "Wrst": 0.9, "StDev": 0.1 },
+      { "count": 2, "host": "10.0.0.1", "Loss%": 0.0, "Snt": 10, "Last": 5.2, "Avg": 5.4, "Best": 5.0, "Wrst": 6.1, "StDev": 0.3 }
+    ]
+  }
+}

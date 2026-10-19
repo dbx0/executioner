@@ -1,0 +1,3 @@
+www.example.com
+api.example.com
+mail.example.com

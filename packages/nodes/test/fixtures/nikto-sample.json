@@ -1,0 +1,10 @@
+{
+  "host": "example.com",
+  "ip": "93.184.216.34",
+  "port": "80",
+  "banner": "Apache/2.4.41",
+  "vulnerabilities": [
+    { "id": "999100", "method": "GET", "url": "/", "msg": "Retrieved x-powered-by header: PHP/7.4.3" },
+    { "id": "999200", "method": "GET", "url": "/admin/", "msg": "Admin login page found" }
+  ]
+}

@@ -1,0 +1,27 @@
+id = "katana"
+name = "Katana"
+description = "Fast web crawler by ProjectDiscovery with JavaScript crawling support"
+category = "web"
+accepts = ["url"]
+
+[params]
+depth = { type = "number", placeholder = "3", default = 3, label = "Depth", description = "Maximum crawl depth" }
+concurrency = { type = "number", placeholder = "10", default = 10, label = "Concurrency", description = "Number of concurrent crawlers" }
+js_crawl = { type = "bool", default = false, label = "JS crawl", description = "Enable JavaScript file crawling" }
+
+[command]
+program = "katana"
+# -jsonl, not -json: katana has never accepted -json, and passing it makes every
+# run exit 2 with "flag provided but not defined". Verified against katana v1.6.1.
+args = ["-u", "{{ target.value }}", "-jsonl", "-silent", "-depth", "{{ params.depth }}", "-concurrency", "{{ params.concurrency }}", "{{ params.js_crawl | -js-crawl }}"]
+timeout_ms = 300000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$"
+
+[[emit.targets]]
+kind = "url"
+value = "{{ record.request.endpoint }}"
+parent = "input"

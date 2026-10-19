@@ -1,0 +1,23 @@
+id = "amass"
+name = "Amass"
+description = "Enumerates subdomains using OWASP Amass and creates child targets"
+category = "recon"
+accepts = ["domain"]
+
+[params]
+mode = { type = "enum", values = ["passive", "active"], default = "passive", label = "Mode", description = "Enumeration mode" }
+
+[command]
+program = "amass"
+args = ["enum", "-d", "{{ target.value }}", "{{ params.mode == passive | -passive }}"]
+timeout_ms = 600000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "(?<host>[A-Za-z0-9][A-Za-z0-9_.-]*\\.[A-Za-z]{2,})"
+
+[[emit.targets]]
+kind = "subdomain"
+value = "{{ record.host }}"
+parent = "input"

@@ -1,0 +1,22 @@
+id = "sslscan"
+name = "SSLScan"
+description = "Analyzes TLS/SSL configuration, cipher suites, and certificate details"
+category = "network"
+accepts = ["ip", "domain"]
+
+[params]
+no_fallback = { type = "bool", default = false, label = "No fallback", description = "Disable TLS fallback probing" }
+
+[command]
+program = "sslscan"
+args = ["--xml=-", "{{ params.no_fallback | --no-fallback }}", "{{ target.value }}"]
+timeout_ms = 300000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "<cipher status=\"(?<status>[^\"]*)\" sslversion=\"(?<sslversion>[^\"]*)\" bits=\"(?<bits>[^\"]*)\" cipher=\"(?<cipher>[^\"]*)\""
+
+[[emit.facts]]
+kind = "raw_output"
+data = { status = "{{ record.status }}", sslversion = "{{ record.sslversion }}", bits = "{{ record.bits }}", cipher = "{{ record.cipher }}" }

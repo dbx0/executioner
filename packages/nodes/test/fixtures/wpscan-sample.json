@@ -1,0 +1,11 @@
+{
+  "target_url": "http://example.com/",
+  "effective_url": "http://example.com/",
+  "version": "5.7",
+  "plugins": {
+    "akismet": {
+      "slug": "akismet",
+      "version": "4.1.9"
+    }
+  }
+}

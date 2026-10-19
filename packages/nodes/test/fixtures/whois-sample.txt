@@ -1,0 +1,7 @@
+   Domain Name: EXAMPLE.COM
+   Registrar: MarkMonitor Inc.
+   Registrar WHOIS Server: whois.markmonitor.com
+   Creation Date: 1995-08-14T04:00:00Z
+   Registry Expiry Date: 2024-08-13T04:00:00Z
+   Name Server: A.IANA-SERVERS.NET
+   Name Server: B.IANA-SERVERS.NET

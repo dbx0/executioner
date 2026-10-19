@@ -1,0 +1,4 @@
+[
+  {"target":"https://example.com","http_status":200,"plugins":{"nginx":{"version":["1.18.0"]},"HTML5":{}}},
+  {"target":"https://example.com/app","http_status":403,"plugins":{"WordPress":{"version":["6.4"]}}}
+]

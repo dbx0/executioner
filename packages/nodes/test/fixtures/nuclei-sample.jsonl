@@ -1,0 +1,2 @@
+{"template-id":"tech-detect","info":{"name":"Wappalyzer Technology Detection","severity":"info"},"type":"http","host":"https://example.com","matched-at":"https://example.com"}
+{"template-id":"CVE-2021-44228","info":{"name":"Apache Log4j RCE","severity":"critical"},"type":"http","host":"https://example.com","matched-at":"https://example.com/api"}

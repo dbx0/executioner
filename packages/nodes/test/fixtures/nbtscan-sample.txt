@@ -1,0 +1,6 @@
+Doing NBT name scan for addresses from 192.168.1.0/24
+
+IP address       NetBIOS Name     Server    User             MAC address
+------------------------------------------------------------------------
+192.168.1.10     MYHOST           <server>  MYHOST           00:11:22:33:44:55
+192.168.1.20     OTHERHOST        <server>  OTHERHOST        aa:bb:cc:dd:ee:ff

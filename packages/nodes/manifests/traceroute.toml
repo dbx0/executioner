@@ -1,0 +1,23 @@
+id = "traceroute"
+name = "Traceroute"
+description = "Traces the network path to a target host, showing each hop"
+category = "network"
+accepts = ["ip", "domain"]
+
+[params]
+max_hops = { type = "number", placeholder = "30", default = 30, label = "Max hops", description = "Maximum number of hops (1-64)" }
+protocol = { type = "enum", values = ["udp", "icmp", "tcp"], default = "udp", label = "Protocol", description = "Protocol to use" }
+
+[command]
+program = "traceroute"
+args = ["{{ params.protocol == icmp | -I }}", "{{ params.protocol == tcp | -T }}", "-m", "{{ params.max_hops }}", "{{ target.value }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "(?:^|\\n)\\s*(?<hop>\\d+)\\s+(?<host>\\S+)\\s+\\((?<ip>[^)]+)\\)\\s+(?<rtt>[\\d.]+)\\s*ms"
+
+[[emit.facts]]
+kind = "raw_output"
+data = { hop = "{{ record.hop }}", host = "{{ record.host }}", ip = "{{ record.ip }}", rtt = "{{ record.rtt }}" }

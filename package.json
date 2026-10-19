@@ -1,0 +1,28 @@
+{
+  "name": "executioner",
+  "private": true,
+  "version": "0.0.1",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": "^24"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b && tsc -p tsconfig.test.json && tsc --noEmit -p apps/desktop/tsconfig.json",
+    "postinstall": "node scripts/fix-node-pty.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.4"
+  }
+}

@@ -1,0 +1,26 @@
+id = "netexec"
+name = "NetExec"
+description = "Swiss army knife for Windows/AD network enumeration (successor to CrackMapExec)"
+category = "network"
+accepts = ["ip", "domain", "cidr"]
+
+[params]
+protocol = { type = "enum", values = ["ftp", "ldap", "mssql", "rdp", "smb", "ssh", "vnc", "winrm", "wmi"], default = "smb", label = "Protocol", description = "Protocol to use" }
+username = { type = "string", placeholder = "administrator", default = "", label = "Username", description = "Username for authentication" }
+password = { type = "string", placeholder = "Passw0rd!", default = "", label = "Password", description = "Password for authentication" }
+local_auth = { type = "bool", default = false, label = "Local auth", description = "Authenticate using local account" }
+action = { type = "string", placeholder = "--shares", default = "", label = "Action", description = "Enumeration action (e.g. '--shares', '--users', '--sam')" }
+
+[command]
+program = "nxc"
+args = ["{{ params.protocol }}", "{{ target.value }}", "{{ params.username | -u }}", "{{ params.username? }}", "{{ params.password | -p }}", "{{ params.password? }}", "{{ params.local_auth | --local-auth }}", "{{ params.action? }}"]
+timeout_ms = 300000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "(?:^|\\n)(?<protocol>\\S+)\\s+(?<ip>\\S+)\\s+(?<port>\\d+)\\s+(?<hostname>\\S+)\\s+\\[\\*\\]\\s+(?<info>.*)"
+
+[[emit.facts]]
+kind = "raw_output"
+data = { protocol = "{{ record.protocol }}", ip = "{{ record.ip }}", port = "{{ record.port }}", hostname = "{{ record.hostname }}", info = "{{ record.info }}" }

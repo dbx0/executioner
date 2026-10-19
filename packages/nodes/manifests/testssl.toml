@@ -1,0 +1,22 @@
+id = "testssl"
+name = "testssl.sh"
+description = "Comprehensive TLS/SSL testing tool with JSON output"
+category = "network"
+accepts = ["ip", "domain"]
+
+[params]
+checks = { type = "string", placeholder = "--vulnerabilities --protocols", default = "", ui = "textarea", label = "Checks", description = "Specific checks to run (e.g. '--vulnerabilities --protocols')" }
+
+[command]
+program = "testssl"
+args = ["--jsonfile", "/dev/stdout", "{{ params.checks? }}", "{{ target.value }}"]
+timeout_ms = 600000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$"
+
+[[emit.facts]]
+kind = "vulnerability"
+data = { id = "{{ record.id }}", severity = "{{ record.severity }}", finding = "{{ record.finding }}" }

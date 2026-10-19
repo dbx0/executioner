@@ -1,0 +1,24 @@
+id = "whatweb"
+name = "WhatWeb"
+description = "Web technology fingerprinter — identifies CMS, frameworks, and server software"
+category = "web"
+accepts = ["url", "domain", "subdomain"]
+
+[command]
+program = "whatweb"
+# --quiet suppresses the brief colored plaintext whatweb otherwise interleaves
+# into stdout, which would corrupt the JSON log written to `-`.
+args = ["--quiet", "--log-json", "-", "{{ target.value }}"]
+timeout_ms = 120000
+
+# One record per detected plugin: `_key` is the technology name. (Version is
+# omitted from the mapping because facts with an unresolved field are skipped,
+# and many plugins report no version — so mapping it would drop those.)
+[emit]
+parser = "json"
+source = "stdout"
+records = "$[*].plugins.*"
+
+[[emit.facts]]
+kind = "technology"
+data = { name = "{{ record._key }}" }

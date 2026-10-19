@@ -1,0 +1,6 @@
+{
+  "RESULTS_EXPLOIT": [
+    { "Title": "Apache 2.4.49 - Path Traversal", "EDB-ID": "50383", "Date": "2021-10-06", "Type": "webapps", "Platform": "multiple", "Path": "exploits/multiple/webapps/50383.py" }
+  ],
+  "RESULTS_SHELLCODE": []
+}

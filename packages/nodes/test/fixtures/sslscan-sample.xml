@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document title="SSLScan Results">
+ <ssltest host="example.com" port="443">
+  <cipher status="preferred" sslversion="TLSv1.2" bits="256" cipher="ECDHE-RSA-AES256-GCM-SHA384" id="0xC030"/>
+  <cipher status="accepted" sslversion="TLSv1.2" bits="128" cipher="ECDHE-RSA-AES128-GCM-SHA256" id="0xC02F"/>
+ </ssltest>
+</document>

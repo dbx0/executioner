@@ -1,0 +1,9 @@
+Starting enum4linux v0.9.1
+Target ........... 192.168.1.5
+
+[+] Got domain/workgroup name: WORKGROUP
+
+Sharename       Type      Comment
+---------       ----      -------
+//192.168.1.5/print$    Disk      Printer Drivers
+//192.168.1.5/tmp       Disk      IPC Service

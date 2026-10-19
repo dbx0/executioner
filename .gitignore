@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+out/
+release/
+*.tsbuildinfo
+
+# Caches
+.vite/
+.eslintcache
+.cache/
+coverage/
+*.lcov
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local data
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Claude Code (shared agents stay tracked)
+.claude/*
+!.claude/agents/
+.claude/settings.local.json
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scratch
+/tmp/
+
+# README media
+docs/.readme-media/

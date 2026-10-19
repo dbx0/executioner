@@ -1,0 +1,4 @@
+[
+  { "id": "TLS1_3", "severity": "OK", "finding": "offered" },
+  { "id": "TLS1", "severity": "MEDIUM", "finding": "offered" }
+]

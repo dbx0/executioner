@@ -1,0 +1,18 @@
+id = "whois"
+name = "Whois"
+description = "WHOIS lookup, parsed into structured registration fields"
+category = "recon"
+accepts = ["domain", "ip"]
+
+[command]
+program = "whois"
+args = ["{{ target.value }}"]
+timeout_ms = 60000
+
+[emit]
+parser = "whois"
+source = "stdout"
+
+[[emit.facts]]
+kind = "whois"
+data = { registrar = "{{ record.registrar }}", registrant = "{{ record.registrant }}", created = "{{ record.creation_date }}", updated = "{{ record.updated_date }}", expires = "{{ record.expiry_date }}", name_servers = "{{ record.name_servers }}", status = "{{ record.domain_status }}", dnssec = "{{ record.dnssec }}", emails = "{{ record.emails }}" }

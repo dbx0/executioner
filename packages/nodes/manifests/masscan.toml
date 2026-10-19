@@ -1,0 +1,23 @@
+id = "masscan"
+name = "Masscan"
+description = "High-speed port scanner for large-scale network scanning"
+category = "scanning"
+accepts = ["ip", "domain", "cidr"]
+
+[params]
+ports = { type = "string", placeholder = "80,443,8000-8100", default = "1-1000" }
+rate = { type = "string", placeholder = "1000", default = "1000" }
+
+[command]
+program = "masscan"
+args = ["{{ target.value }}", "-p", "{{ params.ports }}", "--rate", "{{ params.rate }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "Discovered open port (?<port>\\d+)/(?<protocol>tcp|udp) on (?<host>.+)"
+
+[[emit.facts]]
+kind = "port"
+data = { port = "{{ record.port }}", protocol = "{{ record.protocol }}", host = "{{ record.host }}", state = "open" }

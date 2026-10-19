@@ -1,0 +1,23 @@
+id = "dig"
+name = "Dig"
+description = "Performs DNS lookups using dig with configurable record type"
+category = "recon"
+accepts = ["domain", "subdomain"]
+
+[params]
+record_type = { type = "enum", values = ["A", "AAAA", "MX", "NS", "TXT", "CNAME", "SOA", "PTR"], default = "A", label = "Record type", description = "DNS record type" }
+
+[command]
+program = "dig"
+args = ["+short", "{{ params.record_type }}", "{{ target.value }}"]
+timeout_ms = 30000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "(?<ip>\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3})"
+
+[[emit.targets]]
+kind = "ip"
+value = "{{ record.ip }}"
+parent = "input"

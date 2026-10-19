@@ -1,0 +1,646 @@
+/* Self-hosted Inter and JetBrains Mono (the Workbench theme's faces). */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Self-hosted Geist (copied from the design reference). */
+@font-face {
+  font-family: 'Geist';
+  src: url('./assets/fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: var(--app-font-family);
+  --font-mono: 'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas, 'Liberation Mono', monospace;
+  --radius: 0.625rem;
+
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent: #f5f5f5;
+  --accent-foreground: #171717;
+  --destructive: #e40014;
+  --destructive-foreground: #fcf3f3;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #a1a1a1;
+
+  --sidebar: #fafafa;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-accent: #f5f5f5;
+  --sidebar-accent-foreground: #171717;
+  --sidebar-border: #e5e5e5;
+
+  /* Reserved semantic accents: violet=AI, orange=needs-you, amber=activity, green=ok. */
+  --ai: #7c3aed;
+  --attention: #ea580c;
+  --activity: #f59e0b;
+  --status-success: #15803d;
+  --status-running: #d4a300;
+  --status-error: #dc2626;
+
+  --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
+
+  /* Grey ladder — see docs/superpowers/specs/2026-09-22-design-token-ladder-design.md.
+     Named by luminance step, not by role: the same step serves a hover here and
+     a selection there, and components read a rung instead of computing one. */
+  --surface-1: color-mix(in srgb, var(--foreground) 4%, var(--background));
+  --surface-2: color-mix(in srgb, var(--foreground) 6%, var(--background));
+  --surface-3: color-mix(in srgb, var(--foreground) 9%, var(--background));
+  --border-subtle: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --border-strong: color-mix(in srgb, var(--foreground) 24%, transparent);
+  --tertiary-foreground: color-mix(in srgb, var(--muted-foreground) 75%, var(--background));
+  --disabled-foreground: color-mix(in srgb, var(--muted-foreground) 50%, var(--background));
+
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #171717;
+  --card-foreground: #fafafa;
+  --popover: #171717;
+  --popover-foreground: #fafafa;
+  --primary: #e5e5e5;
+  --primary-foreground: #171717;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --muted: #262626;
+  --muted-foreground: #a1a1a1;
+  --accent: #404040;
+  --accent-foreground: #fafafa;
+  --destructive: #e5484d;
+  --destructive-foreground: #fdf3f3;
+  --border: rgb(255 255 255 / 0.08);
+  --input: rgb(255 255 255 / 0.15);
+  --ring: #737373;
+
+  --sidebar: #171717;
+  --sidebar-foreground: #fafafa;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: rgb(255 255 255 / 0.08);
+
+  --ai: #a78bfa;
+  --attention: #fb923c;
+  --activity: #fbbf24;
+  --status-success: #22c55e;
+  --status-running: #eab308;
+  --status-error: #f87171;
+
+  --shadow-floating: 0 10px 30px rgb(0 0 0 / 0.5);
+
+  /* Grey ladder — see docs/superpowers/specs/2026-09-22-design-token-ladder-design.md.
+     Named by luminance step, not by role: the same step serves a hover here and
+     a selection there, and components read a rung instead of computing one. */
+  --surface-1: color-mix(in srgb, var(--foreground) 4%, var(--background));
+  --surface-2: color-mix(in srgb, var(--foreground) 6%, var(--background));
+  --surface-3: color-mix(in srgb, var(--foreground) 9%, var(--background));
+  --border-subtle: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --border-strong: color-mix(in srgb, var(--foreground) 24%, transparent);
+  --tertiary-foreground: color-mix(in srgb, var(--muted-foreground) 75%, var(--background));
+  --disabled-foreground: color-mix(in srgb, var(--muted-foreground) 50%, var(--background));
+
+}
+
+/* ── Named themes ──────────────────────────────────────────────────────────
+   Each theme is one token block keyed by `data-theme`; light/dark keep their
+   `:root` / `.dark` blocks above. Dark-base themes also carry the `.dark` class
+   (see applyTheme) so `dark:` Tailwind variants and any un-overridden token fall
+   back sensibly; these blocks follow `.dark` so they win the specificity tie. */
+
+/* Paper — warm, low-glare off-white (light base). */
+[data-theme='paper'] {
+  --background: #f6f2e9;
+  --foreground: #3a352c;
+  --card: #fbf8f1;
+  --card-foreground: #3a352c;
+  --popover: #fbf8f1;
+  --popover-foreground: #3a352c;
+  --primary: #4a4234;
+  --primary-foreground: #f6f2e9;
+  --secondary: #ece5d6;
+  --secondary-foreground: #4a4234;
+  --muted: #ece5d6;
+  --muted-foreground: #8a7f6a;
+  --accent: #e7dfcd;
+  --accent-foreground: #4a4234;
+  --destructive: #b4402b;
+  --destructive-foreground: #fbf3ee;
+  --border: #ded4bf;
+  --input: #ded4bf;
+  --ring: #b9ac90;
+
+  --sidebar: #f1ece0;
+  --sidebar-foreground: #3a352c;
+  --sidebar-accent: #ece5d6;
+  --sidebar-accent-foreground: #4a4234;
+  --sidebar-border: #ded4bf;
+
+  --ai: #8a5a2b;
+  --attention: #b4531f;
+  --activity: #b8860b;
+  --status-success: #4d7c0f;
+  --status-running: #a16207;
+  --status-error: #b4402b;
+
+  /* Grey ladder — see docs/superpowers/specs/2026-09-22-design-token-ladder-design.md.
+     Named by luminance step, not by role: the same step serves a hover here and
+     a selection there, and components read a rung instead of computing one. */
+  --surface-1: color-mix(in srgb, var(--foreground) 4%, var(--background));
+  --surface-2: color-mix(in srgb, var(--foreground) 6%, var(--background));
+  --surface-3: color-mix(in srgb, var(--foreground) 9%, var(--background));
+  --border-subtle: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --border-strong: color-mix(in srgb, var(--foreground) 24%, transparent);
+  --tertiary-foreground: color-mix(in srgb, var(--muted-foreground) 75%, var(--background));
+  --disabled-foreground: color-mix(in srgb, var(--muted-foreground) 50%, var(--background));
+
+}
+
+/* Midnight — deep-blue low-light (dark base). */
+[data-theme='midnight'] {
+  --background: #0b1120;
+  --foreground: #e2e8f0;
+  --card: #111a2e;
+  --card-foreground: #e2e8f0;
+  --popover: #111a2e;
+  --popover-foreground: #e2e8f0;
+  --primary: #cbd5e1;
+  --primary-foreground: #0b1120;
+  --secondary: #1c2740;
+  --secondary-foreground: #e2e8f0;
+  --muted: #1c2740;
+  --muted-foreground: #8ea2c4;
+  --accent: #24304d;
+  --accent-foreground: #e2e8f0;
+  --destructive: #fb7185;
+  --destructive-foreground: #2a0b12;
+  --border: rgb(148 163 184 / 0.16);
+  --input: rgb(148 163 184 / 0.24);
+  --ring: #64748b;
+
+  --sidebar: #0d1526;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-accent: #1c2740;
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: rgb(148 163 184 / 0.16);
+
+  --ai: #a5b4fc;
+  --attention: #fbbf24;
+  --activity: #38bdf8;
+  --status-success: #34d399;
+  --status-running: #fbbf24;
+  --status-error: #fb7185;
+
+  /* Grey ladder — see docs/superpowers/specs/2026-09-22-design-token-ladder-design.md.
+     Named by luminance step, not by role: the same step serves a hover here and
+     a selection there, and components read a rung instead of computing one. */
+  --surface-1: color-mix(in srgb, var(--foreground) 4%, var(--background));
+  --surface-2: color-mix(in srgb, var(--foreground) 6%, var(--background));
+  --surface-3: color-mix(in srgb, var(--foreground) 9%, var(--background));
+  --border-subtle: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --border-strong: color-mix(in srgb, var(--foreground) 24%, transparent);
+  --tertiary-foreground: color-mix(in srgb, var(--muted-foreground) 75%, var(--background));
+  --disabled-foreground: color-mix(in srgb, var(--muted-foreground) 50%, var(--background));
+
+}
+
+/* High contrast — maximum-contrast dark for legibility (dark base). */
+[data-theme='high-contrast'] {
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #0a0a0a;
+  --card-foreground: #ffffff;
+  --popover: #0a0a0a;
+  --popover-foreground: #ffffff;
+  --primary: #ffffff;
+  --primary-foreground: #000000;
+  --secondary: #1a1a1a;
+  --secondary-foreground: #ffffff;
+  --muted: #1a1a1a;
+  --muted-foreground: #d4d4d4;
+  --accent: #2a2a2a;
+  --accent-foreground: #ffffff;
+  --destructive: #ff5b5b;
+  --destructive-foreground: #000000;
+  --border: rgb(255 255 255 / 0.32);
+  --input: rgb(255 255 255 / 0.4);
+  --ring: #ffffff;
+
+  --sidebar: #000000;
+  --sidebar-foreground: #ffffff;
+  --sidebar-accent: #1a1a1a;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.32);
+
+  --ai: #c4b5fd;
+  --attention: #ffb020;
+  --activity: #ffd000;
+  --status-success: #3ade7f;
+  --status-running: #ffd000;
+  --status-error: #ff5b5b;
+
+  /* Grey ladder — see docs/superpowers/specs/2026-09-22-design-token-ladder-design.md.
+     Named by luminance step, not by role: the same step serves a hover here and
+     a selection there, and components read a rung instead of computing one. */
+  --surface-1: color-mix(in srgb, var(--foreground) 4%, var(--background));
+  --surface-2: color-mix(in srgb, var(--foreground) 6%, var(--background));
+  --surface-3: color-mix(in srgb, var(--foreground) 9%, var(--background));
+  --border-subtle: color-mix(in srgb, var(--foreground) 12%, transparent);
+  --border-strong: color-mix(in srgb, var(--foreground) 24%, transparent);
+  --tertiary-foreground: color-mix(in srgb, var(--muted-foreground) 75%, var(--background));
+  --disabled-foreground: color-mix(in srgb, var(--muted-foreground) 50%, var(--background));
+
+}
+
+/* Workbench — dense near-black technical workbench (dark base). Ported from the
+   "TALOS-inspired Dark Technical Workbench" spec: hierarchy comes from tiny
+   luminance steps between near-black surfaces and 1px borders, never from
+   colour, and the semantic accents stay a small fraction of the surface. The
+   radius and mono stack are tightened here (not globally) for the compact,
+   IDE-like feel the spec asks for. */
+[data-theme='workbench'] {
+  /* Compact geometry: 6px controls instead of the app-wide 10px. */
+  --radius: 0.375rem;
+  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo,
+    Consolas, 'Liberation Mono', monospace;
+
+  --background: #050505;
+  --foreground: #e7e7e7;
+  --card: #101010;
+  --card-foreground: #e7e7e7;
+  --popover: #151515;
+  --popover-foreground: #e7e7e7;
+  --primary: #e7e7e7;
+  --primary-foreground: #080808;
+  --secondary: #151515;
+  --secondary-foreground: #d0d0d0;
+  --muted: #151515;
+  --muted-foreground: #a0a0a0;
+  --accent: #1a1a1a;
+  --accent-foreground: #e7e7e7;
+  --destructive: #e06a6a;
+  --destructive-foreground: #0b0b0b;
+  --border: #242424;
+  --input: #242424;
+  /* Focus is a neutral ring, not a bright blue one (spec §10). */
+  --ring: #454545;
+
+  --sidebar: #080808;
+  --sidebar-foreground: #e7e7e7;
+  --sidebar-accent: #1a1a1a;
+  --sidebar-accent-foreground: #e7e7e7;
+  --sidebar-border: #1b1b1b;
+
+  --ai: #9b7cff;
+  --attention: #e5b94b;
+  --activity: #55c7d9;
+  --status-success: #5bc78a;
+  --status-running: #e5b94b;
+  --status-error: #e06a6a;
+
+  /* Elevation is carried by surface contrast and borders; the shadow is faint. */
+  --shadow-floating: 0 8px 24px rgb(0 0 0 / 0.35);
+
+  /* Grey ladder — the spec's literal bg-surface-2 / bg-elevated / bg-elevated-2,
+     border-subtle / border-strong, and text-tertiary / text-disabled. */
+  --surface-1: #101010;
+  --surface-2: #151515;
+  --surface-3: #1a1a1a;
+  --border-subtle: #1b1b1b;
+  --border-strong: #303030;
+  --tertiary-foreground: #686868;
+  --disabled-foreground: #404040;
+
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body,
+  #root {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    letter-spacing: 0.01em;
+    background: var(--background);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Kill transitions during theme flips so nothing staggers. */
+  .theme-transition-disabled * {
+    transition: none !important;
+  }
+}
+
+@layer components {
+  /* The selection treatment: mix the foreground into the surface
+     and add a hairline inset ring, instead of a flat accent fill that vanishes
+     in light mode. */
+  .selected-surface {
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px var(--border-subtle);
+  }
+  .app-drag {
+    -webkit-app-region: drag;
+  }
+  .app-no-drag {
+    -webkit-app-region: no-drag;
+  }
+}
+
+/* VS Code-style thin scrollbars that fade in on hover. */
+.scrollbar-sleek {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-sleek:hover {
+  scrollbar-color: var(--border-strong) transparent;
+}
+.scrollbar-sleek::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scrollbar-sleek::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+.scrollbar-sleek:hover::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  background-clip: padding-box;
+}
+.scrollbar-sleek::-webkit-scrollbar-thumb:hover {
+  background: var(--tertiary-foreground);
+  background-clip: padding-box;
+}
+/* Textareas: Chromium's default resize grip is a heavy dotted triangle that
+   reads as a rendering artefact next to everything else here. Draw a quieter
+   one — two thin diagonal strokes in the app's own foreground colour. The glyph
+   is small; the grab area is the whole corner the browser gives it. */
+.textarea-sleek::-webkit-resizer {
+  background: transparent;
+  background-image: linear-gradient(
+    135deg,
+    transparent 0 52%,
+    var(--border-strong) 52% 58%,
+    transparent 58% 72%,
+    var(--border-strong) 72% 78%,
+    transparent 78%
+  );
+  background-size: 9px 9px;
+  background-position: bottom right;
+  background-repeat: no-repeat;
+}
+.textarea-sleek:hover::-webkit-resizer {
+  background-image: linear-gradient(
+    135deg,
+    transparent 0 52%,
+    var(--tertiary-foreground) 52% 58%,
+    transparent 58% 72%,
+    var(--tertiary-foreground) 72% 78%,
+    transparent 78%
+  );
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* xterm ships an always-on viewport scrollbar that looks like an empty gutter
+   when the terminal has little output. Only show it on real overflow, styled
+   to match the app's sleek scrollbar. */
+.xterm .xterm-viewport {
+  overflow-y: auto !important;
+  scrollbar-width: thin;
+}
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 9px;
+}
+.xterm .xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--tertiary-foreground);
+  background-clip: padding-box;
+}
+
+/* Rendered markdown (.md/.markdown files in the workspace, and a finding's
+   description and details). Near-monochrome, token-driven so it tracks the
+   app's light/dark themes. */
+.markdown-body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--foreground);
+  word-wrap: break-word;
+}
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+.markdown-body > :last-child {
+  margin-bottom: 0;
+}
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin: 1.6em 0 0.6em;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--foreground);
+}
+.markdown-body h1 {
+  font-size: 1.7em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+.markdown-body h2 {
+  font-size: 1.4em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
+}
+.markdown-body h3 {
+  font-size: 1.2em;
+}
+.markdown-body h4 {
+  font-size: 1.05em;
+}
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: 0.95em;
+  color: var(--muted-foreground);
+}
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body blockquote,
+.markdown-body table,
+.markdown-body pre {
+  margin: 0 0 1em;
+}
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.6em;
+}
+.markdown-body li {
+  margin: 0.25em 0;
+}
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin: 0.25em 0;
+}
+.markdown-body li::marker {
+  color: var(--muted-foreground);
+}
+.markdown-body a {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--tertiary-foreground);
+}
+.markdown-body a:hover {
+  text-decoration-color: var(--foreground);
+}
+.markdown-body strong {
+  font-weight: 600;
+  color: var(--foreground);
+}
+.markdown-body em {
+  font-style: italic;
+}
+.markdown-body code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  background: var(--surface-3);
+}
+.markdown-body pre {
+  padding: 0.85em 1em;
+  border-radius: 8px;
+  overflow-x: auto;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+  font-size: 0.85em;
+  line-height: 1.6;
+}
+.markdown-body blockquote {
+  padding: 0.1em 1em;
+  color: var(--muted-foreground);
+  border-left: 3px solid var(--border);
+}
+.markdown-body blockquote > :last-child {
+  margin-bottom: 0;
+}
+.markdown-body hr {
+  height: 1px;
+  margin: 1.8em 0;
+  border: 0;
+  background: var(--border);
+}
+.markdown-body table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+.markdown-body th,
+.markdown-body td {
+  padding: 0.45em 0.85em;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.markdown-body th {
+  font-weight: 600;
+  background: var(--surface-1);
+}
+.markdown-body img {
+  max-width: 100%;
+  border-radius: 6px;
+}
+.markdown-body input[type='checkbox'] {
+  margin-right: 0.5em;
+  vertical-align: middle;
+}
+.markdown-body ul:has(> li > input[type='checkbox']) {
+  list-style: none;
+  padding-left: 0.5em;
+}
+
+/* Syntax highlighting (rehype-highlight → hljs classes), tinted with mid-tone
+   accents that read on both the light and dark markdown surfaces. */
+.markdown-body .hljs-comment,
+.markdown-body .hljs-quote {
+  color: var(--tertiary-foreground);
+  font-style: italic;
+}
+.markdown-body .hljs-keyword,
+.markdown-body .hljs-selector-tag,
+.markdown-body .hljs-literal,
+.markdown-body .hljs-type {
+  color: #b366d9;
+}
+.markdown-body .hljs-string,
+.markdown-body .hljs-attr,
+.markdown-body .hljs-regexp,
+.markdown-body .hljs-addition {
+  color: #4a9e5f;
+}
+.markdown-body .hljs-number,
+.markdown-body .hljs-meta {
+  color: #c98a3e;
+}
+.markdown-body .hljs-title,
+.markdown-body .hljs-section {
+  color: #4a90d9;
+}
+.markdown-body .hljs-built_in,
+.markdown-body .hljs-name,
+.markdown-body .hljs-attribute {
+  color: #c0902e;
+}
+.markdown-body .hljs-deletion {
+  color: var(--status-error);
+}

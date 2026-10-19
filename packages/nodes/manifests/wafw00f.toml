@@ -1,0 +1,19 @@
+id = "wafw00f"
+name = "wafw00f"
+description = "Detects Web Application Firewalls protecting a target"
+category = "recon"
+accepts = ["url", "domain"]
+
+[command]
+program = "wafw00f"
+args = ["{{ target.value }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "is behind\\s+(?<waf>[^\\n]+)"
+
+[[emit.facts]]
+kind = "raw_output"
+data = { waf = "{{ record.waf }}", detected = "true" }

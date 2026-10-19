@@ -1,0 +1,117 @@
+# electron-builder packaging config for Executioner.
+#
+# Icons are generated from build/icon.png (the buildResources dir, default
+# "build/") — electron-builder derives .icns (macOS), .ico (Windows) and the
+# Linux PNG set from that single source, so the packaged bundle carries the
+# brand logo everywhere the OS shows it (dock, Finder, taskbar, installer).
+#
+# Releases are built per OS on native GitHub Actions runners (see
+# .github/workflows/release.yml): the native modules below are compiled for the
+# host platform/arch, so cross-building from one OS is not supported.
+appId: sh.executioner.app
+productName: Executioner
+copyright: Copyright © 2026 dbx0
+
+directories:
+  buildResources: build
+  output: release
+
+# One predictable name per OS/arch so the matrix jobs never collide when their
+# artifacts land in the same GitHub release.
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+# The app is the electron-vite output plus its production node_modules.
+# electron-builder auto-includes the production dependency tree, which carries
+# @exe/engine and its full transitive tree (better-sqlite3, node-pty via
+# @exe/pty, hono, ws, zod, the @exe/* libs). The engine boots from
+# node_modules/@exe/engine inside the app bundle — see src/main/index.ts.
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+
+# Ship the app unpacked (no asar). The native modules (better-sqlite3's
+# better_sqlite3.node, node-pty's pty.node + its extension-less `spawn-helper`
+# executable) must live on disk as real files so the OS loader and posix_spawn
+# can reach them — a .node cannot be dlopen'd from inside an asar and an asar's
+# unpack filter cannot resolve pnpm's out-of-tree symlinked workspace packages
+# (@exe/*). The engine boots from node_modules/@exe/engine inside
+# Resources/app — see src/main/index.ts.
+asar: false
+
+# Native modules: better-sqlite3 (13+) and node-pty are both Node-API addons,
+# so the binaries in node_modules load under Electron's ABI as they are and the
+# blanket rebuild of every native module is turned off. scripts/before-pack.cjs
+# only checks that a binary exists for the target platform/arch.
+npmRebuild: false
+beforePack: scripts/before-pack.cjs
+
+# Ship the brand logo alongside the app (the engine ships inside node_modules,
+# so no separate engine extraResource is needed).
+extraResources:
+  - from: resources/logo.png
+    to: logo.png
+  # The app's own license and the notices for the MIT code it adapts. Those
+  # licenses require the notices to travel with every copy, installers included.
+  - from: ../../LICENSE
+    to: LICENSE
+  - from: ../../THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+
+# Ad-hoc signs the macOS bundle when no Developer ID identity is configured, so
+# an unsigned build still has an intact code seal (see the script for why).
+afterPack: scripts/after-pack.cjs
+
+mac:
+  category: public.app-category.developer-tools
+  # Arch comes from the CLI (--arm64 / --x64) so each runner builds its own.
+  # zip sits next to dmg because electron-updater's mac updater needs it.
+  target:
+    - dmg
+    - zip
+  icon: build/icon.png
+  # Signing is opt-in from the environment: with CSC_LINK + CSC_KEY_PASSWORD
+  # set, electron-builder imports the Developer ID cert and signs with the
+  # hardened runtime and its default Electron entitlements; with APPLE_ID +
+  # APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID (or APPLE_API_KEY +
+  # APPLE_API_KEY_ID + APPLE_API_ISSUER) set, it then notarizes via notarytool.
+  # Without them the build is unsigned (CI sets CSC_IDENTITY_AUTO_DISCOVERY=false)
+  # and only ad-hoc signed by scripts/after-pack.cjs.
+  hardenedRuntime: true
+
+dmg:
+  # The dmg wrapper itself is not signed; the notarization ticket is stapled to
+  # the .app inside it.
+  sign: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+  # Signing is opt-in from the environment: WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD
+  # (a .pfx) or, for Azure Trusted Signing, add an `azureSignOptions` block here
+  # and provide AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET.
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-${version}-win-${arch}-setup.${ext}
+
+# The newer AppImage toolset builds with the static type-2 runtime, which
+# carries its own FUSE support, so the AppImage runs on distros that no longer
+# ship libfuse.so.2 (the legacy runtime needs it).
+toolsets:
+  appimage: '1.0.3'
+
+linux:
+  category: Development
+  executableName: executioner
+  synopsis: Agentic development environment for offensive security
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  icon: build/icon.png

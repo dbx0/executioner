@@ -1,0 +1,30 @@
+id = "ffuf"
+name = "ffuf"
+description = "Fast web fuzzer for directory discovery, parameter fuzzing, and more"
+category = "web"
+accepts = ["url"]
+
+[params]
+wordlist = { type = "string", placeholder = "/usr/share/wordlists/dirb/common.txt", default = "/usr/share/wordlists/dirb/common.txt", label = "Wordlist", description = "Path to wordlist file" }
+filter_code = { type = "string", placeholder = "404,403", default = "", label = "Filter code", description = "HTTP status codes to filter out (e.g. '404,403')" }
+filter_size = { type = "string", placeholder = "0,1234", default = "", label = "Filter size", description = "Response sizes to filter out (e.g. '0,1234')" }
+threads = { type = "number", placeholder = "40", default = 40, label = "Threads", description = "Number of concurrent threads" }
+
+[command]
+program = "ffuf"
+args = ["-u", "{{ target.value }}", "-w", "{{ params.wordlist }}", "-of", "json", "-o", "/dev/stdout", "-t", "{{ params.threads }}", "{{ params.filter_code | -fc }}", "{{ params.filter_code? }}", "{{ params.filter_size | -fs }}", "{{ params.filter_size? }}"]
+timeout_ms = 300000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$.results"
+
+[[emit.targets]]
+kind = "url"
+value = "{{ record.url }}"
+parent = "input"
+
+[[emit.facts]]
+kind = "http_service"
+data = { url = "{{ record.url }}", status = "{{ record.status }}", length = "{{ record.length }}" }

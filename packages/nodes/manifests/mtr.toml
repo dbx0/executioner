@@ -1,0 +1,22 @@
+id = "mtr"
+name = "MTR"
+description = "Network diagnostic tool combining traceroute and ping with JSON output"
+category = "network"
+accepts = ["ip", "domain"]
+
+[params]
+cycles = { type = "number", placeholder = "10", default = 10 }
+
+[command]
+program = "mtr"
+args = ["--report", "--json", "-c", "{{ params.cycles }}", "{{ target.value }}"]
+timeout_ms = 300000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$.report.hubs"
+
+[[emit.facts]]
+kind = "raw_output"
+data = { hop = "{{ record.count }}", host = "{{ record.host }}", avg_ms = "{{ record.Avg }}", sent = "{{ record.Snt }}" }

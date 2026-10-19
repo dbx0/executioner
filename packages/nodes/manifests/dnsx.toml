@@ -1,0 +1,22 @@
+id = "dnsx"
+name = "dnsx"
+description = "Fast DNS toolkit — resolves domains and validates live hosts across multiple record types"
+category = "recon"
+accepts = ["domain", "subdomain"]
+
+[params]
+record_types = { type = "string", placeholder = "a,aaaa,cname", default = "a", label = "Record types", description = "DNS record type to query (a, aaaa, cname, mx, ns, txt)" }
+
+[command]
+program = "dnsx"
+args = ["-d", "{{ target.value }}", "-resp", "-json", "-silent", "-{{ params.record_types }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$"
+
+[[emit.facts]]
+kind = "raw_output"
+data = { host = "{{ record.host }}", status_code = "{{ record.status_code }}" }

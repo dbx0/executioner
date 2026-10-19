@@ -1,0 +1,25 @@
+id = "gau"
+name = "GAU"
+description = "Fetch known URLs for a domain from AlienVault, Wayback Machine, and Common Crawl"
+category = "web"
+accepts = ["domain", "subdomain"]
+
+[params]
+threads = { type = "number", placeholder = "5", default = 5, label = "Threads", description = "Number of concurrent threads" }
+include_subdomains = { type = "bool", default = false, label = "Include subdomains", description = "Include subdomains in results" }
+providers = { type = "string", placeholder = "wayback,otx,commoncrawl", default = "", label = "Providers", description = "Comma-separated providers to use (wayback,otx,commoncrawl)" }
+
+[command]
+program = "gau"
+args = ["--json", "--threads", "{{ params.threads }}", "{{ params.include_subdomains | --subs }}", "{{ params.providers | --providers }}", "{{ params.providers? }}", "{{ target.value }}"]
+timeout_ms = 120000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$"
+
+[[emit.targets]]
+kind = "url"
+value = "{{ record.url }}"
+parent = "input"

@@ -1,0 +1,26 @@
+id = "hydra"
+name = "Hydra"
+description = "Network login cracker — brute-forces credentials against various services"
+category = "network"
+accepts = ["ip", "domain"]
+
+[params]
+service = { type = "enum", values = ["ftp", "http-get", "http-get-form", "http-head", "http-post", "http-post-form", "https-get", "https-head", "https-post", "imap", "ldap", "mongodb", "mssql", "mysql", "pop3", "postgres", "rdp", "redis", "smb", "smtp", "snmp", "socks5", "ssh", "telnet", "vnc"], default = "ssh" }
+userlist = { type = "string", placeholder = "/usr/share/wordlists/users.txt" }
+passlist = { type = "string", placeholder = "/usr/share/wordlists/rockyou.txt" }
+threads = { type = "number", placeholder = "16", default = 16 }
+additional_flags = { type = "string", placeholder = "-f -V", default = "", ui = "textarea", label = "Additional flags", description = "Additional hydra flags (space-separated, validated against allowlist)" }
+
+[command]
+program = "hydra"
+args = ["-L", "{{ params.userlist }}", "-P", "{{ params.passlist }}", "-t", "{{ params.threads }}", "{{ params.additional_flags? }}", "{{ target.value }}", "{{ params.service }}"]
+timeout_ms = 600000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "\\[(?<port>\\d+)\\]\\[(?<service>\\S+)\\]\\s+host:\\s+(?<host>\\S+)\\s+login:\\s+(?<login>\\S+)\\s+password:\\s+(?<password>.*)"
+
+[[emit.facts]]
+kind = "raw_output"
+data = { port = "{{ record.port }}", service = "{{ record.service }}", host = "{{ record.host }}", login = "{{ record.login }}", password = "{{ record.password }}" }

@@ -1,0 +1,20 @@
+id = "subfinder"
+name = "Subfinder"
+description = "Passive subdomain enumeration"
+category = "recon"
+accepts = ["domain"]
+
+[command]
+program = "subfinder"
+args = ["-silent", "-oJ", "-d", "{{ target.value }}"]
+timeout_ms = 180000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$"
+
+[[emit.targets]]
+kind = "subdomain"
+value = "{{ record.host }}"
+parent = "input"

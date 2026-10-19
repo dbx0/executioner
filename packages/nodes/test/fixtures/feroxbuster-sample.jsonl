@@ -1,0 +1,2 @@
+{"type":"response","url":"http://example.com/admin","status":200,"content_length":1234,"word_count":10,"line_count":5,"method":"GET"}
+{"type":"response","url":"http://example.com/login","status":301,"content_length":0,"word_count":0,"line_count":0,"method":"GET"}

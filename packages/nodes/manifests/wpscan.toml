@@ -1,0 +1,22 @@
+id = "wpscan"
+name = "WPScan"
+description = "WordPress vulnerability scanner — enumerates users, plugins, themes"
+category = "web"
+accepts = ["url"]
+
+[params]
+enumerate = { type = "string", placeholder = "u,p,t", default = "", label = "Enumerate", description = "Enumeration options (e.g. 'u,p,t' for users, plugins, themes)" }
+
+[command]
+program = "wpscan"
+args = ["--url", "{{ target.value }}", "--format", "json", "{{ params.enumerate | --enumerate }}", "{{ params.enumerate? }}"]
+timeout_ms = 300000
+
+[emit]
+parser = "json"
+source = "stdout"
+records = "$"
+
+[[emit.facts]]
+kind = "technology"
+data = { target_url = "{{ record.target_url }}", version = "{{ record.version }}" }

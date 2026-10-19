@@ -1,0 +1,25 @@
+id = "nuclei"
+name = "Nuclei"
+description = "Template scanner, parsed from its JSONL output"
+category = "scan"
+accepts = ["url", "domain", "ip"]
+
+[params]
+tags = { type = "string", placeholder = "cve,xss,sqli", default = "", label = "Tags", description = "Comma-separated template tags to include (e.g. 'cve,xss,sqli')" }
+severity = { type = "string", placeholder = "high,critical", default = "", label = "Severity", description = "Comma-separated severity levels (info,low,medium,high,critical)" }
+templates = { type = "string", placeholder = "/root/nuclei-templates", default = "", label = "Templates", description = "Path to a custom template directory or file; leave empty for the templates nuclei installed" }
+
+[command]
+program = "nuclei"
+args = ["-u", "{{ target.value }}", "-jsonl", "{{ params.tags | -tags }}", "{{ params.tags? }}", "{{ params.severity | -severity }}", "{{ params.severity? }}", "{{ params.templates | -t }}", "{{ params.templates? }}"]
+timeout_ms = 120000
+
+# Results go to stdout rather than a file (-o), so the scan can run on a remote
+# connection: a file would land on that host, where nothing reads it.
+[emit]
+parser = "json"
+source = "stdout"
+
+[[emit.facts]]
+kind = "vulnerability"
+data = { template = "{{ record.template-id }}", severity = "{{ record.info.severity }}" }

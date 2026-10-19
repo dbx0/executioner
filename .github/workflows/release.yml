@@ -1,0 +1,174 @@
+# Builds the desktop app on native runners and attaches the installers to a
+# DRAFT GitHub release. A human reviews the draft and clicks Publish.
+#
+#   git tag v0.0.1 && git push origin v0.0.1   -> build + draft release v0.0.1
+#   Actions > Release > Run workflow            -> build only (artifacts on the run)
+#
+# Signing is opt-in: every signing secret below is optional. When a platform's
+# secrets are missing the build still succeeds and ships unsigned.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Typecheck, lint, test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version="$(node -p "require('./apps/desktop/package.json').version")"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match apps/desktop/package.json version ${version}"
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm --filter @exe/desktop test
+
+  build:
+    name: Build (${{ matrix.name }})
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Built on 22.04 so the binaries link against an older glibc and run
+          # on more distros than a 24.04 build would.
+          - name: linux-x64
+            os: ubuntu-22.04
+            args: --linux --x64
+            unpacked: release/linux-unpacked
+          # macos-latest is Apple Silicon. Both archs are packaged on it: the
+          # natives come from prebuilts (better-sqlite3 and node-pty both ship
+          # Node-API prebuilds/ in their packages), so nothing is compiled for
+          # the foreign arch. Only the native arm64 bundle is smoke-tested.
+          - name: macos
+            os: macos-latest
+            args: --mac --arm64 --x64
+            unpacked: release/mac-arm64
+          - name: windows-x64
+            os: windows-latest
+            args: --win --x64
+            unpacked: release/win-unpacked
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 12
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      # node-gyp needs Python for the source builds: node-pty on Linux, and any
+      # native module that has no prebuild for the runner.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build
+
+      - name: Package
+        working-directory: apps/desktop
+        env:
+          # macOS: Developer ID Application cert (.p12, base64) and its password.
+          # With these unset, CSC_IDENTITY_AUTO_DISCOVERY=false keeps the build
+          # unsigned (ad-hoc sealed by scripts/after-pack.cjs).
+          CSC_LINK: ${{ runner.os == 'macOS' && secrets.MAC_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ (runner.os == 'macOS' && secrets.MAC_CSC_LINK != '') && 'true' || 'false' }}
+          # macOS notarization (notarytool). Only runs after a successful sign.
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Windows: code signing cert (.pfx, base64) and its password.
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          # Empty secrets arrive as empty strings; drop them so electron-builder
+          # does not treat them as configured.
+          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID WIN_CSC_LINK WIN_CSC_KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then unset "$v"; fi
+          done
+          pnpm exec electron-builder ${{ matrix.args }} --publish never
+
+      - name: Smoke-test the packaged natives
+        working-directory: apps/desktop
+        run: node scripts/smoke-packaged.mjs ${{ matrix.unpacked }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: executioner-${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+
+  release:
+    name: Draft GitHub release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: executioner-*
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Release notes
+        run: node scripts/release-notes.mjs "${GITHUB_REF_NAME}" > release-notes.md
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Executioner ${{ github.ref_name }}
+          draft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: release-notes.md
+          fail_on_unmatched_files: true
+          files: dist/*

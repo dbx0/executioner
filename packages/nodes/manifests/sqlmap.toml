@@ -1,0 +1,26 @@
+id = "sqlmap"
+name = "sqlmap"
+description = "Automatic SQL injection detection and exploitation tool. WARNING: sqlmap may be destructive — ensure you have authorization."
+category = "web"
+accepts = ["url"]
+
+[params]
+level = { type = "number", placeholder = "1 to 5", default = 1, label = "Level", description = "Level of tests to perform (1-5, default 1)" }
+risk = { type = "number", placeholder = "1 to 3", default = 1, label = "Risk", description = "Risk of tests to perform (1-3, default 1)" }
+dbms = { type = "string", placeholder = "mysql", default = "", label = "DBMS", description = "Force back-end DBMS (e.g. 'mysql', 'postgresql')" }
+output_dir = { type = "string", placeholder = "/tmp/sqlmap_output", default = "/tmp/sqlmap_output", label = "Output directory", description = "Directory to store sqlmap output" }
+additional_flags = { type = "string", placeholder = "--batch --dbs", default = "", ui = "textarea", label = "Additional flags", description = "Additional sqlmap flags (space-separated, validated against allowlist)", warning = "sqlmap may be destructive — ensure you have authorization" }
+
+[command]
+program = "sqlmap"
+args = ["-u", "{{ target.value }}", "--batch", "--output-dir", "{{ params.output_dir }}", "--level", "{{ params.level }}", "--risk", "{{ params.risk }}", "{{ params.dbms | --dbms }}", "{{ params.dbms? }}", "{{ params.additional_flags? }}"]
+timeout_ms = 600000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "Parameter:\\s+(?<param>\\S+).*?\\n\\s+Type:\\s+(?<type>.+?)\\n\\s+Title:\\s+.+?\\n\\s+Payload:\\s+(?<payload>.+)"
+
+[[emit.facts]]
+kind = "vulnerability"
+data = { param = "{{ record.param }}", type = "{{ record.type }}", payload = "{{ record.payload }}" }

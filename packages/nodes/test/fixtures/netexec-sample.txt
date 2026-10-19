@@ -1,0 +1,2 @@
+SMB         10.0.0.5        445    DC01             [*] Windows Server 2019 Build 17763 x64 (name:DC01) (domain:CORP) (signing:True) (SMBv1:False)
+SMB         10.0.0.5        445    DC01             [+] CORP\admin:Password123

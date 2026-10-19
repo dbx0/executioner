@@ -1,0 +1,23 @@
+id = "enum4linux"
+name = "Enum4linux"
+description = "Enumerates users, shares, and workgroup info via SMB/NetBIOS"
+category = "network"
+accepts = ["ip", "domain"]
+
+[params]
+username = { type = "string", placeholder = "administrator", default = "", label = "Username", description = "Username for authenticated enumeration" }
+password = { type = "string", placeholder = "Passw0rd!", default = "", label = "Password", description = "Password for authenticated enumeration" }
+
+[command]
+program = "enum4linux"
+args = ["-a", "{{ params.username | -u }}", "{{ params.username? }}", "{{ params.password | -p }}", "{{ params.password? }}", "{{ target.value }}"]
+timeout_ms = 600000
+
+[emit]
+parser = "regex"
+source = "stdout"
+pattern = "//\\S+/(?<share>\\S+)\\s+(?<type>Disk|IPC|Printer)\\s*(?<comment>.*)"
+
+[[emit.facts]]
+kind = "raw_output"
+data = { share = "{{ record.share }}", type = "{{ record.type }}", comment = "{{ record.comment }}" }

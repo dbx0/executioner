@@ -1,0 +1,3 @@
+[*] Checking https://example.com
+[+] The site https://example.com is behind Cloudflare (Cloudflare Inc.) WAF.
+[~] Number of requests: 12

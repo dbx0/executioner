@@ -1,0 +1,22 @@
+packages:
+  - 'packages/*'
+  - 'apps/*'
+# pnpm 12 reads build-script approvals from here. node-pty compiles on Linux
+# at install time. better-sqlite3 13 ships Node-API prebuilds for every
+# released platform, so its implicit node-gyp build is skipped. Electron 42+ has no postinstall (it downloads on first run;
+# electron-builder fetches its own copy to package). ssh2 and its optional
+# cpu-features accelerator stay unbuilt, as they were before: ssh2 falls back
+# to its pure-JS crypto path. electron-winstaller (Squirrel.Windows, pulled in
+# by electron-builder 26; the NSIS build never uses it) stays unbuilt too.
+allowBuilds:
+  better-sqlite3: false
+  cpu-features: false
+  electron: true
+  electron-winstaller: false
+  node-pty: true
+  ssh2: false
+# Patched versions of transitive renderer dependencies flagged by `pnpm audit`:
+# monaco-editor pins an older dompurify, and rehype-katex an older katex.
+overrides:
+  dompurify: ^3.4.17
+  katex: ^0.19.0

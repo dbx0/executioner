@@ -1,0 +1,7 @@
+{
+  "commandline": "ffuf -u https://example.com/FUZZ -w list.txt",
+  "results": [
+    {"input":{"FUZZ":"admin"},"status":200,"length":1234,"words":56,"lines":10,"url":"https://example.com/admin"},
+    {"input":{"FUZZ":"api"},"status":401,"length":21,"words":3,"lines":1,"url":"https://example.com/api"}
+  ]
+}
