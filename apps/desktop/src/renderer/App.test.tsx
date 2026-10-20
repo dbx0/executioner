@@ -7,7 +7,7 @@ describe('App', () => {
     vi.stubGlobal(
       'window',
       Object.assign(window, {
-        executioner: { pickFolder: vi.fn(), openProject: vi.fn() },
+        executioner: { pickFolder: vi.fn(), openProject: vi.fn(), onMaximizedChange: () => () => {} },
       }),
     )
     render(<App />)
@@ -22,7 +22,7 @@ describe('App — native context menu', () => {
   it('swallows the OS menu so only the app\'s own menus appear', () => {
     vi.stubGlobal(
       'window',
-      Object.assign(window, { executioner: { pickFolder: vi.fn(), openProject: vi.fn() } }),
+      Object.assign(window, { executioner: { pickFolder: vi.fn(), openProject: vi.fn(), onMaximizedChange: () => () => {} } }),
     )
     const { container } = render(<App />)
 
@@ -35,7 +35,7 @@ describe('App — native context menu', () => {
   it('leaves the menu alone in a text field', () => {
     vi.stubGlobal(
       'window',
-      Object.assign(window, { executioner: { pickFolder: vi.fn(), openProject: vi.fn() } }),
+      Object.assign(window, { executioner: { pickFolder: vi.fn(), openProject: vi.fn(), onMaximizedChange: () => () => {} } }),
     )
     render(<App />)
 

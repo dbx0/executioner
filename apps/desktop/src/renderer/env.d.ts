@@ -42,6 +42,12 @@ declare global {
       clipboardWrite(text: string): Promise<void>
       /** Match the native window appearance (macOS traffic lights) to the theme base. */
       setAppearance(mode: 'light' | 'dark'): void
+      /** process.platform of the main process; macOS keeps native traffic lights,
+       *  everywhere else the titlebar draws its own window controls. */
+      platform: string
+      windowControl(action: 'minimize' | 'maximize' | 'close'): void
+      /** Subscribe to maximize/unmaximize; returns the unsubscribe. */
+      onMaximizedChange(listener: (maximized: boolean) => void): () => void
     }
   }
 }

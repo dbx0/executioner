@@ -203,6 +203,11 @@ function createWindow(): void {
   // Links marked target="_blank" (the skills CTA, docs pointers) belong in the
   // user's browser, not in a second chrome-less Electron window. Only web links
   // leave: any other scheme would launch whatever the desktop registered for it.
+  // The renderer-drawn maximize button swaps its icon with the window state.
+  const win = mainWindow
+  win.on('maximize', () => win.webContents.send('window-maximized', true))
+  win.on('unmaximize', () => win.webContents.send('window-maximized', false))
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     const external = externalUrl(url)
     if (external !== null) void shell.openExternal(external)
@@ -277,6 +282,18 @@ handle('clipboard-read-text', () => clipboard.readText())
 handle('clipboard-write-text', (text: unknown) => {
   if (typeof text !== 'string') throw new Error('clipboard-write-text: expected a string')
   return clipboard.writeText(text)
+})
+
+// Minimize, maximize and close for the frameless window on Windows and Linux,
+// drawn by the renderer's titlebar (macOS keeps its native traffic lights).
+listen('window-control', (action: unknown) => {
+  const win = mainWindow
+  if (win === undefined || win.isDestroyed()) return
+  if (action === 'minimize') win.minimize()
+  else if (action === 'maximize') {
+    if (win.isMaximized()) win.unmaximize()
+    else win.maximize()
+  } else if (action === 'close') win.close()
 })
 
 // Keep the native window appearance (macOS traffic lights + any native chrome)

@@ -46,4 +46,13 @@ contextBridge.exposeInMainWorld('executioner', {
   // over IPC and resolve asynchronously.
   clipboardRead: (): Promise<string> => ipcRenderer.invoke('clipboard-read-text') as Promise<string>,
   clipboardWrite: (text: string): Promise<void> => ipcRenderer.invoke('clipboard-write-text', text) as Promise<void>,
+  // Window controls for the frameless window on Windows and Linux, where no
+  // native buttons are drawn over the renderer's titlebar.
+  platform: process.platform,
+  windowControl: (action: 'minimize' | 'maximize' | 'close'): void => ipcRenderer.send('window-control', action),
+  onMaximizedChange: (listener: (maximized: boolean) => void): (() => void) => {
+    const handler = (_event: unknown, maximized: boolean): void => listener(maximized)
+    ipcRenderer.on('window-maximized', handler)
+    return () => ipcRenderer.removeListener('window-maximized', handler)
+  },
 })
