@@ -1,7 +1,7 @@
 # Builds the desktop app on native runners and attaches the installers to a
-# DRAFT GitHub release. A human reviews the draft and clicks Publish.
+# public GitHub release.
 #
-#   git tag v0.0.1 && git push origin v0.0.1   -> build + draft release v0.0.1
+#   git tag v0.0.1 && git push origin v0.0.1   -> build + publish release v0.0.1
 #   Actions > Release > Run workflow            -> build only (artifacts on the run)
 #
 # Signing is opt-in: every signing secret below is optional. When a platform's
@@ -137,7 +137,7 @@ jobs:
             apps/desktop/release/*.exe
 
   release:
-    name: Draft GitHub release
+    name: Publish GitHub release
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -167,7 +167,7 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Executioner ${{ github.ref_name }}
-          draft: true
+          draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           body_path: release-notes.md
           fail_on_unmatched_files: true
