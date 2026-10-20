@@ -183,7 +183,25 @@ On the canvas they sit next to triggers (manual, schedule, on new target), logic
 
 ## Install
 
-Grab the build for your platform from the [latest release](https://github.com/dbx0/executioner/releases/latest):
+The install script downloads the latest release, checks it against the published checksums and installs it.
+
+**Linux and macOS**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dbx0/executioner/main/install.sh | bash
+```
+
+On Linux it adds Executioner to your app launcher and puts an `executioner` command in `~/.local/bin`, without sudo. On macOS it installs `Executioner.app` into Applications.
+
+**Windows** (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/dbx0/executioner/main/install.ps1 | iex
+```
+
+Run the same command again to update. To remove it, run `curl -fsSL https://raw.githubusercontent.com/dbx0/executioner/main/install.sh | bash -s -- --uninstall`, or set `$env:EXECUTIONER_UNINSTALL='1'` before the Windows command.
+
+You can also grab the build for your platform from the [latest release](https://github.com/dbx0/executioner/releases/latest):
 
 | Platform | Download |
 |---|---|
