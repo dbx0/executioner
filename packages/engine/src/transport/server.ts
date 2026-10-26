@@ -214,7 +214,7 @@ export function createApp(options: AppOptions): EngineApp {
   // targets would never fire on_create. Wrapping the shared repository instance
   // catches the route, the executor, graph nodes and the /mcp add_target tool in
   // one place. Re-discovery (an already-known target) does not fire. The
-  // Scheduler suppresses cascades from within its own runs (see runDepth).
+  // Scheduler suppresses cascades from within its own runs (see scheduledRun).
   // A target a headless agent recorded does not fire either (see
   // HEADLESS_AGENT_TARGET_SOURCE): a prompt-injected agent must not be able to
   // aim saved workflows at a host of its choosing. The operator sees the

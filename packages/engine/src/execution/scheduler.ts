@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Project } from '@exe/project'
 import type { Schedule } from '@exe/db'
 import type { Target } from '@exe/protocol'
@@ -20,19 +21,23 @@ export interface SchedulerDeps {
  *   created (driven by the target-create route via {@link onTargetCreated}).
  *
  * Best-effort: a failing run is swallowed so one bad workflow never stops the
- * timer loop. Call {@link start} once the engine is up and {@link stop} on
+ * timer loop. An interval tick that lands while the schedule's previous run is
+ * still going is skipped, so a slow workflow never piles up concurrent runs. Call {@link start} once the engine is up and {@link stop} on
  * shutdown.
  */
 export class Scheduler {
   private readonly timers = new Map<string, ReturnType<typeof setInterval>>()
   /**
-   * How many scheduler-initiated workflow runs are currently in flight. Used to
-   * suppress `on_create` cascades: targets a running workflow discovers must not
+   * Set for the async context of every scheduler-initiated workflow run. Used to
+   * suppress `on_create` cascades: targets a scheduled run discovers must not
    * re-trigger `on_create`, or a workflow that emits its own trigger kind (e.g.
    * a subdomain-enum workflow scheduled on `on_create` for `subdomain`) would
-   * loop forever.
+   * loop forever. Scoped to the run's own context, so a target the operator
+   * adds while some unrelated scheduled run is going still fires.
    */
-  private runDepth = 0
+  private readonly scheduledRun = new AsyncLocalStorage<true>()
+  /** Interval schedules whose previous run has not settled yet. */
+  private readonly runningSchedules = new Set<string>()
   /** Trigger handling and runs not yet settled. The engine fires these and forgets them. */
   private readonly inFlight = new Set<Promise<unknown>>()
 
@@ -89,7 +94,11 @@ export class Scheduler {
     const ms = (schedule.intervalSeconds ?? 0) * 1000
     if (ms <= 0) return
     const timer = setInterval(() => {
-      void this.fire(schedule.workflowId, schedule.targetId)
+      if (this.runningSchedules.has(schedule.id)) return
+      this.runningSchedules.add(schedule.id)
+      void this.fire(schedule.workflowId, schedule.targetId).finally(() => {
+        this.runningSchedules.delete(schedule.id)
+      })
     }, ms)
     // Do not keep the process alive purely for a schedule timer.
     if (typeof (timer as { unref?: () => void }).unref === 'function') (timer as { unref: () => void }).unref()
@@ -101,13 +110,10 @@ export class Scheduler {
   }
 
   private async runOnce(workflowId: string, targetId: string | null): Promise<void> {
-    this.runDepth += 1
     try {
-      await this.deps.runWorkflow(workflowId, targetId)
+      await this.scheduledRun.run(true, () => this.deps.runWorkflow(workflowId, targetId))
     } catch {
       /* best-effort: a failed scheduled run must not break the loop */
-    } finally {
-      this.runDepth -= 1
     }
   }
 
@@ -117,15 +123,15 @@ export class Scheduler {
    * reach here). Reads enabled `on_create` schedules live from the DB and runs
    * every one whose `targetKind` matches the new target, against that target.
    *
-   * Targets created while a scheduler-initiated run is already in flight are
-   * ignored (see {@link runDepth}) so a workflow cannot cascade into itself.
+   * Targets created by a scheduler-initiated run are ignored (see
+   * {@link scheduledRun}) so a workflow cannot cascade into itself.
    */
   onTargetCreated(target: Target): Promise<void> {
     return this.track(this.runMatching(target))
   }
 
   private async runMatching(target: Target): Promise<void> {
-    if (this.runDepth > 0) return
+    if (this.scheduledRun.getStore() === true) return
     for (const schedule of this.deps.project.schedules.list()) {
       if (schedule.enabled && schedule.kind === 'on_create' && schedule.targetKind === target.kind) {
         await this.fire(schedule.workflowId, target.id)

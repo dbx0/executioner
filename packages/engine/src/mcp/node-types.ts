@@ -66,7 +66,7 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     label: 'Schedule Trigger',
     kind: 'schedule',
     category: 'trigger',
-    description: 'Entry point run on a recurring interval.',
+    description: 'Entry point run on a recurring interval. Arm it per engagement in Schedules, which reads this interval.',
     params: [
       param({ name: 'interval_seconds', type: 'number', default: 3600, description: 'How often to run, in seconds.' }),
       param({ name: 'cron', type: 'string', description: 'Optional cron expression (informational).' }),
@@ -77,7 +77,7 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     label: 'On Create Trigger',
     kind: 'on_create',
     category: 'trigger',
-    description: 'Entry point fired when a matching target is created.',
+    description: 'Entry point fired when a matching target is created. Arm it per engagement in Schedules, which reads this kind.',
     params: [
       param({
         name: 'target_kind',

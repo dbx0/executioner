@@ -84,7 +84,7 @@ describe('Scheduler', () => {
 
   it('does not cascade: targets created inside a run do not re-trigger on_create', async () => {
     // A workflow that itself discovers a new matching target (subdomain-enum
-    // style). Without the runDepth guard this would recurse forever.
+    // style). Without the cascade guard this would recurse forever.
     let created = 0
     const runWorkflow = vi.fn(async () => {
       // Simulate the running workflow emitting a fresh matching target, which
@@ -105,6 +105,45 @@ describe('Scheduler', () => {
 
     // The seed fires exactly one run; the target that run discovers is suppressed.
     expect(runWorkflow).toHaveBeenCalledTimes(1)
+  })
+
+  it('still fires on_create for a target created outside a scheduled run while one is in flight', async () => {
+    vi.useFakeTimers()
+    project.workflows.create('enum', JSON.stringify({ nodes: [], edges: [] }), { id: 'wf-enum' })
+    let release!: () => void
+    const runWorkflow = vi.fn((workflowId: string) =>
+      workflowId === 'wf-1' ? new Promise<void>((resolve) => (release = resolve)) : Promise.resolve(),
+    )
+    project.schedules.create({ workflowId: 'wf-1', kind: 'interval', intervalSeconds: 60 })
+    project.schedules.create({ workflowId: 'wf-enum', kind: 'on_create', targetKind: 'domain' })
+    const scheduler = new Scheduler({ project, runWorkflow })
+    scheduler.start()
+
+    // The slow interval run is now in flight; the operator adds a target by hand.
+    await vi.advanceTimersByTimeAsync(60_000)
+    const target = project.targets.upsert({ kind: 'domain', value: 'operator.com', source: 'manual' })
+    await scheduler.onTargetCreated(target)
+    release()
+
+    expect(runWorkflow).toHaveBeenCalledWith('wf-enum', target.id)
+    scheduler.stop()
+  })
+
+  it('skips an interval tick while the previous run of that schedule is still going', async () => {
+    vi.useFakeTimers()
+    let release!: () => void
+    const runWorkflow = vi.fn(() => new Promise<void>((resolve) => (release = resolve)))
+    project.schedules.create({ workflowId: 'wf-1', kind: 'interval', intervalSeconds: 5 })
+    const scheduler = new Scheduler({ project, runWorkflow })
+    scheduler.start()
+
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(runWorkflow).toHaveBeenCalledTimes(1)
+
+    release()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(runWorkflow).toHaveBeenCalledTimes(2)
+    scheduler.stop()
   })
 
   it('idle waits for a fire-and-forget on_create run to finish', async () => {

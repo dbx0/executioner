@@ -70,7 +70,7 @@ export const CONTROL_ENTRIES: CatalogEntry[] = [
     label: 'Schedule Trigger',
     kind: 'schedule',
     category: 'trigger',
-    description: 'Entry point run on a recurring interval. Manage active schedules in Settings.',
+    description: 'Entry point run on a recurring interval. Arm it per engagement in Schedules, which reads this interval.',
     params: [
       { name: 'interval_seconds', type: 'number', default: 3600, description: 'How often to run, in seconds.' },
       { name: 'cron', type: 'string', description: 'Optional cron expression (informational; interval_seconds drives runs).' },
@@ -81,7 +81,7 @@ export const CONTROL_ENTRIES: CatalogEntry[] = [
     label: 'On Create Trigger',
     kind: 'on_create',
     category: 'trigger',
-    description: 'Entry point fired when a matching target is created.',
+    description: 'Entry point fired when a matching target is created. Arm it per engagement in Schedules, which reads this kind.',
     params: [
       {
         name: 'target_kind',

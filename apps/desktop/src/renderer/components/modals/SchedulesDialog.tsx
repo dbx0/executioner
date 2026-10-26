@@ -5,6 +5,7 @@ import type { AxiosInstance } from 'axios'
 import { schedulesApi, type Schedule, type ScheduleKind, type ScheduleInput } from '../../api/schedules.js'
 import { workflowsApi, type WorkflowSummary } from '../../api/workflows.js'
 import { targetsApi, type TargetSummary } from '../../api/targets.js'
+import { scheduleDefaultsFromGraph } from '../../lib/schedule-defaults.js'
 import { Button } from '../ui/button.js'
 import { Input } from '../ui/input.js'
 import { Select } from '../ui/select.js'
@@ -49,6 +50,22 @@ export function SchedulesDialog({
     void workflowsApi(client).list().then(setWorkflows).catch(() => {})
     void targetsApi(client).list().then(setTargets).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Picking a workflow prefills the trigger from its Schedule / On Create
+  // Trigger node, so what the canvas says is what gets armed here.
+  const pickWorkflow = (id: string): void => {
+    setWorkflowId(id)
+    void workflowsApi(client)
+      .get(id)
+      .then((wf) => {
+        const defaults = scheduleDefaultsFromGraph(wf.graph)
+        if (defaults === undefined) return
+        setKind(defaults.kind)
+        if (defaults.kind === 'interval') setIntervalSeconds(String(defaults.intervalSeconds))
+        else setTargetKind(defaults.targetKind)
+      })
+      .catch(() => {})
+  }
 
   const valid =
     workflowId !== '' &&
@@ -100,7 +117,8 @@ export function SchedulesDialog({
 
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek p-4">
           <p className="mb-3 text-[12px] text-muted-foreground">
-            Run a workflow automatically: on a recurring interval, or whenever a matching target is created.
+            Run a workflow automatically in this engagement: on a recurring interval, or whenever a matching target is
+            created. A workflow's trigger node fills in the settings below.
           </p>
 
           {schedules.length === 0 ? (
@@ -167,7 +185,7 @@ export function SchedulesDialog({
             <Select
               className="mb-3"
               value={workflowId}
-              onValueChange={(v) => setWorkflowId(v)}
+              onValueChange={pickWorkflow}
               placeholder="Select a workflow…"
               options={workflows.map((w) => ({ value: w.id, label: w.name }))}
             />
