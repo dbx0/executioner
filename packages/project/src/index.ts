@@ -17,6 +17,7 @@ import {
   SavedAgentRepository,
   AssistantRepository,
   adoptProjectGlobals,
+  seedStarterWorkflows,
   type ProjectDatabase,
 } from '@exe/db'
 import { globalLayout, isoNow } from '@exe/protocol'
@@ -92,6 +93,7 @@ function attach(root: string, config: ProjectConfig): Project {
   // work. An engagement created before that was true hands its rows over once.
   const globalDb = openGlobalDatabase(globalLayout.database())
   adoptProjectGlobals(db, globalDb)
+  seedStarterWorkflows(globalDb)
   return {
     root,
     config,

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createProject, type Project } from '@exe/project'
+import { isStarterWorkflow } from '@exe/db'
 import { NodeRegistry, loadManifests, bundledManifestsDir } from '@exe/nodes'
 import { EventBus } from '../transport/events.js'
 import { Executor } from '../execution/executor.js'
@@ -58,7 +59,7 @@ describe('workflows CRUD', () => {
     })
 
     const listed = await readJson<NamedWorkflow[]>(await otherApp.request('/api/workflows', auth))
-    expect(listed.map((w) => w.name)).toEqual(['shared'])
+    expect(listed.filter((w) => !isStarterWorkflow(w.id)).map((w) => w.name)).toEqual(['shared'])
     const fetched = await readJson<WorkflowWithGraph>(await otherApp.request(`/api/workflows/${created.id}`, auth))
     expect(fetched.graph.nodes).toHaveLength(1)
 
@@ -125,8 +126,8 @@ describe('workflows CRUD', () => {
   it('lists workflows', async () => {
     await app.request('/api/workflows', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'a', graph: validGraph }) })
     await app.request('/api/workflows', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'b', graph: validGraph }) })
-    const list = await readJson<unknown[]>(await app.request('/api/workflows', auth))
-    expect(list).toHaveLength(2)
+    const list = await readJson<Array<{ id: string }>>(await app.request('/api/workflows', auth))
+    expect(list.filter((w) => !isStarterWorkflow(w.id))).toHaveLength(2)
   })
 
   it('404s reading an unknown workflow', async () => {

@@ -93,8 +93,17 @@ export const SECRETS_DDL = `CREATE TABLE IF NOT EXISTS secrets (
 );
 `
 
+/** Key/value markers: one-time migrations and seeds record that they ran. */
+const META_DDL = `
+CREATE TABLE IF NOT EXISTS meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+`
+
 /** The user-level database: only the tables shared across all engagements. */
 export const GLOBAL_SCHEMA_SQL = `
+${META_DDL}
 ${WORKFLOWS_DDL}
 ${CUSTOM_NODES_DDL}
 ${BACKEND_PROFILES_DDL}
@@ -106,10 +115,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS meta (
-  key   TEXT PRIMARY KEY,
-  value TEXT NOT NULL
-);
+${META_DDL}
 
 CREATE TABLE IF NOT EXISTS targets (
   id         TEXT PRIMARY KEY,
