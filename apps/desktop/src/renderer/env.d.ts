@@ -2,6 +2,7 @@
 import type { EngineConnection } from './lib/connection.js'
 import type { BackendProfileInput, BackendTestResult, SshEnrollResult } from './api/backends.js'
 import type { ConnectionHints } from '../main/connection-hints.js'
+import type { UpdateInfo } from '../main/update.js'
 
 declare global {
   interface Window {
@@ -40,6 +41,10 @@ declare global {
        *  hand. Served by the main process, hence asynchronous. */
       clipboardRead(): Promise<string>
       clipboardWrite(text: string): Promise<void>
+      /** A newer release than the running one, or null when up to date or offline. */
+      checkForUpdate(): Promise<UpdateInfo | null>
+      /** Quit and install the release found by checkForUpdate, then reopen. */
+      installUpdate(): Promise<void>
       /** Match the native window appearance (macOS traffic lights) to the theme base. */
       setAppearance(mode: 'light' | 'dark'): void
       /** process.platform of the main process; macOS keeps native traffic lights,

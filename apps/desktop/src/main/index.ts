@@ -20,6 +20,7 @@ import { collectConnectionHints } from './connection-hints.js'
 import { EngineSupervisor } from './engine-supervisor.js'
 import { createIpcHandlers } from './ipc.js'
 import { allowPermission, externalUrl, isAppUrl } from './security.js'
+import { checkForUpdate, installKind, startInstall } from './update.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -294,6 +295,39 @@ listen('window-control', (action: unknown) => {
     if (win.isMaximized()) win.unmaximize()
     else win.maximize()
   } else if (action === 'close') win.close()
+})
+
+// Update notice: the renderer asks once on startup. Only a copy the install
+// scripts put in place can update itself; anything else gets the release page.
+const updateKind = installKind({
+  packaged: app.isPackaged,
+  platform: process.platform,
+  execPath: process.execPath,
+  home: app.getPath('home'),
+  localAppData: process.env.LOCALAPPDATA,
+})
+let pendingUpdateTag: string | undefined
+
+handle('check-for-update', async () => {
+  try {
+    const info = await checkForUpdate({
+      current: app.getVersion(),
+      kind: updateKind,
+      // Node's fetch, not Electron's net.fetch: net.fetch follows the
+      // /releases/latest redirect but reports an empty response.url, so the tag
+      // could never be read and no update was ever found.
+    })
+    pendingUpdateTag = info?.tag
+    return info
+  } catch {
+    // Offline or GitHub unreachable: no notice, not an error.
+    return null
+  }
+})
+handle('install-update', () => {
+  if (updateKind === null || pendingUpdateTag === undefined) throw new Error('no update to install')
+  startInstall({ kind: updateKind, tag: pendingUpdateTag, execPath: process.execPath, pid: process.pid })
+  app.quit()
 })
 
 // Keep the native window appearance (macOS traffic lights + any native chrome)

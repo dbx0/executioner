@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('executioner', {
   writeEngagementPhoto: (req: { root: string; dataUrl: string }): Promise<string | null> =>
     ipcRenderer.invoke('write-engagement-photo', req),
   clearEngagementPhoto: (req: { root: string }): void => ipcRenderer.send('clear-engagement-photo', req),
+  // Startup update notice: the newer release, if any, and the in-place install.
+  checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('install-update') as Promise<void>,
   setAppearance: (mode: 'light' | 'dark'): void => ipcRenderer.send('set-appearance', mode),
   // Clipboard for the terminal. xterm maps Ctrl+V to the ^V control code and
   // preventDefaults it, so the browser paste event never fires and there is no
