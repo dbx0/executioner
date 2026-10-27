@@ -201,6 +201,7 @@ export function OutputPane({
   return (
     <div
       ref={pane}
+      data-tour="tools-output"
       style={{ '--output-w': `${size.width}px`, '--output-h': `${size.height}px` } as React.CSSProperties}
       className="relative flex h-[var(--output-h)] w-full shrink-0 flex-col border-t border-border min-[1100px]:h-full min-[1100px]:w-[var(--output-w)] min-[1100px]:border-l min-[1100px]:border-t-0"
     >

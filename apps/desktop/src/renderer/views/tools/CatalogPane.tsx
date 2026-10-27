@@ -101,7 +101,7 @@ export function CatalogPane({
   }
 
   return (
-    <div className="flex h-[260px] w-full shrink-0 flex-col border-b border-border min-[1100px]:h-full min-[1100px]:w-[260px] min-[1100px]:border-b-0 min-[1100px]:border-r">
+    <div data-tour="tools-catalog" className="flex h-[260px] w-full shrink-0 flex-col border-b border-border min-[1100px]:h-full min-[1100px]:w-[260px] min-[1100px]:border-b-0 min-[1100px]:border-r">
       <div className="relative shrink-0 border-b border-border p-2">
         <Search className="pointer-events-none absolute left-4 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <input

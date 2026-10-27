@@ -25,22 +25,22 @@ export function HubHeader({
       <span className="text-sm font-medium capitalize">{tab}</span>
       {tab === 'workflows' ? (
         <>
-          <Button variant="outline" size="sm" className="ml-auto" onClick={onShowSchedules}>
+          <Button variant="outline" size="sm" className="ml-auto" data-tour="workflows-schedules" onClick={onShowSchedules}>
             <CalendarClock className="size-4" strokeWidth={1.75} />
             Schedules
           </Button>
-          <Button size="sm" onClick={onCreateWorkflow}>
+          <Button size="sm" data-tour="workflows-create" onClick={onCreateWorkflow}>
             <Plus className="size-4" strokeWidth={2} />
             Create workflow
           </Button>
         </>
       ) : (
         <>
-          <Button variant="outline" size="sm" className="ml-auto" onClick={onAddTeam}>
+          <Button variant="outline" size="sm" className="ml-auto" data-tour="agents-add-team" onClick={onAddTeam}>
             <Users className="size-4" strokeWidth={1.75} />
             Add team
           </Button>
-          <Button size="sm" onClick={onAddAgent}>
+          <Button size="sm" data-tour="agents-add" onClick={onAddAgent}>
             <Plus className="size-4" strokeWidth={2} />
             Add agent
           </Button>

@@ -22,7 +22,7 @@ export function AgentsPanel({
 }): JSX.Element {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
-      <section className="flex min-h-0 flex-1 flex-col gap-2">
+      <section data-tour="agents-teams" className="flex min-h-0 flex-1 flex-col gap-2">
         <SectionLabel>Teams</SectionLabel>
         <ScrollArea className="-mx-1 min-h-0 flex-1 px-1">
           <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3 pb-1">

@@ -29,7 +29,7 @@ export function WorkflowsPanel({
     <ResizableRows
       storageKey="exe.workflowsSplit"
       top={
-        <section className="flex min-h-0 flex-1 flex-col gap-2 p-4 pb-2">
+        <section data-tour="workflows-list" className="flex min-h-0 flex-1 flex-col gap-2 p-4 pb-2">
           <SectionLabel>Workflows</SectionLabel>
           <ScrollArea className="-mx-1 min-h-0 flex-1 px-1">
             <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3 pb-1">
@@ -49,7 +49,7 @@ export function WorkflowsPanel({
         </section>
       }
       bottom={
-        <section className="flex min-h-0 flex-1 flex-col gap-2 p-4 pt-2">
+        <section data-tour="workflows-runs" className="flex min-h-0 flex-1 flex-col gap-2 p-4 pt-2">
           <SectionLabel>Recent runs</SectionLabel>
           <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card/30">
             <ExecutionsView embedded />

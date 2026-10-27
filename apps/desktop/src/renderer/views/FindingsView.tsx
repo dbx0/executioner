@@ -151,10 +151,10 @@ export function FindingsView(): JSX.Element {
           <Button variant="ghost" size="icon-sm" aria-label="Refresh findings" onClick={() => void refresh()}>
             <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} strokeWidth={1.75} />
           </Button>
-          <Button variant="outline" size="sm" disabled={exporting} onClick={() => void exportReport()}>
+          <Button variant="outline" size="sm" data-tour="findings-export" disabled={exporting} onClick={() => void exportReport()}>
             <FileText className="mr-1 size-3.5" strokeWidth={2} /> {exporting ? 'Exporting…' : 'Export report'}
           </Button>
-          <Button size="sm" onClick={() => void create()}>
+          <Button size="sm" data-tour="findings-new" onClick={() => void create()}>
             <Plus className="mr-1 size-3.5" strokeWidth={2} /> New finding
           </Button>
         </div>
@@ -171,7 +171,7 @@ export function FindingsView(): JSX.Element {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {!listHidden && (
-          <div className="flex w-96 shrink-0 flex-col overflow-hidden border-r border-border">
+          <div data-tour="findings-list" className="flex w-96 shrink-0 flex-col overflow-hidden border-r border-border">
             {loadedOnce ? (
               <FindingList
                 findings={findings}

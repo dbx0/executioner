@@ -17,6 +17,7 @@ export function Sidebar(): JSX.Element {
       <ScrollArea className="min-h-0 flex-1 px-2 pb-2 pt-2">
         <button
           type="button"
+          data-tour="search"
           onClick={() => setPalette(true)}
           // Deliberately muted: the palette opener sits distinctly quieter than
           // the nav items (which are sidebar-foreground/65). Its own opacity-60
@@ -29,14 +30,16 @@ export function Sidebar(): JSX.Element {
           <kbd className="ml-auto rounded border border-border px-1 text-[10px]">⌘K</kbd>
         </button>
 
-        {NAV_GROUPS.map((group) => (
-          <nav key={group.label} className="flex flex-col gap-0.5">
-            <SectionLabel>{group.label}</SectionLabel>
-            {group.items.map((item) => (
-              <NavItemRow key={item.kind === 'view' ? item.id : item.tab} item={item} />
-            ))}
-          </nav>
-        ))}
+        <div data-tour="nav">
+          {NAV_GROUPS.map((group) => (
+            <nav key={group.label} className="flex flex-col gap-0.5">
+              <SectionLabel>{group.label}</SectionLabel>
+              {group.items.map((item) => (
+                <NavItemRow key={item.kind === 'view' ? item.id : item.tab} item={item} />
+              ))}
+            </nav>
+          ))}
+        </div>
 
         {hasEngagement && <SessionsSection />}
       </ScrollArea>

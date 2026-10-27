@@ -194,6 +194,8 @@ export interface AppState {
   defaultExecution: ExecutionMode
   /** Whether the first-launch onboarding modal is open. */
   onboardingOpen: boolean
+  /** Page tours the user has finished or skipped, by tour id. */
+  toursSeen: string[]
   /** Whether the "New engagement" modal is open. */
   newEngagementOpen: boolean
   /** Which tab that modal opens on (the callers that open it pick one). */
@@ -279,6 +281,10 @@ export interface AppState {
   openOnboarding: () => void
   /** Finish onboarding: persist the completed flag and close the modal. */
   completeOnboarding: () => void
+  /** Record a page tour as done, so it is not shown again. */
+  markTourSeen: (id: string) => void
+  /** Forget every finished tour, so each page shows its tour again. */
+  resetTours: () => void
   setActiveView: (v: ViewId) => void
   setSettingsSection: (id: string) => void
   /** Jump to the Settings view, optionally deep-linking a sub-section. */

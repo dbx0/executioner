@@ -9,6 +9,7 @@ import { CommandPalette } from '../components/CommandPalette.js'
 import { FloatingNotepad } from '../components/FloatingNotepad.js'
 import { OnboardingModal } from '../components/onboarding/OnboardingModal.js'
 import { NewEngagementModal } from '../components/modals/NewEngagementModal.js'
+import { PageTour } from '../components/tour/PageTour.js'
 import { Titlebar } from './Titlebar.js'
 import { Sidebar } from './Sidebar.js'
 import { RightSidebar } from './RightSidebar.js'
@@ -203,6 +204,7 @@ export function Shell(): JSX.Element {
       <FloatingNotepad />
       <OnboardingModal />
       <NewEngagementModal />
+      <PageTour />
     </TooltipProvider>
   )
 }

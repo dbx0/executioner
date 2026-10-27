@@ -494,7 +494,7 @@ export function ToolsView(): JSX.Element {
       >
         <span className="text-[13px] font-medium">Tools</span>
         <span className="text-[11px] text-muted-foreground">{nodes.length}</span>
-        <div className="ml-auto flex min-w-0 items-center gap-2">
+        <div data-tour="tools-connection" className="ml-auto flex min-w-0 items-center gap-2">
           {probes[backendId]?.error != null && (
             <span className="min-w-0 truncate text-[11.5px] text-muted-foreground">
               Could not check this connection, so install state is unknown.
@@ -534,7 +534,7 @@ export function ToolsView(): JSX.Element {
           installState={installState}
           searchRef={searchRef}
         />
-        <div className="min-h-[320px] min-w-0 shrink-0 min-[1100px]:min-h-0 min-[1100px]:flex-1 min-[1100px]:shrink">
+        <div data-tour="tools-run" className="min-h-[320px] min-w-0 shrink-0 min-[1100px]:min-h-0 min-[1100px]:flex-1 min-[1100px]:shrink">
           <RunForm
             node={node}
             targets={targets}

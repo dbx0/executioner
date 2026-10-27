@@ -4,6 +4,7 @@ import {
   saveEditorAutoSave,
   saveDefaultExecution,
   saveOnboarded,
+  saveToursSeen,
   saveRightCollapsed,
   saveRightTab,
   saveTheme,
@@ -12,7 +13,7 @@ import type { AppState } from '../types.js'
 import type { SliceCtx } from './context.js'
 
 /** Chrome-level state: theme, onboarding defaults, views, sidebars, palette, hub. */
-export function createUiSlice(ctx: SliceCtx): Pick<AppState, 'setEditorAutoSave' | 'setTheme' | 'toggleTheme' | 'setDefaultAgent' | 'setDefaultExecution' | 'openOnboarding' | 'completeOnboarding' | 'setActiveView' | 'setSettingsSection' | 'openSettings' | 'toggleSidebar' | 'toggleRightSidebar' | 'setRightTab' | 'setPalette' | 'setPendingTargetId' | 'setHubTab' | 'openHub' | 'openExecution' | 'setPendingExecutionId' | 'openFinding' | 'setPendingFindingId' | 'openTools' | 'setPendingToolTargetId'> {
+export function createUiSlice(ctx: SliceCtx): Pick<AppState, 'setEditorAutoSave' | 'setTheme' | 'toggleTheme' | 'setDefaultAgent' | 'setDefaultExecution' | 'openOnboarding' | 'completeOnboarding' | 'markTourSeen' | 'resetTours' | 'setActiveView' | 'setSettingsSection' | 'openSettings' | 'toggleSidebar' | 'toggleRightSidebar' | 'setRightTab' | 'setPalette' | 'setPendingTargetId' | 'setHubTab' | 'openHub' | 'openExecution' | 'setPendingExecutionId' | 'openFinding' | 'setPendingFindingId' | 'openTools' | 'setPendingToolTargetId'> {
   const { set, get } = ctx
 
   return {
@@ -38,6 +39,17 @@ export function createUiSlice(ctx: SliceCtx): Pick<AppState, 'setEditorAutoSave'
     completeOnboarding: () => {
       saveOnboarded()
       set({ onboardingOpen: false })
+    },
+    markTourSeen: (id) => {
+      const seen = get().toursSeen
+      if (seen.includes(id)) return
+      const next = [...seen, id]
+      saveToursSeen(next)
+      set({ toursSeen: next })
+    },
+    resetTours: () => {
+      saveToursSeen([])
+      set({ toursSeen: [] })
     },
     setActiveView: (v) => set({ activeView: v }),
     setSettingsSection: (id) => set({ settingsSection: id }),

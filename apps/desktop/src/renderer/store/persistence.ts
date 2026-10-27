@@ -17,6 +17,7 @@ const THEME_KEY = 'exe.theme'
 const DEFAULT_AGENT_KEY = 'exe.defaultAgent'
 const DEFAULT_EXEC_KEY = 'exe.defaultExecution'
 const ONBOARDED_KEY = 'exe.onboarded'
+const TOURS_SEEN_KEY = 'exe.toursSeen'
 const RIGHT_COLLAPSED_KEY = 'exe.rightSidebarCollapsed'
 const RIGHT_TAB_KEY = 'exe.activeRightTab'
 const RECENTS_KEY = 'exe.recents'
@@ -289,6 +290,24 @@ export function loadOnboarded(): boolean {
 export function saveOnboarded(): void {
   try {
     localStorage.setItem(ONBOARDED_KEY, 'true')
+  } catch {
+    /* ignore */
+  }
+}
+
+/** The page tours already walked through (or skipped), by tour id. */
+export function loadToursSeen(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TOURS_SEEN_KEY) ?? '[]') as unknown
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+export function saveToursSeen(ids: string[]): void {
+  try {
+    localStorage.setItem(TOURS_SEEN_KEY, JSON.stringify(ids))
   } catch {
     /* ignore */
   }

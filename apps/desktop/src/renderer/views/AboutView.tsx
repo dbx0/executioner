@@ -92,6 +92,7 @@ export function AboutView(): JSX.Element {
           <Button
             variant="outline"
             size="sm"
+            data-tour="about-close"
             onClick={() => closeEngagement()}
             title="Return to the landing screen. The engine keeps running."
           >

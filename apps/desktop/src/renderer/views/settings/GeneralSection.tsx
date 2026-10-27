@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { Sparkles } from 'lucide-react'
+import { Compass, Sparkles } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { Button } from '../../components/ui/button.js'
 import { OnboardingChecklist } from '../../components/onboarding/OnboardingChecklist.js'
@@ -10,6 +10,8 @@ import { PageHeading, Row } from './parts.js'
  *  (name, badge) and closing it live on the About page, with the engagement. */
 export function GeneralSection(): JSX.Element {
   const openOnboarding = useApp((s) => s.openOnboarding)
+  const resetTours = useApp((s) => s.resetTours)
+  const toursSeen = useApp((s) => s.toursSeen.length)
   const editorAutoSave = useApp((s) => s.editorAutoSave)
   const setEditorAutoSave = useApp((s) => s.setEditorAutoSave)
 
@@ -35,6 +37,12 @@ export function GeneralSection(): JSX.Element {
         <Button variant="outline" size="sm" onClick={openOnboarding}>
           <Sparkles className="size-4" strokeWidth={1.75} />
           Run setup
+        </Button>
+      </Row>
+      <Row label="Page tours" description="Show each page's walkthrough again the next time you open it.">
+        <Button variant="outline" size="sm" disabled={toursSeen === 0} onClick={resetTours}>
+          <Compass className="size-4" strokeWidth={1.75} />
+          Replay tours
         </Button>
       </Row>
     </div>

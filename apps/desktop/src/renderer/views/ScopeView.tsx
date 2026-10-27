@@ -83,6 +83,7 @@ export function ScopeView(): JSX.Element {
         <Button
           size="sm"
           className="ml-auto shrink-0"
+          data-tour="scope-add"
           disabled={client === null || busy}
           onClick={() => setShowAdd(true)}
         >
@@ -100,7 +101,7 @@ export function ScopeView(): JSX.Element {
         <div className="shrink-0 border-b border-border px-4 py-1.5 text-[12px] text-muted-foreground">{status}</div>
       )}
 
-      <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-4 py-3">
+      <div data-tour="scope-rules" className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {rules === null ? (
           <p className="py-6 text-center text-[13px] text-muted-foreground">Loading…</p>
         ) : sorted.length === 0 ? (

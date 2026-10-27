@@ -48,7 +48,7 @@ export function SettingsView(): JSX.Element {
       <div className="flex h-11 shrink-0 items-center border-b border-border px-4 text-sm font-medium">Settings</div>
       <div className="flex min-h-0 flex-1">
         {/* Sub-navigation */}
-        <nav className="w-52 shrink-0 overflow-y-auto scrollbar-sleek border-r border-border p-2">
+        <nav data-tour="settings-nav" className="w-52 shrink-0 overflow-y-auto scrollbar-sleek border-r border-border p-2">
           {SECTIONS.map(({ id, label, icon: Icon }) => {
             const selected = id === active
             return (

@@ -200,6 +200,7 @@ export function TargetsView(): JSX.Element {
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="Filter…"
+            data-tour="targets-filter"
             className="h-8 w-44 text-[13px]"
           />
           <Button
@@ -215,7 +216,7 @@ export function TargetsView(): JSX.Element {
           <Button variant="ghost" size="icon-sm" onClick={() => void refresh()} aria-label="Refresh">
             <RefreshCw className={cn('size-4', loading && 'animate-[spin_1s_linear_infinite]')} strokeWidth={1.75} />
           </Button>
-          <Button size="sm" disabled={client === null} onClick={() => setShowAdd(true)}>
+          <Button size="sm" data-tour="targets-add" disabled={client === null} onClick={() => setShowAdd(true)}>
             <Plus className="size-4" strokeWidth={2} />
             Add target
           </Button>
@@ -273,6 +274,7 @@ export function TargetsView(): JSX.Element {
           so an unselected page gives the whole width to the list. */}
       <div className="flex min-h-0 flex-1">
         <div
+          data-tour="targets-tree"
           className={cn(
             'flex flex-col',
             detailOpen ? 'w-96 shrink-0 border-r border-border' : 'min-w-0 flex-1',
