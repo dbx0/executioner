@@ -3,3 +3,6 @@ contact_links:
   - name: Report a security vulnerability
     url: https://github.com/dbx0/executioner/security/advisories/new
     about: Report vulnerabilities in Executioner privately. Please do not open a public issue.
+  - name: Ask a question or share an idea
+    url: https://github.com/dbx0/executioner/discussions
+    about: Questions, ideas and show-and-tell go to Discussions. Issues are for bugs and concrete work.

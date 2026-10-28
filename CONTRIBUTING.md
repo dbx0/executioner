@@ -6,6 +6,7 @@ Executioner is a tool for authorized security testing. Contributions that exist 
 
 ## Ways to contribute
 
+- **Ask a question or float an idea.** Use [Discussions](https://github.com/dbx0/executioner/discussions). Issues are for bugs and concrete, agreed work.
 - **Report a bug.** Open a [bug report](https://github.com/dbx0/executioner/issues/new?template=bug_report.yml). Include your OS, the release you installed (for example `v0.0.3`) and the steps that trigger it.
 - **Ask for a feature.** Open a [feature request](https://github.com/dbx0/executioner/issues/new?template=feature_request.yml) and describe the problem before the solution.
 - **Add a tool.** Most tools are a single TOML manifest. Open a [tool node request](https://github.com/dbx0/executioner/issues/new?template=tool_node.yml), or send the manifest straight away (see [Adding a tool node](#adding-a-tool-node)).
