@@ -1,0 +1,28 @@
+# Pull requests are squash merged, so the PR title becomes the commit on main
+# and feeds the release notes (scripts/release-notes.mjs). Check its format.
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  conventional:
+    name: Conventional PR title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the title
+        env:
+          # Through the environment, never interpolated into the script, so a
+          # crafted title cannot inject shell.
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|perf|refactor|style|docs|build|ci|test|chore|revert)(\([a-z0-9._/-]+\))?!?: [^ ].*$'
+          if printf '%s' "$TITLE" | grep -Eq "$pattern"; then
+            echo "OK: $TITLE"
+          else
+            echo "::error::PR title must follow Conventional Commits, e.g. 'fix(engine): skip overlapping interval runs'. Got: $TITLE"
+            exit 1
+          fi

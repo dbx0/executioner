@@ -1,0 +1,73 @@
+name: Bug report
+description: Something in Executioner is not working as expected
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Found a security vulnerability? Please use [private reporting](https://github.com/dbx0/executioner/security/advisories/new) instead.
+        Remove API keys, tokens and client data from anything you paste below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open an engagement
+        2. Run the "Domain recon" workflow on example.com
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release you installed, or the commit if you built from source.
+      placeholder: v0.0.3
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - Install script (install.sh / install.ps1)
+        - Downloaded from the release page
+        - Built from source
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Workflows and canvas
+        - Agents
+        - Targets, scope and findings
+        - Tools and nodes
+        - Terminals
+        - Connections and remote backends
+        - Install and updates
+        - Other
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Relevant output from Settings > Logs, your terminal, or a screenshot.
+      render: text

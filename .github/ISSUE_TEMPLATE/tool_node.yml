@@ -1,0 +1,32 @@
+name: Tool node request
+description: Ask for a command-line tool to be added as a node
+title: "Tool node: "
+labels: ["tool-node", "triage"]
+body:
+  - type: input
+    id: tool
+    attributes:
+      label: Tool
+      description: Name and link to the project.
+      placeholder: katana (https://github.com/projectdiscovery/katana)
+    validations:
+      required: true
+  - type: textarea
+    id: use
+    attributes:
+      label: What would you use it for?
+      description: Which targets it runs against, and what it should add to the engagement (new targets, ports, technologies, findings).
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Example command and output
+      description: A command you run today, and a short sample of its output. JSON output is best.
+      render: text
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I can write the manifest (see "Adding a tool node" in CONTRIBUTING.md)
