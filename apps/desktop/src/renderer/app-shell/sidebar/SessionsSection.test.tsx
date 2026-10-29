@@ -61,4 +61,28 @@ describe('SessionsSection', () => {
     render(<SessionsSection />)
     expect(screen.getAllByRole('button', { name: /new session/i })).toHaveLength(1)
   })
+
+  it('an idle agent session shows the idle dot', () => {
+    useApp.setState({ sessions: [session({ id: 'a1', agent: 'claude', label: 'claude', title: 'recon' })] })
+    render(<SessionsSection />)
+    expect(screen.getByLabelText('idle')).toBeTruthy()
+    expect(screen.queryByLabelText('working')).toBeNull()
+  })
+
+  it('a working agent session shows the working dot and no idle dot', () => {
+    useApp.setState({
+      sessions: [session({ id: 'a1', agent: 'claude', label: 'claude', title: 'recon' })],
+      sessionState: { a1: 'working' },
+    })
+    render(<SessionsSection />)
+    expect(screen.getByLabelText('working')).toBeTruthy()
+    expect(screen.queryByLabelText('idle')).toBeNull()
+  })
+
+  it('an idle shell row shows no dot', () => {
+    useApp.setState({ sessions: [session({ id: 't1', agent: 'shell', label: 'bash' })] })
+    render(<SessionsSection />)
+    expect(screen.queryByLabelText('idle')).toBeNull()
+    expect(screen.queryByLabelText('working')).toBeNull()
+  })
 })

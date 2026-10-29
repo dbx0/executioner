@@ -34,7 +34,7 @@ export function SubagentNodeRow({ node }: { node: SubagentNode }): JSX.Element {
         {working ? (
           <AgentStatusDot state="working" className="ml-auto size-2" />
         ) : (
-          <span className="ml-auto text-status-success">✓</span>
+          <span className="ml-auto text-status-success motion-safe:animate-pop">✓</span>
         )}
       </div>
       {hasChildren && !collapsed && <SubagentChildren nodes={node.children} />}

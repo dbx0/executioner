@@ -18,7 +18,7 @@ function StatusGlyph({ status }: { status: MemberStatus }): JSX.Element {
     )
   }
   if (status === 'done') {
-    return <Check className="size-3 shrink-0 text-status-success" strokeWidth={2.5} aria-label="done" />
+    return <Check className="size-3 shrink-0 text-status-success motion-safe:animate-pop" strokeWidth={2.5} aria-label="done" />
   }
   return <span className="size-2 shrink-0 rounded-full bg-tertiary-foreground" aria-label="idle" />
 }

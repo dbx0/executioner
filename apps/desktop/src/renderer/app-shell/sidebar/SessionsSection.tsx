@@ -92,7 +92,7 @@ function AgentRow({ session }: { session: Session }): JSX.Element {
         >
           <AgentIcon agent={session.agent} className="size-4 shrink-0 text-muted-foreground" />
           <span className="truncate">{session.title ?? session.label}</span>
-          {working && <AgentStatusDot state="working" className="ml-auto" />}
+          <AgentStatusDot state={working ? 'working' : 'idle'} className="ml-auto" />
         </button>
       </div>
       {hasSubs && !collapsed && <SubagentChildren nodes={tree} />}
