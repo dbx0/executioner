@@ -18,6 +18,13 @@ export interface TargetNode {
   children: TargetNode[]
 }
 
+/** What re-judging the target tree after a boundary edit produced. */
+export interface Rejudge {
+  rejudged: number
+  inScope: number
+  outOfScope: number
+}
+
 export interface ScopeRule {
   id: string
   effect: 'include' | 'exclude'
@@ -83,11 +90,11 @@ export const targetsApi = (client: AxiosInstance) => ({
   /** The engagement boundary every target write is judged against. */
   scopeRules: () => client.get<ScopeRule[]>('/scope/rules').then((r) => r.data),
   addScopeRule: (input: { effect: 'include' | 'exclude'; pattern: string; note?: string }) =>
-    client.post<{ rule: ScopeRule; rejudged: number }>('/scope/rules', input).then((r) => r.data),
+    client.post<{ rule: ScopeRule } & Rejudge>('/scope/rules', input).then((r) => r.data),
   updateScopeRule: (
     id: string,
     patch: { effect?: 'include' | 'exclude'; pattern?: string; note?: string },
-  ) => client.patch<{ rule: ScopeRule; rejudged: number }>(`/scope/rules/${id}`, patch).then((r) => r.data),
+  ) => client.patch<{ rule: ScopeRule } & Rejudge>(`/scope/rules/${id}`, patch).then((r) => r.data),
   removeScopeRule: (id: string) =>
-    client.delete<{ ok: boolean; rejudged: number }>(`/scope/rules/${id}`).then((r) => r.data),
+    client.delete<{ ok: boolean } & Rejudge>(`/scope/rules/${id}`).then((r) => r.data),
 })

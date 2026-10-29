@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { openDatabase } from './index.js'
+import { ScopeRuleRepository } from './scope-rules.js'
 import { TargetRepository } from './targets.js'
 
 let repo: TargetRepository
+let rules: ScopeRuleRepository
 
 beforeEach(() => {
   const db = openDatabase(':memory:')
   repo = new TargetRepository(db)
+  rules = new ScopeRuleRepository(db)
 })
 
 describe('TargetRepository.upsert', () => {
@@ -93,5 +96,33 @@ describe('TargetRepository.findByValue', () => {
 
   it('returns undefined when absent', () => {
     expect(repo.findByValue('domain', 'nope.test')).toBeUndefined()
+  })
+})
+
+describe('TargetRepository.scopeCounts', () => {
+  it('scopeCounts counts each status', () => {
+    repo.upsert({ kind: 'domain', value: 'a.com', source: 'manual' })
+    repo.upsert({ kind: 'domain', value: 'b.com', source: 'manual' })
+    repo.upsert({ kind: 'domain', value: 'c.com', source: 'manual' })
+    expect(repo.scopeCounts()).toEqual({ inScope: 0, outOfScope: 0, unknown: 3 })
+  })
+
+  it('scopeCounts splits in, out and unknown once rules judge the tree', () => {
+    rules.add({ effect: 'include', pattern: '*.example.com', source: 'manual' })
+    rules.add({ effect: 'exclude', pattern: 'shop.example.com', source: 'manual' })
+    repo.upsert({ kind: 'subdomain', value: 'api.example.com', source: 'manual' })
+    repo.upsert({ kind: 'subdomain', value: 'www.example.com', source: 'manual' })
+    repo.upsert({ kind: 'subdomain', value: 'shop.example.com', source: 'manual' })
+    repo.upsert({ kind: 'domain', value: 'other.org', source: 'manual' })
+    repo.reevaluateScope()
+
+    const counts = repo.scopeCounts()
+    const judged = Object.fromEntries(repo.all().map((t) => [t.value, t.scopeStatus]))
+    const tally = (s: string): number => Object.values(judged).filter((v) => v === s).length
+    expect(counts).toEqual({ inScope: tally('in'), outOfScope: tally('out'), unknown: tally('unknown') })
+    expect(judged['shop.example.com']).toBe('out')
+    expect(judged['other.org']).toBe('unknown')
+    expect(counts.inScope).toBeGreaterThanOrEqual(2)
+    expect(counts.outOfScope).toBe(1)
   })
 })

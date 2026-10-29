@@ -2,7 +2,7 @@ import type { JSX } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Loader2, Plus, Sparkles, X } from 'lucide-react'
 import { useApp } from '../../store.js'
-import { targetsApi } from '../../api/targets.js'
+import { targetsApi, type Rejudge } from '../../api/targets.js'
 import { scopeApi } from '../../api/scope.js'
 import { cn } from '../../lib/utils.js'
 import { Button } from '../ui/button.js'
@@ -22,11 +22,11 @@ const TABS: { id: Tab; label: string }[] = [
 export interface AddScopeRuleModalProps {
   onClose: () => void
   /**
-   * The boundary changed: reload the list. `rejudged` is how many target verdicts
-   * the write moved, or null when the caller cannot know (the AI pass writes its
-   * rules through MCP, so no single count comes back).
+   * The boundary changed: reload the list. `rejudge` is how many target verdicts
+   * the write moved and the split it left, or null when the caller cannot know
+   * (the AI pass writes its rules through MCP, so no single count comes back).
    */
-  onApplied: (rejudged: number | null) => void
+  onApplied: (rejudge: Rejudge | null) => void
 }
 
 /**
@@ -92,12 +92,12 @@ export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps
     setBusy(true)
     setError(null)
     try {
-      const { rejudged } = await api.addScopeRule({
+      const { rejudged, inScope, outOfScope } = await api.addScopeRule({
         effect,
         pattern: trimmed,
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       })
-      onApplied(rejudged)
+      onApplied({ rejudged, inScope, outOfScope })
       onClose()
     } catch (e) {
       setError((e as Error).message)

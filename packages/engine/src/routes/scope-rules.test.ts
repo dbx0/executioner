@@ -38,6 +38,18 @@ describe('GET /scope/rules', () => {
 })
 
 describe('POST /scope/rules', () => {
+  it('returns the in and out of scope split after re-judging', async () => {
+    project.targets.upsert({ kind: 'domain', value: 'smartfit.com.br', source: 'manual' })
+    project.targets.upsert({ kind: 'domain', value: 'smartfit.io', source: 'manual' })
+    project.targets.upsert({ kind: 'domain', value: 'other.org', source: 'manual' })
+    await post({ effect: 'exclude', pattern: 'smartfit.io' })
+
+    const res = await post({ effect: 'include', pattern: '*.smartfit.com.br' })
+    const body = (await res.json()) as { rejudged: number; inScope: number; outOfScope: number }
+    expect(body.inScope).toBe(1)
+    expect(body.outOfScope).toBe(1)
+  })
+
   it('adds a rule and reports how many targets changed verdict', async () => {
     project.targets.upsert({ kind: 'domain', value: 'smartfit.com.br', source: 'manual' })
 
@@ -127,7 +139,7 @@ describe('POST /scope/reevaluate', () => {
 
     const res = await app.request('/scope/reevaluate', { method: 'POST' })
     expect(res.status).toBe(200)
-    expect((await res.json()) as { rejudged: number }).toEqual({ rejudged: 1 })
+    expect((await res.json()) as { rejudged: number }).toEqual({ rejudged: 1, inScope: 1, outOfScope: 0 })
     expect(project.targets.get(target.id)?.scopeStatus).toBe('in')
   })
 })

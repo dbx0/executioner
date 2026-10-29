@@ -31,6 +31,13 @@ const updateSchema = z
 export function scopeRuleRoutes(project: Project): Hono {
   const app = new Hono()
 
+  /** Re-judge the tree and report how many verdicts moved and where the tree now stands. */
+  const rejudge = (): { rejudged: number; inScope: number; outOfScope: number } => {
+    const rejudged = project.targets.reevaluateScope()
+    const { inScope, outOfScope } = project.targets.scopeCounts()
+    return { rejudged, inScope, outOfScope }
+  }
+
   app.get('/scope/rules', (c) => c.json(project.scopeRules.all()))
 
   app.post('/scope/rules', async (c) => {
@@ -46,7 +53,7 @@ export function scopeRuleRoutes(project: Project): Hono {
         ...(parsed.data.note === undefined ? {} : { note: parsed.data.note }),
         source: parsed.data.source ?? 'manual',
       })
-      return c.json({ rule, rejudged: project.targets.reevaluateScope() }, 201)
+      return c.json({ rule, ...rejudge() }, 201)
     } catch (e) {
       return c.json({ error: (e as Error).message }, 400)
     }
@@ -65,7 +72,7 @@ export function scopeRuleRoutes(project: Project): Hono {
         ...(parsed.data.note === undefined ? {} : { note: parsed.data.note }),
       })
       if (rule === undefined) return c.json({ error: 'not found' }, 404)
-      return c.json({ rule, rejudged: project.targets.reevaluateScope() })
+      return c.json({ rule, ...rejudge() })
     } catch (e) {
       return c.json({ error: (e as Error).message }, 409)
     }
@@ -73,10 +80,10 @@ export function scopeRuleRoutes(project: Project): Hono {
 
   app.delete('/scope/rules/:id', (c) => {
     if (!project.scopeRules.remove(c.req.param('id'))) return c.json({ error: 'not found' }, 404)
-    return c.json({ ok: true, rejudged: project.targets.reevaluateScope() })
+    return c.json({ ok: true, ...rejudge() })
   })
 
-  app.post('/scope/reevaluate', (c) => c.json({ rejudged: project.targets.reevaluateScope() }))
+  app.post('/scope/reevaluate', (c) => c.json({ ...rejudge() }))
 
   return app
 }

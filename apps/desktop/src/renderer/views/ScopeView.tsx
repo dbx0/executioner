@@ -2,13 +2,17 @@ import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2, ShieldCheck, ShieldX } from 'lucide-react'
 import { useApp } from '../store.js'
-import { targetsApi, type ScopeRule } from '../api/targets.js'
+import { stagger, useNewIds } from '../lib/motion.js'
+import { targetsApi, type Rejudge, type ScopeRule } from '../api/targets.js'
+import { cn } from '../lib/utils.js'
 import { Button } from '../components/ui/button.js'
 import { Badge } from '../components/ui/badge.js'
 import { AddScopeRuleModal } from '../components/modals/AddScopeRuleModal.js'
 
-const describeRejudged = (n: number): string | null =>
-  n === 0 ? null : `Re-judged ${n} ${n === 1 ? 'target' : 'targets'}.`
+const describeRejudged = ({ rejudged, inScope, outOfScope }: Rejudge): string | null =>
+  rejudged === 0
+    ? null
+    : `Re-judged ${rejudged} ${rejudged === 1 ? 'target' : 'targets'}. ${inScope} in scope, ${outOfScope} out of scope.`
 
 /**
  * The engagement's boundary, as an editable list.
@@ -21,7 +25,10 @@ export function ScopeView(): JSX.Element {
   const client = useApp((s) => s.client)
   const api = useMemo(() => (client === null ? null : targetsApi(client)), [client])
 
+  const activeRoot = useApp((s) => s.activeRoot)
   const [rules, setRules] = useState<ScopeRule[] | null>(null)
+  // Which engagement the loaded rules belong to, so a switch never diffs against the old one.
+  const [loadedRoot, setLoadedRoot] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -36,16 +43,17 @@ export function ScopeView(): JSX.Element {
       setError((e as Error).message)
       setRules([])
     }
-  }, [api])
+    setLoadedRoot(activeRoot)
+  }, [api, activeRoot])
 
   useEffect(() => {
     void load()
   }, [load])
 
   const applied = useCallback(
-    (rejudged: number | null) => {
+    (rejudge: Rejudge | null) => {
       setError(null)
-      setStatus(rejudged === null ? null : describeRejudged(rejudged))
+      setStatus(rejudge === null ? null : describeRejudged(rejudge))
       void load()
     },
     [load],
@@ -57,8 +65,8 @@ export function ScopeView(): JSX.Element {
     setError(null)
     setStatus(null)
     try {
-      const { rejudged } = await api.removeScopeRule(rule.id)
-      setStatus(describeRejudged(rejudged))
+      const { rejudged, inScope, outOfScope } = await api.removeScopeRule(rule.id)
+      setStatus(describeRejudged({ rejudged, inScope, outOfScope }))
       await load()
     } catch (e) {
       setError((e as Error).message)
@@ -74,6 +82,14 @@ export function ScopeView(): JSX.Element {
         .sort((a, b) => (a.effect === b.effect ? a.pattern.localeCompare(b.pattern) : a.effect === 'exclude' ? -1 : 1)),
     [rules],
   )
+
+  const newIds = useNewIds(
+    useMemo(() => (loadedRoot === activeRoot ? sorted.map((r) => r.id) : []), [sorted, loadedRoot, activeRoot]),
+    activeRoot,
+    rules !== null && loadedRoot === activeRoot,
+  )
+  // Stagger by position among the new rows, so a lone rule never waits on its row number.
+  const newOrder = useMemo(() => new Map([...newIds].map((id, i) => [id, i])), [newIds])
 
   return (
     <div className="flex h-full flex-col">
@@ -113,7 +129,12 @@ export function ScopeView(): JSX.Element {
             {sorted.map((rule) => (
               <li
                 key={rule.id}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-2"
+                data-new={newIds.has(rule.id) ? 'true' : undefined}
+                className={cn(
+                  'flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-2',
+                  newIds.has(rule.id) && 'motion-safe:animate-enter-x',
+                )}
+                style={newIds.has(rule.id) ? stagger(newOrder.get(rule.id) ?? 0, 70) : undefined}
               >
                 {rule.effect === 'exclude' ? (
                   <ShieldX className="size-3.5 shrink-0 text-destructive" strokeWidth={1.75} />

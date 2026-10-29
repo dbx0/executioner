@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm'
+import { asc, count, eq, inArray } from 'drizzle-orm'
 import {
   canonicaliseAsset,
   evaluateScope,
@@ -190,6 +190,22 @@ export class TargetRepository {
       }
     })
     return changed
+  }
+
+  /** How many targets sit at each verdict, so a re-judge can report the split it produced. */
+  scopeCounts(): { inScope: number; outOfScope: number; unknown: number } {
+    const counts = { inScope: 0, outOfScope: 0, unknown: 0 }
+    const rows = this.orm
+      .select({ status: targets.scopeStatus, n: count() })
+      .from(targets)
+      .groupBy(targets.scopeStatus)
+      .all()
+    for (const { status, n } of rows) {
+      if (status === 'in') counts.inScope = n
+      else if (status === 'out') counts.outOfScope = n
+      else counts.unknown += n
+    }
+    return counts
   }
 
   all(): Target[] {

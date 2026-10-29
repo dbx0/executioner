@@ -19,9 +19,9 @@ vi.mock('../api/scope.js', () => ({ scopeApi: () => ({ parse }) }))
 
 const api = {
   scopeRules: vi.fn(() => Promise.resolve([rule()])),
-  addScopeRule: vi.fn(() => Promise.resolve({ rule: rule({ id: 'r2' }), rejudged: 3 })),
+  addScopeRule: vi.fn(() => Promise.resolve({ rule: rule({ id: 'r2' }), rejudged: 3, inScope: 2, outOfScope: 1 })),
   updateScopeRule: vi.fn(() => Promise.resolve({ rule: rule(), rejudged: 0 })),
-  removeScopeRule: vi.fn(() => Promise.resolve({ ok: true, rejudged: 2 })),
+  removeScopeRule: vi.fn(() => Promise.resolve({ ok: true, rejudged: 2, inScope: 1, outOfScope: 1 })),
 }
 
 vi.mock('../api/targets.js', () => ({ targetsApi: () => api }))
@@ -31,8 +31,8 @@ const { ScopeView } = await import('./ScopeView.js')
 beforeEach(() => {
   vi.clearAllMocks()
   api.scopeRules.mockResolvedValue([rule()])
-  api.addScopeRule.mockResolvedValue({ rule: rule({ id: 'r2' }), rejudged: 3 })
-  api.removeScopeRule.mockResolvedValue({ ok: true, rejudged: 2 })
+  api.addScopeRule.mockResolvedValue({ rule: rule({ id: 'r2' }), rejudged: 3, inScope: 2, outOfScope: 1 })
+  api.removeScopeRule.mockResolvedValue({ ok: true, rejudged: 2, inScope: 1, outOfScope: 1 })
   useApp.setState({ client: {} as AxiosInstance, defaultAgent: 'claude', scopeRuns: {} })
 })
 
@@ -92,6 +92,41 @@ describe('ScopeView', () => {
     submit()
 
     expect(await screen.findByText(/3 targets/i)).toBeTruthy()
+  })
+
+  it('shows the in and out of scope split after a manual add', async () => {
+    await openAdd()
+
+    fireEvent.change(screen.getByLabelText(/pattern/i), { target: { value: 'smartfit.com' } })
+    submit()
+
+    expect(await screen.findByText('Re-judged 3 targets. 2 in scope, 1 out of scope.')).toBeTruthy()
+  })
+
+  it('says target in the singular for a single re-judged target', async () => {
+    api.addScopeRule.mockResolvedValue({ rule: rule({ id: 'r2' }), rejudged: 1, inScope: 1, outOfScope: 0 })
+    await openAdd()
+
+    fireEvent.change(screen.getByLabelText(/pattern/i), { target: { value: 'smartfit.com' } })
+    submit()
+
+    expect(await screen.findByText('Re-judged 1 target. 1 in scope, 0 out of scope.')).toBeTruthy()
+  })
+
+  it('does not mark the first load of rules as new, only a later arrival', async () => {
+    const { container } = open()
+    await screen.findByText('*.smartfit.com.br')
+    expect(container.querySelectorAll('[data-new="true"]')).toHaveLength(0)
+
+    api.scopeRules.mockResolvedValue([rule(), rule({ id: 'r2', pattern: 'new.example.com' })])
+    fireEvent.click(screen.getByRole('button', { name: /add rule/i }))
+    fireEvent.change(screen.getByLabelText(/pattern/i), { target: { value: 'new.example.com' } })
+    submit()
+
+    await screen.findByText('new.example.com')
+    const fresh = container.querySelectorAll('[data-new="true"]')
+    expect(fresh).toHaveLength(1)
+    expect(fresh[0]?.textContent).toContain('new.example.com')
   })
 
   it('does not submit an empty pattern', async () => {
