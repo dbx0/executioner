@@ -144,7 +144,7 @@ export function TargetsView(): JSX.Element {
   const total = useMemo(() => countTree(tree), [tree])
 
   const allIds = useMemo(() => (treeRoot === activeRoot ? collectIds(tree) : []), [tree, treeRoot, activeRoot])
-  const newIds = useFlashIds(allIds, activeRoot)
+  const newIds = useFlashIds(allIds, activeRoot, loadedOnce && treeRoot === activeRoot)
 
   const describeRejudged = (n: number): string =>
     n === 0 ? '' : ` · re-judged ${n} ${n === 1 ? 'target' : 'targets'}`

@@ -65,6 +65,24 @@ describe('motion', () => {
     expect(result.current).toBe(stable)
   })
 
+  it('useNewIds treats an empty load as the baseline once ready', () => {
+    const { result, rerender } = renderHook(({ ids, ready }) => useNewIds(ids, 'e1', ready), {
+      initialProps: { ids: [] as string[], ready: false },
+    })
+    rerender({ ids: [], ready: true })
+    expect(result.current.size).toBe(0)
+    rerender({ ids: ['a'], ready: true })
+    expect([...result.current]).toEqual(['a'])
+  })
+
+  it('useNewIds waits for ready before taking a baseline', () => {
+    const { result, rerender } = renderHook(({ ids, ready }) => useNewIds(ids, 'e1', ready), {
+      initialProps: { ids: [] as string[], ready: false },
+    })
+    rerender({ ids: ['a', 'b'], ready: true })
+    expect(result.current.size).toBe(0)
+  })
+
   it('useNewIds resets when resetKey changes', () => {
     const { result, rerender } = renderHook(({ ids, key }) => useNewIds(ids, key), {
       initialProps: { ids: ['a'], key: 'e1' },

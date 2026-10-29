@@ -57,21 +57,23 @@ interface NewIdsState {
 }
 
 /**
- * Ids that appeared since the previous load. The first non-empty load for a
- * resetKey is the baseline and yields an empty set. Seen ids accumulate, so an
- * id that disappears and returns is not new again. The returned set keeps its
- * reference while the ids are unchanged.
+ * Ids that appeared since the previous load. The first load for a resetKey that
+ * is `ready` is the baseline and yields an empty set, even when it is empty, so
+ * the first item added to an empty list still counts as new. `ready` defaults to
+ * "ids is non-empty" for callers that cannot tell an empty load from no load.
+ * Seen ids accumulate, so an id that disappears and returns is not new again.
+ * The returned set keeps its reference while the ids are unchanged.
  */
-export function useNewIds(ids: readonly string[], resetKey: unknown): ReadonlySet<string> {
+export function useNewIds(ids: readonly string[], resetKey: unknown, ready = ids.length > 0): ReadonlySet<string> {
   const [state, setState] = useState<NewIdsState>({ resetKey, seen: null, key: '', result: EMPTY })
-  const key = ids.join('\0')
+  const key = `${ready ? 1 : 0}\0${ids.join('\0')}`
   const reset = !Object.is(state.resetKey, resetKey)
   if (reset || key !== state.key) {
     const base = reset ? { seen: null, result: EMPTY } : state
     const prev = base.seen
     let seen = prev
     let result: ReadonlySet<string> = EMPTY
-    if (ids.length > 0) {
+    if (ready) {
       if (prev === null) {
         seen = new Set(ids)
       } else {

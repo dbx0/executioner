@@ -57,12 +57,18 @@ function collectAllIds(nodes: TargetNode[], into: Set<string>): Set<string> {
 }
 
 /**
- * Ids of rows that appeared since the last load, kept for FLASH_MS and then
+ * Ids of rows that appeared since the last load, kept for durationMs (FLASH_MS by default) and then
  * dropped. The set is computed from the data rather than per mounted row, so a
- * virtualized row that scrolls into view later does not animate again.
+ * virtualized row that scrolls into view later does not animate again. `ready`
+ * says the ids are this resetKey's loaded data (see useNewIds).
  */
-export function useFlashIds(ids: readonly string[], resetKey: unknown): ReadonlySet<string> {
-  const fresh = useNewIds(ids, resetKey)
+export function useFlashIds(
+  ids: readonly string[],
+  resetKey: unknown,
+  ready = ids.length > 0,
+  durationMs = FLASH_MS,
+): ReadonlySet<string> {
+  const fresh = useNewIds(ids, resetKey, ready)
   const [state, setState] = useState({ resetKey, fresh, active: NO_IDS })
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>())
 
@@ -85,9 +91,9 @@ export function useFlashIds(ids: readonly string[], resetKey: unknown): Readonly
         for (const id of fresh) next.delete(id)
         return { ...prev, active: next }
       })
-    }, FLASH_MS)
+    }, durationMs)
     timers.current.add(timer)
-  }, [fresh])
+  }, [fresh, durationMs])
 
   // Pending expiries die with the engagement and with the component.
   useEffect(() => {

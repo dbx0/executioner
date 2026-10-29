@@ -8,10 +8,20 @@ import { Input } from '../../components/ui/input.js'
 import { ScrollArea } from '../../components/ui/scroll-area.js'
 import { Select } from '../../components/ui/select.js'
 import { cn } from '../../lib/utils.js'
+import { stagger } from '../../lib/motion.js'
 import { SourceChip } from './chips.js'
 
 const severityOptions = SEVERITIES.map((s) => ({ value: s, label: s }))
 const statusOptions = STATUSES.map((s) => ({ value: s, label: statusLabel(s) }))
+
+/** One staggered entrance step. FindingDetail is keyed by finding id, so this replays per selection only. */
+function Step({ index, children }: { index: number; children: React.ReactNode }): JSX.Element {
+  return (
+    <div className="motion-safe:animate-enter" style={stagger(index, 120)}>
+      {children}
+    </div>
+  )
+}
 
 const LABEL_CLASS = 'text-[11px] font-medium uppercase tracking-wide text-muted-foreground'
 
@@ -244,7 +254,10 @@ export function FindingDetail({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
+      <div
+        className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4 motion-safe:animate-enter"
+        style={stagger(0, 120)}
+      >
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{finding.title}</span>
         <SourceChip source={finding.source} />
         <Button
@@ -294,86 +307,96 @@ export function FindingDetail({
 
       <ScrollArea className="min-h-0 min-w-0 flex-1 overflow-x-hidden">
         <div className={cn('flex min-w-0 flex-col gap-4 p-4', expanded && 'mx-auto w-full max-w-4xl')}>
-          <Field label="Title">
-            <Input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
-          </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Severity">
-              <Select
-                value={draft.severity}
-                onValueChange={(severity) => setDraft({ ...draft, severity })}
-                options={severityOptions}
-                ariaLabel="Severity"
-              />
+          <Step index={1}>
+            <Field label="Title">
+              <Input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
             </Field>
-            <Field label="Status">
-              <Select
-                value={draft.status}
-                onValueChange={(status) => setDraft({ ...draft, status })}
-                options={statusOptions}
-                ariaLabel="Status"
-              />
-            </Field>
-          </div>
+          </Step>
 
-          <Field
-            label="Description"
-            action={<FullScreenButton label="description" onOpen={() => setFullScreen('description')} />}
-          >
-            {view === 'preview' ? (
-              <Rendered source={draft.description} cap={caps.description} />
-            ) : (
-              <textarea
-                value={draft.description}
-                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                rows={4}
-                placeholder="What it is and why it matters. Markdown."
-                className="textarea-sleek scrollbar-sleek w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-[12px] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-            )}
-          </Field>
+          <Step index={2}>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Severity">
+                <Select
+                  value={draft.severity}
+                  onValueChange={(severity) => setDraft({ ...draft, severity })}
+                  options={severityOptions}
+                  ariaLabel="Severity"
+                />
+              </Field>
+              <Field label="Status">
+                <Select
+                  value={draft.status}
+                  onValueChange={(status) => setDraft({ ...draft, status })}
+                  options={statusOptions}
+                  ariaLabel="Status"
+                />
+              </Field>
+            </div>
+          </Step>
 
-          <Field
-            label="Details"
-            action={<FullScreenButton label="details" onOpen={() => setFullScreen('details')} />}
-          >
-            {view === 'preview' ? (
-              <Rendered source={draft.details} cap={caps.details} />
-            ) : (
-              <textarea
-                value={draft.details}
-                onChange={(e) => setDraft({ ...draft, details: e.target.value })}
-                rows={16}
-                placeholder="The evidence: request, payload, matched secret, notes. Markdown."
-                className="textarea-sleek scrollbar-sleek w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-[12px] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
-            )}
-          </Field>
-
-          <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[11.5px] text-muted-foreground">
-            <dt>Target</dt>
-            <dd className="min-w-0 break-words font-mono text-muted-foreground">{targetValue ?? 'none'}</dd>
-            <dt>Recorded by</dt>
-            <dd className="min-w-0 break-words">
-              {finding.source === 'workflow' && finding.nodeId !== null
-                ? `workflow node ${finding.nodeId}`
-                : finding.source}
-              {finding.executionId !== null && (
-                <span className="font-mono text-muted-foreground"> · run {finding.executionId.slice(0, 8)}</span>
+          <Step index={3}>
+            <Field
+              label="Description"
+              action={<FullScreenButton label="description" onOpen={() => setFullScreen('description')} />}
+            >
+              {view === 'preview' ? (
+                <Rendered source={draft.description} cap={caps.description} />
+              ) : (
+                <textarea
+                  value={draft.description}
+                  onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                  rows={4}
+                  placeholder="What it is and why it matters. Markdown."
+                  className="textarea-sleek scrollbar-sleek w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-[12px] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
               )}
-            </dd>
-            <dt>First seen</dt>
-            <dd>{new Date(finding.createdAt).toLocaleString()}</dd>
-            <dt>Last seen</dt>
-            <dd>{new Date(finding.updatedAt).toLocaleString()}</dd>
-            {finding.evidencePath !== null && (
-              <>
-                <dt>Evidence</dt>
-                <dd className="break-all font-mono">{finding.evidencePath}</dd>
-              </>
-            )}
-          </dl>
+            </Field>
+          </Step>
+
+          <Step index={4}>
+            <Field
+              label="Details"
+              action={<FullScreenButton label="details" onOpen={() => setFullScreen('details')} />}
+            >
+              {view === 'preview' ? (
+                <Rendered source={draft.details} cap={caps.details} />
+              ) : (
+                <textarea
+                  value={draft.details}
+                  onChange={(e) => setDraft({ ...draft, details: e.target.value })}
+                  rows={16}
+                  placeholder="The evidence: request, payload, matched secret, notes. Markdown."
+                  className="textarea-sleek scrollbar-sleek w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-[12px] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                />
+              )}
+            </Field>
+          </Step>
+
+          <Step index={5}>
+            <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[11.5px] text-muted-foreground">
+              <dt>Target</dt>
+              <dd className="min-w-0 break-words font-mono text-muted-foreground">{targetValue ?? 'none'}</dd>
+              <dt>Recorded by</dt>
+              <dd className="min-w-0 break-words">
+                {finding.source === 'workflow' && finding.nodeId !== null
+                  ? `workflow node ${finding.nodeId}`
+                  : finding.source}
+                {finding.executionId !== null && (
+                  <span className="font-mono text-muted-foreground"> · run {finding.executionId.slice(0, 8)}</span>
+                )}
+              </dd>
+              <dt>First seen</dt>
+              <dd>{new Date(finding.createdAt).toLocaleString()}</dd>
+              <dt>Last seen</dt>
+              <dd>{new Date(finding.updatedAt).toLocaleString()}</dd>
+              {finding.evidencePath !== null && (
+                <>
+                  <dt>Evidence</dt>
+                  <dd className="break-all font-mono">{finding.evidencePath}</dd>
+                </>
+              )}
+            </dl>
+          </Step>
         </div>
       </ScrollArea>
 

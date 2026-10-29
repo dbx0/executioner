@@ -220,7 +220,7 @@ export function TargetsPanel(): JSX.Element {
   useEngineChange(['targets', 'scope'], () => setNonce((n) => n + 1))
 
   const allIds = useMemo(() => (treeRoot === activeRoot ? collectIds(tree) : []), [tree, treeRoot, activeRoot])
-  const newIds = useFlashIds(allIds, activeRoot)
+  const newIds = useFlashIds(allIds, activeRoot, treeRoot !== null && treeRoot === activeRoot)
 
   // Fetch the selected target's details (metadata + facts).
   useEffect(() => {

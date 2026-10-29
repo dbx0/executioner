@@ -1,5 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosInstance } from 'axios'
 import { useApp } from '../store.js'
 import type { Finding } from '../api/findings.js'
@@ -294,5 +294,88 @@ describe('FindingsView live refresh', () => {
     emitChange('findings')
 
     expect(await screen.findByText('critical')).toBeTruthy()
+  })
+})
+
+describe('FindingsView new rows', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    rows = [finding(), finding({ id: 'f2', title: 'Directory listing', severity: 'low', description: '' })]
+    useApp.setState({ client: {} as AxiosInstance, activeRoot: '/eng-a' })
+  })
+  afterEach(() => {
+    useApp.setState({ activeRoot: null })
+  })
+
+  const rowOf = (title: string): HTMLElement => screen.getByText(title).closest('button') as HTMLElement
+
+  it('findings added by a live refresh are marked new', async () => {
+    render(<FindingsView />)
+    expect(await screen.findByText('AWS key in bundle.js')).toBeTruthy()
+
+    rows = [...rows.map((r) => ({ ...r })), finding({ id: 'f3', title: 'Exposed admin panel' })]
+    emitChange('findings')
+
+    await waitFor(() => expect(rowOf('Exposed admin panel').getAttribute('data-new')).toBe('true'))
+    expect(rowOf('AWS key in bundle.js').getAttribute('data-new')).toBeNull()
+  })
+
+  it('marks the first finding of an empty engagement as new', async () => {
+    rows = []
+    render(<FindingsView />)
+    expect(await screen.findByText(/nothing recorded yet/i)).toBeTruthy()
+
+    rows = [finding({ id: 'f3', title: 'Exposed admin panel' })]
+    emitChange('findings')
+
+    await waitFor(() => expect(rowOf('Exposed admin panel').getAttribute('data-new')).toBe('true'))
+  })
+
+  it('keeps the new mark for the whole highlight animation, then clears it', async () => {
+    render(<FindingsView />)
+    expect(await screen.findByText('AWS key in bundle.js')).toBeTruthy()
+
+    vi.useFakeTimers()
+    try {
+      rows = [...rows.map((r) => ({ ...r })), finding({ id: 'f3', title: 'Exposed admin panel' })]
+      emitChange('findings')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100)
+      })
+      expect(rowOf('Exposed admin panel').getAttribute('data-new')).toBe('true')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000)
+      })
+      expect(rowOf('Exposed admin panel').getAttribute('data-new')).toBe('true')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(600)
+      })
+      expect(rowOf('Exposed admin panel').getAttribute('data-new')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not mark the first load as new', async () => {
+    render(<FindingsView />)
+    expect(await screen.findByText('AWS key in bundle.js')).toBeTruthy()
+
+    expect(rowOf('AWS key in bundle.js').getAttribute('data-new')).toBeNull()
+    expect(rowOf('Directory listing').getAttribute('data-new')).toBeNull()
+  })
+
+  it('does not mark the first load of another engagement as new', async () => {
+    render(<FindingsView />)
+    expect(await screen.findByText('AWS key in bundle.js')).toBeTruthy()
+
+    rows = [finding({ id: 'f9', title: 'Other engagement finding' })]
+    act(() => {
+      useApp.setState({ client: {} as AxiosInstance, activeRoot: '/eng-b' })
+    })
+
+    expect(await screen.findByText('Other engagement finding')).toBeTruthy()
+    expect(rowOf('Other engagement finding').getAttribute('data-new')).toBeNull()
   })
 })

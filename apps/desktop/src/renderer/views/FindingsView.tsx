@@ -9,6 +9,7 @@ import { Button } from '../components/ui/button.js'
 import { Select } from '../components/ui/select.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
 import { notify } from '../lib/toast.js'
+import { useFlashIds } from '../components/targets/VirtualTargetTree.js'
 import { FindingList } from './findings/FindingList.js'
 import { FindingListSkeleton } from './findings/FindingListSkeleton.js'
 import { FindingDetail } from './findings/FindingDetail.js'
@@ -17,6 +18,9 @@ const statusFilterOptions = [
   { value: 'all', label: 'All statuses' },
   ...STATUSES.map((s) => ({ value: s, label: statusLabel(s) })),
 ]
+
+/** Matches the 1600ms enter-down-flash-red animation, so the highlight is not cut off mid-fade. */
+const NEW_FLASH_MS = 1600
 
 /** Every Finding field is a primitive, so a shallow comparison is exact. */
 function sameFinding(a: Finding, b: Finding): boolean {
@@ -32,7 +36,10 @@ export function FindingsView(): JSX.Element {
   const client = useApp((s) => s.client)
   const api = useMemo(() => (client === null ? null : findingsApi(client)), [client])
 
+  const activeRoot = useApp((s) => s.activeRoot)
   const [findings, setFindings] = useState<Finding[]>([])
+  // Which engagement and filter the list belongs to, so a switch never diffs against the old one.
+  const [listKey, setListKey] = useState<string | null>(null)
   const [targetValues, setTargetValues] = useState<Record<string, string>>({})
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('all')
@@ -65,6 +72,7 @@ export function FindingsView(): JSX.Element {
           return same !== undefined && sameFinding(same, f) ? same : f
         })
       })
+      setListKey(`${activeRoot}\0${statusFilter}`)
       setError(null)
     } catch {
       if (!silent) setFindings([])
@@ -75,7 +83,7 @@ export function FindingsView(): JSX.Element {
       if (!silent) setLoading(false)
       setLoadedOnce(true)
     }
-  }, [api, statusFilter])
+  }, [api, statusFilter, activeRoot])
 
   useEffect(() => {
     void refresh()
@@ -103,6 +111,14 @@ export function FindingsView(): JSX.Element {
       .then((list) => setTargetValues(Object.fromEntries(list.map((t) => [t.id, t.value]))))
       .catch(() => setTargetValues({}))
   }, [client])
+
+  const currentKey = `${activeRoot}\0${statusFilter}`
+  const newIds = useFlashIds(
+    useMemo(() => (listKey === currentKey ? findings.map((f) => f.id) : []), [findings, listKey, currentKey]),
+    currentKey,
+    listKey === currentKey,
+    NEW_FLASH_MS,
+  )
 
   const selected = findings.find((f) => f.id === selectedId) ?? null
   const listHidden = expanded && selected !== null
@@ -190,6 +206,7 @@ export function FindingsView(): JSX.Element {
                 findings={findings}
                 selectedId={selectedId}
                 targetValues={targetValues}
+                newIds={newIds}
                 onSelect={setSelectedId}
               />
             ) : (
