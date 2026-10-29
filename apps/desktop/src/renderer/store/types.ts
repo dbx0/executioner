@@ -1,6 +1,7 @@
 import type { AxiosInstance } from 'axios'
 import type { EngineConnection } from '../lib/connection.js'
 import type { TerminalSpec } from '../api/terminals.js'
+import type { ScopeProposal } from '../api/scope.js'
 
 /** One ephemeral "phone-message" progress bubble from a scope parse. */
 export interface ScopeBubble {
@@ -14,6 +15,8 @@ export interface ScopeRunState {
   done: boolean
   error?: boolean
   summary?: { total: number; added: number; targets: { kind: string; value: string }[] }
+  /** Present when the parse ran in propose mode: what the agent would save, awaiting review. */
+  proposal?: ScopeProposal
 }
 
 /** Options for creating a brand-new engagement from the New-engagement modal. */

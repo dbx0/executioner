@@ -1,15 +1,38 @@
+import type { TargetKind } from '@exe/protocol'
 import type { WorkflowProposal } from './toolset.js'
+
+/** A scope rule the agent proposed, not yet written. */
+export interface ScopeRuleDraft {
+  effect: 'include' | 'exclude'
+  pattern: string
+  note?: string
+}
+
+/** A target the agent proposed, not yet written. */
+export interface TargetDraft {
+  kind: TargetKind
+  value: string
+}
+
+/** Where a propose-mode scope parse collects what the agent would have written. */
+export interface ScopeDraftSink {
+  rules: ScopeRuleDraft[]
+  targets: TargetDraft[]
+}
 
 /**
  * What one headless agent run is waiting to receive from its own MCP calls.
  * - `nodeOutput`: the workflow agent node's result (`set_node_output`).
  * - `proposal`: the assistant turn's proposed graph (`propose_workflow`).
  * - `graph`: the canvas the assistant turn edits (`get_workflow_graph`).
+ * - `scopeDraft`: a scope parse that proposes instead of writing; its rule and
+ *   target calls are recorded here and the project is left untouched.
  */
 export interface AgentSessionBinding {
   nodeOutput?: (data: Record<string, unknown>) => void
   proposal?: (proposal: WorkflowProposal) => void
   graph?: unknown
+  scopeDraft?: ScopeDraftSink
 }
 
 /**

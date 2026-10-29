@@ -701,6 +701,7 @@ export function createApp(options: AppOptions): EngineApp {
     scopeRoutes({
       project: options.project,
       bus: options.bus,
+      toolsetDeps,
       ...(buildScopeRunAgent !== undefined ? { buildRunAgent: buildScopeRunAgent } : {}),
     }),
   )

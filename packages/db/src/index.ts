@@ -5,6 +5,7 @@ import { migrate } from './migrate.js'
 import { wrapDatabase, type ProjectDatabase } from './orm.js'
 import { GLOBAL_SCHEMA_SQL } from './schema.js'
 
+export { atomically } from './orm.js'
 export type { ProjectDatabase } from './orm.js'
 
 export function openDatabase(path: string): ProjectDatabase {

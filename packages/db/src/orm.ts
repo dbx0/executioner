@@ -15,6 +15,15 @@ export interface ProjectDatabase {
   close(): void
 }
 
+/**
+ * Run `fn` as one transaction: every repository write inside it lands together,
+ * or none does when it throws. Repositories that open their own transaction
+ * nest inside it as savepoints.
+ */
+export function atomically<T>(db: ProjectDatabase, fn: () => T): T {
+  return db.orm.transaction(() => fn())
+}
+
 /** Wrap an already-open better-sqlite3 handle (migration tests build their own). */
 export function wrapDatabase(raw: Database.Database): ProjectDatabase {
   return {

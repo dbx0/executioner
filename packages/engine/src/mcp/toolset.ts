@@ -2,13 +2,23 @@ import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { z } from 'zod'
-import { scopeEffectSchema, targetKindSchema, type BackendProfile, type ToolManifest } from '@exe/protocol'
+import {
+  canonicaliseAsset,
+  evaluateScope,
+  isCanonicalAsset,
+  scopeEffectSchema,
+  scopePatternProblem,
+  targetKindSchema,
+  type BackendProfile,
+  type ScopeRule,
+  type ToolManifest,
+} from '@exe/protocol'
 import { graphSchema, validateGraph } from '@exe/graph'
 import { writeProgramDescription, type Project } from '@exe/project'
 import { launcherForProfile, type CommandLauncher } from '../infra/launcher.js'
 import { buildNodeTypes } from './node-types.js'
-import type { RunRepository } from '@exe/db'
-import type { AgentSessionSinks } from './agent-sessions.js'
+import { normaliseScopePattern, type RunRepository } from '@exe/db'
+import type { AgentSessionSinks, ScopeDraftSink } from './agent-sessions.js'
 
 export interface RunWorkflowFn {
   (workflowId: string, targetId: string): Promise<{ executionId: string; status: 'success' | 'error' }>
@@ -190,6 +200,35 @@ export class ProjectToolset {
     )
   }
 
+  /** The boundary as the matcher wants it: the stored rules plus the drafted ones. */
+  private draftedRules(draft: ScopeDraftSink): ScopeRule[] {
+    const stored = this.deps.project.scopeRules.all()
+    const drafted = draft.rules.map((r, i) => ({ id: `draft-${i}`, effect: r.effect, pattern: r.pattern, note: r.note ?? '' }))
+    return [...stored, ...drafted]
+  }
+
+  /** Propose mode: validate and remember a rule the way the repository would, without writing it. */
+  private draftRule(draft: ScopeDraftSink, a: z.infer<typeof scopeRuleArgs>): unknown {
+    const pattern = normaliseScopePattern(a.pattern)
+    const problem = scopePatternProblem(pattern)
+    if (problem !== null) throw new Error(problem)
+    const known = (r: { effect: string; pattern: string }): boolean => r.effect === a.effect && r.pattern === pattern
+    const note = a.note === undefined ? {} : { note: a.note }
+    if (!this.deps.project.scopeRules.all().some(known) && !draft.rules.some(known)) {
+      draft.rules.push({ effect: a.effect, pattern, ...note })
+    }
+    return { draft: true, effect: a.effect, pattern, ...note }
+  }
+
+  /** Propose mode: judge a target against the stored and drafted rules, and remember it, without writing it. */
+  private draftTarget(draft: ScopeDraftSink, a: z.infer<typeof upsertArgs>): unknown {
+    const asset = canonicaliseAsset({ kind: a.kind, value: a.value })
+    if (!isCanonicalAsset(asset)) throw new Error(asset.error)
+    const verdict = evaluateScope(asset, this.draftedRules(draft))
+    if (!draft.targets.some((t) => t.value === asset.value)) draft.targets.push({ kind: asset.kind, value: asset.value })
+    return { draft: true, kind: asset.kind, value: asset.value, scopeStatus: verdict.status, scopeReason: verdict.reason }
+  }
+
   async call(name: string, args: Record<string, unknown>, caller: ToolCaller = {}): Promise<unknown> {
     const { project } = this.deps
     const session = this.deps.sessions?.get(caller.sessionId)
@@ -212,12 +251,14 @@ export class ProjectToolset {
         const parentId = parent === undefined || parent.value.toLowerCase() === a.value.toLowerCase() ? null : parent.id
         // The verdict rides back with the target so an agent learns it has
         // drifted off the engagement at the moment it drifts, not at report time.
+        if (session?.scopeDraft !== undefined) return this.draftTarget(session.scopeDraft, a)
         const source = isHeadless(caller) ? HEADLESS_AGENT_TARGET_SOURCE : 'agent'
         return project.targets.upsert({ kind: a.kind, value: a.value, source, parentId })
       }
 
       case 'add_scope_rule': {
         const a = scopeRuleArgs.parse(args)
+        if (session?.scopeDraft !== undefined) return this.draftRule(session.scopeDraft, a)
         const rule = project.scopeRules.add({
           effect: a.effect,
           pattern: a.pattern,
@@ -235,6 +276,8 @@ export class ProjectToolset {
 
       case 'set_program_description': {
         const a = programArgs.parse(args)
+        // A proposal only drafts rules and targets; it never rewrites the program.
+        if (session?.scopeDraft !== undefined) return { ok: true, draft: true }
         const path = writeProgramDescription(project.root, a.markdown)
         return { ok: true, path: basename(path) }
       }

@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Loader2, Plus, Sparkles, X } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { targetsApi, type Rejudge } from '../../api/targets.js'
-import { scopeApi } from '../../api/scope.js'
+import { scopeApi, type ScopeProposal } from '../../api/scope.js'
+import { stagger } from '../../lib/motion.js'
 import { cn } from '../../lib/utils.js'
 import { Button } from '../ui/button.js'
 import { Input } from '../ui/input.js'
@@ -12,7 +13,7 @@ import { FieldLabel } from './new-engagement/fields.js'
 import { RunningPage } from './new-engagement/result-pages.js'
 
 type Tab = 'manual' | 'ai'
-type Phase = 'form' | 'running' | 'done'
+type Phase = 'form' | 'running' | 'review' | 'done'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'manual', label: 'Manual' },
@@ -24,7 +25,7 @@ export interface AddScopeRuleModalProps {
   /**
    * The boundary changed: reload the list. `rejudge` is how many target verdicts
    * the write moved and the split it left, or null when the caller cannot know
-   * (the AI pass writes its rules through MCP, so no single count comes back).
+   * (an AI pass that ended without a proposal wrote nothing through this modal).
    */
   onApplied: (rejudge: Rejudge | null) => void
 }
@@ -34,9 +35,8 @@ export interface AddScopeRuleModalProps {
  * program's scope and letting the default agent write the rules.
  *
  * The AI tab runs the same `/scope/parse` pass as "Start with AI" on a new
- * engagement — the agent records the boundary first, then the assets — so a
- * mid-engagement scope update goes through the path that already knows how to
- * turn program prose into include/exclude rules.
+ * engagement, but in propose mode: the agent drafts the boundary and the assets,
+ * and nothing is saved until the operator confirms the review step.
  */
 export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps): JSX.Element {
   const client = useApp((s) => s.client)
@@ -45,7 +45,7 @@ export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps
   const api = useMemo(() => (client === null ? null : targetsApi(client)), [client])
 
   const [tab, setTab] = useState<Tab>('manual')
-  const [phase, setPhase] = useState<Phase>('form')
+  const [step, setStep] = useState<Phase>('form')
   const [effect, setEffect] = useState<'include' | 'exclude'>('include')
   const [pattern, setPattern] = useState('')
   const [note, setNote] = useState('')
@@ -54,6 +54,7 @@ export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps
   const [error, setError] = useState<string | null>(null)
   const [runId, setRunId] = useState<string | null>(null)
   const [rulesAdded, setRulesAdded] = useState(0)
+  const [targetsRecorded, setTargetsRecorded] = useState<number | null>(null)
   const patternRef = useRef<HTMLInputElement>(null)
 
   const scopeRun = useApp((s) => (runId !== null ? s.scopeRuns[runId] : undefined))
@@ -62,12 +63,17 @@ export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps
     patternRef.current?.focus()
   }, [])
 
-  // The agent writes its rules through MCP, so the count comes from the list
-  // itself: snapshot before the run, compare once it reports done.
+  // A proposal waits for the operator's review. A run that ended without one
+  // wrote through MCP itself, so its count comes from the list: snapshot before
+  // the run, compare once it reports done.
   const rulesBefore = useRef(0)
+  const proposal = scopeRun?.proposal
+
+  // A finished run with a proposal moves from running to review by itself.
+  const phase: Phase = step === 'running' && scopeRun?.done === true && proposal !== undefined ? 'review' : step
 
   useEffect(() => {
-    if (phase !== 'running' || scopeRun?.done !== true || api === null) return
+    if (phase !== 'running' || scopeRun?.done !== true || proposal !== undefined || api === null) return
     let cancelled = false
     void api
       .scopeRules()
@@ -77,14 +83,14 @@ export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps
       .catch(() => undefined)
       .finally(() => {
         if (!cancelled) {
-          setPhase('done')
+          setStep('done')
           onApplied(null)
         }
       })
     return () => {
       cancelled = true
     }
-  }, [phase, scopeRun?.done, api, onApplied])
+  }, [phase, scopeRun?.done, proposal, api, onApplied])
 
   const submitManual = async (): Promise<void> => {
     const trimmed = pattern.trim()
@@ -114,11 +120,12 @@ export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps
       rulesBefore.current = (await api.scopeRules().catch(() => [])).length
       const { runId: id } = await scopeApi(client).parse({
         scope: scope.trim(),
+        propose: true,
         ...(defaultAgent !== null ? { agent: defaultAgent } : {}),
       })
       beginScopeRun(id)
       setRunId(id)
-      setPhase('running')
+      setStep('running')
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -126,7 +133,25 @@ export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps
     }
   }
 
-  const targetsAdded = scopeRun?.summary?.total ?? 0
+  const applyProposal = async (reviewed: ScopeProposal): Promise<void> => {
+    if (client === null) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await scopeApi(client).apply(reviewed)
+      setRulesAdded(result.rulesAdded)
+      setTargetsRecorded(result.targetsAdded)
+      onApplied({ rejudged: result.rejudged, inScope: result.inScope, outOfScope: result.outOfScope })
+      setStep('done')
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const targetsAdded = targetsRecorded ?? scopeRun?.summary?.total ?? 0
+  const emptyProposal = proposal !== undefined && proposal.rules.length === 0 && proposal.targets.length === 0
   const canSubmit = tab === 'manual' ? pattern.trim() !== '' : scope.trim() !== ''
 
   return (
@@ -183,6 +208,41 @@ export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps
         <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto p-5">
           {phase === 'running' ? (
             <RunningPage scopeRun={scopeRun} />
+          ) : phase === 'review' && proposal !== undefined ? (
+            emptyProposal ? (
+              <p className="text-[13px] text-muted-foreground">The agent didn't find any rules in that text.</p>
+            ) : (
+              <>
+                <div className="mb-2 text-[13px] font-medium">Review what the agent found</div>
+                <ul className="flex flex-col gap-1.5">
+                  {proposal.rules.map((r, i) => (
+                    <li
+                      key={`${r.effect}:${r.pattern}`}
+                      className="flex items-baseline gap-2.5 rounded-md border border-border bg-surface-1 px-3 py-2 motion-safe:animate-enter"
+                      style={stagger(i, 140)}
+                    >
+                      <span
+                        className={cn(
+                          'shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium capitalize',
+                          r.effect === 'include' ? 'bg-primary/15 text-primary' : 'bg-status-error/15 text-status-error',
+                        )}
+                      >
+                        {r.effect}
+                      </span>
+                      <span className="font-mono text-[13px]">{r.pattern}</span>
+                      {r.note !== undefined && r.note !== '' && (
+                        <span className="min-w-0 truncate text-[12px] text-muted-foreground">{r.note}</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-3 text-[12px] text-muted-foreground">
+                  {proposal.targets.length} {proposal.targets.length === 1 ? 'target' : 'targets'} to record. Nothing
+                  is saved until you add it.
+                </p>
+                {error !== null && <p className="mt-3 text-[12px] text-status-error">{error}</p>}
+              </>
+            )
           ) : phase === 'done' ? (
             <div className="flex items-start gap-3">
               <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
@@ -272,6 +332,22 @@ export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps
             <Button size="sm" onClick={onClose}>
               Done
             </Button>
+          ) : phase === 'review' ? (
+            emptyProposal || proposal === undefined ? (
+              <Button size="sm" onClick={onClose}>
+                Close
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
+                  Cancel
+                </Button>
+                <Button size="sm" disabled={busy} onClick={() => void applyProposal(proposal)}>
+                  {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" strokeWidth={2} />}
+                  Add
+                </Button>
+              </>
+            )
           ) : phase === 'running' ? (
             <Button size="sm" variant="ghost" disabled>
               <Loader2 className="size-4 animate-spin" /> Working…

@@ -1,4 +1,5 @@
 import { agentsApi } from '../../api/agents.js'
+import type { ScopeProposal } from '../../api/scope.js'
 import { transcriptStem } from '../helpers.js'
 import type { AppState, ScopeRunState, Subagent } from '../types.js'
 import type { SliceCtx } from './context.js'
@@ -63,10 +64,14 @@ export function createAgentsSlice(ctx: SliceCtx): Pick<AppState, 'refreshAgents'
           const isError = (payload as { error?: unknown }).error === true
           const rawTargets = (payload as { targets?: unknown }).targets
           const targets = Array.isArray(rawTargets) ? (rawTargets as { kind: string; value: string }[]) : []
+          const rawProposal = (payload as { proposal?: unknown }).proposal
+          const proposal =
+            rawProposal !== null && typeof rawProposal === 'object' ? (rawProposal as ScopeProposal) : undefined
           const done: ScopeRunState = {
             ...prev,
             done: true,
             ...(isError ? { error: true } : {}),
+            ...(proposal !== undefined ? { proposal } : {}),
             ...(isError
               ? {}
               : {

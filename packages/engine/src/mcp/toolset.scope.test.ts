@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createProject, readProgramDescription, scaffoldEngagement, type Project } from '@exe/project'
 import { ProjectToolset } from './toolset.js'
+import { AgentSessionSinks, type ScopeDraftSink } from './agent-sessions.js'
 import { TOOL_SCHEMAS } from './schema.js'
 
 let dir: string
@@ -138,5 +139,55 @@ describe('set_program_description', () => {
     const schema = TOOL_SCHEMAS.find((s) => s.name === 'set_program_description')
     expect(schema?.inputSchema).toMatchObject({ required: ['markdown'] })
     expect(schema?.description).toContain('word for word')
+  })
+})
+
+describe('propose mode', () => {
+  let draft: ScopeDraftSink
+  let proposing: ProjectToolset
+  const caller = { profile: 'scope' as const, sessionId: 'run-1' }
+
+  beforeEach(() => {
+    draft = { rules: [], targets: [] }
+    const sessions = new AgentSessionSinks()
+    sessions.bind('run-1', { scopeDraft: draft })
+    proposing = new ProjectToolset({ project, runWorkflow: vi.fn(), sessions })
+  })
+
+  it('in propose mode add_scope_rule records a draft and writes nothing', async () => {
+    const result = await proposing.call(
+      'add_scope_rule',
+      { effect: 'exclude', pattern: 'Shop.Example.com', note: 'third party' },
+      caller,
+    )
+    expect(result).toMatchObject({ draft: true, effect: 'exclude', pattern: 'shop.example.com' })
+    expect(draft.rules).toEqual([{ effect: 'exclude', pattern: 'shop.example.com', note: 'third party' }])
+    expect(project.scopeRules.all()).toEqual([])
+  })
+
+  it('in propose mode upsert_target records a draft and writes nothing', async () => {
+    project.targets.upsert({ kind: 'domain', value: 'existing.com', source: 'manual' })
+    const before = project.targets.all()
+    await proposing.call('add_scope_rule', { effect: 'include', pattern: '*.example.com' }, caller)
+    const result = await proposing.call('upsert_target', { kind: 'subdomain', value: 'api.example.com' }, caller)
+    await proposing.call('upsert_target', { kind: 'subdomain', value: 'API.example.com' }, caller)
+
+    expect(result).toMatchObject({ draft: true, scopeStatus: 'in' })
+    expect(draft.targets).toEqual([{ kind: 'subdomain', value: 'api.example.com' }])
+    expect(project.targets.all()).toEqual(before)
+  })
+
+  it('in propose mode set_program_description leaves HUNT.md alone', async () => {
+    const before = readProgramDescription(project.root)
+    const result = await proposing.call('set_program_description', { markdown: 'Rewritten by a proposal' }, caller)
+    expect(result).toMatchObject({ draft: true })
+    expect(readProgramDescription(project.root)).toBe(before)
+  })
+
+  it('still rejects a pattern the matcher could never match', async () => {
+    await expect(
+      proposing.call('add_scope_rule', { effect: 'exclude', pattern: 'class:denial-of-service' }, caller),
+    ).rejects.toThrow()
+    expect(draft.rules).toEqual([])
   })
 })

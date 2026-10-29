@@ -1,6 +1,8 @@
 import type { Project } from '@exe/project'
 import type { TargetKind } from '@exe/protocol'
 import type { EventBus } from '../transport/events.js'
+import { AgentSessionSinks, type ScopeDraftSink } from '../mcp/agent-sessions.js'
+import type { ToolsetDeps } from '../mcp/toolset.js'
 
 /** A target the run created, as reported back to the confirmation page. */
 export interface ScopeEntry {
@@ -91,6 +93,12 @@ export interface ScopeRunInput {
   description?: string
   /** The id this run streams its progress bubbles under (executionId on the bus). */
   runId: string
+  /**
+   * Collect what the agent would write instead of writing it. The run reports
+   * the proposal in `scope-done` and the project is left untouched, so the
+   * operator can review it before anything is saved.
+   */
+  propose?: boolean
 }
 
 export interface ScopeRunSummary {
@@ -113,6 +121,11 @@ export interface AgentScopeRunnerDeps {
    * the route when a capable agent is available; when it is absent the run adds
    * nothing and says so (the user picks a working agent, or uses Manual entry).
    */
+  /**
+   * The shared MCP toolset deps. A propose-mode run binds its draft sink on
+   * `sessions` under its runId, which is the session id the agent's token carries.
+   */
+  toolsetDeps?: ToolsetDeps
   runAgent?: (input: { scope: string; description: string; runId: string }) => Promise<void>
 }
 
@@ -134,6 +147,7 @@ export class AgentScopeRunner {
     const { project, runAgent } = this.deps
     const { scope, runId } = input
     const description = input.description ?? ''
+    const propose = input.propose === true
     const key = (t: { kind: string; value: string }): string => `${t.kind}:${t.value}`
 
     this.emit(runId, 'scope-progress', {
@@ -144,12 +158,39 @@ export class AgentScopeRunner {
       this.emit(runId, 'scope-progress', {
         message: 'AI setup needs a working agent. Pick one in Settings, or add targets manually.',
       })
-      this.emit(runId, 'scope-done', { total: 0, added: 0, targets: [] })
+      this.emit(runId, 'scope-done', {
+        total: 0,
+        added: 0,
+        targets: [],
+        ...(propose ? { proposal: { rules: [], targets: [] } } : {}),
+      })
       return { runId, added: [], total: 0 }
     }
 
     // The agent is the only parser. Snapshot what exists so we can report exactly
     // what IT added, and let its own MCP tool calls do all the work.
+    if (propose) {
+      const draft: ScopeDraftSink = { rules: [], targets: [] }
+      const sessions = this.deps.toolsetDeps === undefined ? undefined : (this.deps.toolsetDeps.sessions ??= new AgentSessionSinks())
+      // Unbound in finally so an error or abort cannot leave the session proposing.
+      const unbind = sessions?.bind(runId, { scopeDraft: draft })
+      try {
+        await runAgent({ scope, description, runId })
+      } catch (error) {
+        this.emit(runId, 'scope-progress', { message: `The agent couldn’t finish: ${(error as Error).message}` })
+      } finally {
+        unbind?.()
+      }
+      const targets = draft.targets.map((t) => ({ kind: t.kind, value: t.value }))
+      this.emit(runId, 'scope-done', {
+        total: targets.length,
+        added: 0,
+        targets,
+        proposal: { rules: draft.rules, targets: draft.targets },
+      })
+      return { runId, added: [], total: targets.length }
+    }
+
     const before = new Set(project.targets.all().map(key))
     try {
       await runAgent({ scope, description, runId })
