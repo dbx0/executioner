@@ -1,4 +1,5 @@
 import * as pty from 'node-pty'
+import { resolveLaunch } from './windows-launch.js'
 
 export interface PtySessionOptions {
   command: string
@@ -65,12 +66,16 @@ export class PtySession {
 
   constructor(options: PtySessionOptions) {
     this.scrollbackBytes = options.scrollbackBytes ?? DEFAULT_SCROLLBACK
-    this.proc = pty.spawn(options.command, options.args, {
+    const env = buildEnv(options)
+    // On Windows a bare agent name has to become a full path first (see
+    // resolveLaunch); elsewhere this hands the command back unchanged.
+    const launch = resolveLaunch(options.command, options.args, env)
+    this.proc = pty.spawn(launch.command, launch.args, {
       name: 'xterm-color',
       cols: options.cols ?? 80,
       rows: options.rows ?? 30,
       cwd: options.cwd,
-      env: buildEnv(options),
+      env,
     })
     // Recording starts with the process, so output produced before any client
     // attaches is still there when one does.

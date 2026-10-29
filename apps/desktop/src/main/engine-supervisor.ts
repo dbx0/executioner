@@ -8,6 +8,14 @@ export interface EngineConnection {
 }
 
 type SpawnFn = (command: string, args: string[], options: object) => ChildProcess
+
+/**
+ * V8 flags the engine needs, set at startup. The engine's IF conditions use the
+ * linear-time regex engine; turning it on later with v8.setFlagsFromString
+ * makes Electron's Node abort the moment any Worker starts, and on Windows
+ * node-pty starts one for every terminal.
+ */
+export const ENGINE_V8_FLAGS = ['--enable-experimental-regexp-engine']
 type FetchFn = (input: string) => Promise<{ ok: boolean }>
 
 export interface SupervisorOptions {
@@ -102,7 +110,7 @@ export class EngineSupervisor {
 
   private spawnEngine(projectDir: string): Promise<EngineConnection> {
     return new Promise((resolve, reject) => {
-      const child = this.spawnFn(this.nodeBin, [this.enginePath, 'serve', projectDir], {
+      const child = this.spawnFn(this.nodeBin, [...ENGINE_V8_FLAGS, this.enginePath, 'serve', projectDir], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: this.spawnEnv,
       })

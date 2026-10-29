@@ -43,7 +43,7 @@ describe('EngineSupervisor', () => {
     expect(connection.token).toHaveLength(40)
     expect(spawnFn).toHaveBeenCalledWith(
       process.execPath,
-      ['/engine.js', 'serve', '/tmp/acme'],
+      ['--enable-experimental-regexp-engine', '/engine.js', 'serve', '/tmp/acme'],
       expect.anything(),
     )
   })
@@ -62,7 +62,7 @@ describe('EngineSupervisor', () => {
     await startPromise
     expect(spawnFn).toHaveBeenCalledWith(
       process.execPath,
-      ['/engine.js', 'serve', '/tmp/acme'],
+      ['--enable-experimental-regexp-engine', '/engine.js', 'serve', '/tmp/acme'],
       expect.objectContaining({ env: expect.objectContaining({ ELECTRON_RUN_AS_NODE: '1' }) }),
     )
   })
