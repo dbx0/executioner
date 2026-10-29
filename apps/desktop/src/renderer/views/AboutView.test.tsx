@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosInstance } from 'axios'
 import { useApp } from '../store.js'
 import type { Overview } from '../api/overview.js'
+import { emitChange } from '../lib/engine-changes.js'
 
 function makeOverview(over: Partial<Overview> = {}): Overview {
   return {
@@ -246,6 +247,16 @@ describe('AboutView', () => {
     render(<AboutView />)
     await screen.findByRole('heading', { name: 'acme' })
     fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
+  })
+
+  it('refetches on a findings change', async () => {
+    render(<AboutView />)
+    await screen.findByRole('heading', { name: 'acme' })
+    expect(get).toHaveBeenCalledTimes(1)
+
+    emitChange('findings')
+
     await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
   })
 })

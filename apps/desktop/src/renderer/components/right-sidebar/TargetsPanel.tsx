@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronRight, Crosshair, Globe, Link2, Network, RotateCw, Server } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useApp } from '../../store.js'
+import { useEngineChange } from '../../lib/engine-changes.js'
 import { targetsApi, type TargetNode, type TargetDetail, type TargetFact } from '../../api/targets.js'
 import { setTargetDrag } from '../../lib/target-drag.js'
 import { Button } from '../ui/button.js'
@@ -192,6 +193,9 @@ export function TargetsPanel(): JSX.Element {
       cancelled = true
     }
   }, [api, nonce])
+
+  // The tree stays on screen while the refetch lands; the skeleton only shows when it is empty.
+  useEngineChange(['targets', 'scope'], () => setNonce((n) => n + 1))
 
   // Fetch the selected target's details (metadata + facts).
   useEffect(() => {

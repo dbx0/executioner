@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FileText, Plus, RefreshCw } from 'lucide-react'
 import { useApp } from '../store.js'
+import { useEngineChange } from '../lib/engine-changes.js'
 import { findingsApi, statusLabel, STATUSES, type Finding, type FindingInput } from '../api/findings.js'
 import { targetsApi } from '../api/targets.js'
 import { Button } from '../components/ui/button.js'
@@ -15,6 +16,11 @@ const statusFilterOptions = [
   { value: 'all', label: 'All statuses' },
   ...STATUSES.map((s) => ({ value: s, label: statusLabel(s) })),
 ]
+
+/** Every Finding field is a primitive, so a shallow comparison is exact. */
+function sameFinding(a: Finding, b: Finding): boolean {
+  return (Object.keys(a) as (keyof Finding)[]).every((k) => a[k] === b[k]) && Object.keys(a).length === Object.keys(b).length
+}
 
 /**
  * The Findings page: what the engagement has actually proved, in one place.
@@ -45,18 +51,29 @@ export function FindingsView(): JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [exporting, setExporting] = useState(false)
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (silent = false) => {
     if (api === null) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       const list = await api.list(statusFilter === 'all' ? {} : { status: statusFilter })
-      setFindings(list)
+      // Keep the existing object for any row whose content is identical, so the open
+      // finding's editor does not take the refresh for a new finding and drop
+      // the operator's unsaved draft.
+      setFindings((prev) => {
+        const old = new Map(prev.map((f) => [f.id, f]))
+        return list.map((f) => {
+          const same = old.get(f.id)
+          return same !== undefined && sameFinding(same, f) ? same : f
+        })
+      })
       setError(null)
     } catch {
-      setFindings([])
+      if (!silent) setFindings([])
       setError('Could not load findings.')
     } finally {
-      setLoading(false)
+      // A silent refresh never started the spinner, so it must not stop one a
+      // manual refresh still owns.
+      if (!silent) setLoading(false)
       setLoadedOnce(true)
     }
   }, [api, statusFilter])
@@ -64,6 +81,9 @@ export function FindingsView(): JSX.Element {
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  // Live refresh keeps the rows, the selection and the scroll where they are.
+  useEngineChange(['findings'], () => void refresh(true))
 
   // A deep link from a target's panel: show that finding, and clear any filter
   // that would have hidden it. Consumed once, like the other pending-id links.

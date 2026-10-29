@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, FolderX, Pencil, RefreshCw, Sparkles } from 'lucide-react'
 import { useApp } from '../store.js'
+import { useEngineChange } from '../lib/engine-changes.js'
 import { overviewApi, type Overview } from '../api/overview.js'
 import { cn } from '../lib/utils.js'
 import { friendlyError } from '../lib/api-error.js'
@@ -23,7 +24,7 @@ import {
 } from './about/summary.js'
 
 /** Live counts (runs, agents) go stale silently, so the page re-reads slowly. */
-const POLL_MS = 15_000
+const POLL_MS = 60_000
 
 /** How much of the program description stands above the fold. The height is
  *  approximate on purpose: what decides whether the "Show more" control appears
@@ -53,9 +54,9 @@ export function AboutView(): JSX.Element {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (silent = false) => {
     if (api === null) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       setData(await api.get())
       setError(null)
@@ -64,7 +65,9 @@ export function AboutView(): JSX.Element {
       // an older engine has no /project/overview until it restarts.
       setError(friendlyError(e, (e as Error).message))
     } finally {
-      setLoading(false)
+      // A silent refresh never started the spinner, so it must not stop one a
+      // manual refresh still owns.
+      if (!silent) setLoading(false)
     }
   }, [api])
 
@@ -73,6 +76,9 @@ export function AboutView(): JSX.Element {
     const timer = setInterval(() => void refresh(), POLL_MS)
     return () => clearInterval(timer)
   }, [refresh])
+
+  // Changes arrive as events; the timer only keeps the relative times ticking.
+  useEngineChange(['targets', 'findings', 'scope', 'runs', 'sessions'], () => void refresh(true))
 
   const agents = agentActivity(sessions, sessionState, subagents)
 

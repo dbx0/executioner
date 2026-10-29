@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Bot, RotateCw } from 'lucide-react'
 import { useApp } from '../../store.js'
+import { useEngineChange } from '../../lib/engine-changes.js'
 import { sessionsApi, type SessionSummary } from '../../api/sessions.js'
 import { Button } from '../ui/button.js'
 import { ScrollArea } from '../ui/scroll-area.js'
@@ -51,6 +52,9 @@ export function SessionHistory(): JSX.Element {
       cancelled = true
     }
   }, [api, nonce])
+
+  // The list stays on screen while the refetch lands; the skeleton only shows when it is empty.
+  useEngineChange(['sessions'], () => setNonce((n) => n + 1))
 
   if (client === null) {
     return (

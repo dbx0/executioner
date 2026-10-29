@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useApp } from '../store.js'
 import type { AxiosInstance } from 'axios'
 import type { ScreenshotItem, TargetDetail, TargetNode } from '../api/targets.js'
+import { emitChange } from '../lib/engine-changes.js'
 
 const tree: TargetNode[] = [
   {
@@ -448,5 +449,13 @@ describe('TargetsView — where a run happens', () => {
 
     expect(await screen.findByText(/running .* on kali-vps/i)).toBeTruthy()
   })
-})
 
+  it('refetches the tree on a targets change', async () => {
+    render(<TargetsView />)
+    await waitFor(() => expect(fakeApi.tree).toHaveBeenCalledTimes(1))
+
+    emitChange('targets')
+
+    await waitFor(() => expect(fakeApi.tree).toHaveBeenCalledTimes(2))
+  })
+})

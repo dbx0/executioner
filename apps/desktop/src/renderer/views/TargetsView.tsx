@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Plus, ShieldCheck, X } from 'lucide-react'
 import { useApp } from '../store.js'
+import { useEngineChange } from '../lib/engine-changes.js'
 import { targetsApi, type TargetNode } from '../api/targets.js'
 import { workflowsApi, type WorkflowSummary } from '../api/workflows.js'
 import { executionsApi } from '../api/executions.js'
@@ -56,16 +57,18 @@ export function TargetsView(): JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const detailOpen = selectedId !== null
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (silent = false) => {
     if (api === null) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     try {
       setTree(await api.tree())
       setError(null)
     } catch (e) {
       setError((e as Error).message)
     } finally {
-      setLoading(false)
+      // A silent refresh never started the spinner, so it must not stop one a
+      // manual refresh still owns.
+      if (!silent) setLoading(false)
       setLoadedOnce(true)
     }
   }, [api])
@@ -73,6 +76,9 @@ export function TargetsView(): JSX.Element {
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  // Live refresh swaps the tree in place: no spinner, selection and scroll kept.
+  useEngineChange(['targets', 'scope', 'findings'], () => void refresh(true))
 
   // The right-click menu offers workflows and everywhere they could run. Both
   // are fetched up front so opening the menu never waits on the network.

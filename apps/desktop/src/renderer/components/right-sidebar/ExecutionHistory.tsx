@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { friendlyError } from '../../lib/api-error.js'
 import { RotateCw } from 'lucide-react'
 import { useApp } from '../../store.js'
+import { useEngineChange } from '../../lib/engine-changes.js'
 import { executionsApi, type ExecutionSummary } from '../../api/executions.js'
 import { cn } from '../../lib/utils.js'
 import { Button } from '../ui/button.js'
@@ -54,6 +55,9 @@ export function ExecutionHistory(): JSX.Element {
       cancelled = true
     }
   }, [api, nonce])
+
+  // The list stays on screen while the refetch lands; the skeleton only shows when it is empty.
+  useEngineChange(['runs'], () => setNonce((n) => n + 1))
 
   if (client === null) {
     return (

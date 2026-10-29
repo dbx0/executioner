@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosInstance } from 'axios'
 import { useApp } from '../store.js'
 import type { Finding } from '../api/findings.js'
+import { emitChange } from '../lib/engine-changes.js'
 
 const finding = (over: Partial<Finding> = {}): Finding => ({
   id: 'f1',
@@ -214,5 +215,80 @@ describe('FindingsView loading state', () => {
     expect(screen.getByText('AWS key in bundle.js')).toBeTruthy()
     expect(screen.queryByRole('status', { name: /loading findings/i })).toBeNull()
     d.resolve([finding()])
+  })
+})
+
+describe('FindingsView live refresh', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    rows = [finding(), finding({ id: 'f2', title: 'Directory listing', severity: 'low', description: '' })]
+    useApp.setState({ client: {} as AxiosInstance })
+  })
+
+  it('refetches when a findings change arrives', async () => {
+    render(<FindingsView />)
+    expect(await screen.findByText('AWS key in bundle.js')).toBeTruthy()
+    expect(fakeApi.list).toHaveBeenCalledTimes(1)
+
+    rows = [...rows, finding({ id: 'f3', title: 'Exposed admin panel' })]
+    emitChange('findings')
+
+    expect(await screen.findByText('Exposed admin panel')).toBeTruthy()
+    expect(fakeApi.list).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the refresh spinner going until the manual refresh lands', async () => {
+    render(<FindingsView />)
+    expect(await screen.findByText('AWS key in bundle.js')).toBeTruthy()
+
+    let resolveManual!: (v: Finding[]) => void
+    fakeApi.list.mockReturnValueOnce(new Promise<Finding[]>((r) => (resolveManual = r)))
+    const button = screen.getByLabelText('Refresh findings')
+    fireEvent.click(button)
+    const spinning = (): boolean => button.querySelector('svg')?.getAttribute('class')?.includes('animate-spin') ?? false
+    expect(spinning()).toBe(true)
+
+    // A live refresh starts and finishes while the manual one is still out.
+    rows = [...rows, finding({ id: 'f3', title: 'Exposed admin panel' })]
+    emitChange('findings')
+    expect(await screen.findByText('Exposed admin panel')).toBeTruthy()
+    expect(spinning()).toBe(true)
+
+    resolveManual(rows)
+    await waitFor(() => expect(spinning()).toBe(false))
+  })
+
+  it('keeps the selected finding after a live refresh', async () => {
+    render(<FindingsView />)
+    fireEvent.click(await screen.findByText('AWS key in bundle.js'))
+    expect(await screen.findByText('AKIAEXAMPLE')).toBeTruthy()
+
+    rows = [...rows, finding({ id: 'f3', title: 'Exposed admin panel' })]
+    emitChange('findings')
+
+    expect(await screen.findByText('Exposed admin panel')).toBeTruthy()
+    expect(screen.getByText('AKIAEXAMPLE')).toBeTruthy()
+  })
+
+  it('keeps an unsaved edit when a live refresh brings an unrelated finding', async () => {
+    render(<FindingsView />)
+    fireEvent.click(await screen.findByText('AWS key in bundle.js'))
+    fireEvent.change(await screen.findByDisplayValue('AWS key in bundle.js'), { target: { value: 'AWS key, half typed' } })
+
+    rows = [...rows.map((r) => ({ ...r })), finding({ id: 'f4', title: 'Open redirect on login' })]
+    emitChange('findings')
+
+    expect(await screen.findByText('Open redirect on login')).toBeTruthy()
+    expect(screen.getByDisplayValue('AWS key, half typed')).toBeTruthy()
+  })
+
+  it('shows a refreshed row whose content changed without a new updatedAt', async () => {
+    render(<FindingsView />)
+    expect(await screen.findByText('Directory listing')).toBeTruthy()
+
+    rows = rows.map((r) => (r.id === 'f2' ? { ...r, severity: 'critical', targetId: null } : { ...r }))
+    emitChange('findings')
+
+    expect(await screen.findByText('critical')).toBeTruthy()
   })
 })
