@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="Executioner logo" width="128" />
+  <img src="docs/assets/cover.jpg" alt="Executioner" width="100%" />
 </p>
-
-<h1 align="center">Executioner</h1>
 
 <p align="center">
   <a href="https://github.com/dbx0/executioner/stargazers"><img src="https://img.shields.io/github/stars/dbx0/executioner?style=flat&label=%E2%98%85&color=e5484d" alt="GitHub stars" /></a>
