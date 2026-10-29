@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosInstance } from 'axios'
 import { useApp } from '../store.js'
@@ -111,12 +111,18 @@ describe('AboutView', () => {
     const tile = (label: string): HTMLElement =>
       [...document.querySelectorAll('[data-stat]')].find((e) => e.getAttribute('data-stat') === label) as HTMLElement
 
-    expect(tile('In scope').textContent).toContain('9')
+    // The tiles count up from zero, so the real values arrive a moment after mount.
+    await waitFor(
+      () => {
+        expect(tile('In scope').textContent).toContain('9')
+        expect(tile('Open findings').textContent).toContain('4')
+        // critical + high
+        expect(tile('Critical + high').textContent).toContain('3')
+        expect(tile('Recon facts').textContent).toContain('40')
+      },
+      { timeout: 4000 },
+    )
     expect(tile('In scope').textContent).toContain('of 12 assets')
-    expect(tile('Open findings').textContent).toContain('4')
-    // critical + high
-    expect(tile('Critical + high').textContent).toContain('3')
-    expect(tile('Recon facts').textContent).toContain('40')
   })
 
   it('reads working agents from the live session state, not the engine', async () => {
@@ -258,5 +264,34 @@ describe('AboutView', () => {
     emitChange('findings')
 
     await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
+  })
+
+  describe('motion', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('stat tiles end on the real values', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+      render(<AboutView />)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      const tile = (): HTMLElement =>
+        [...document.querySelectorAll('[data-stat]')].find((e) => e.getAttribute('data-stat') === 'Open findings') as HTMLElement
+      expect(tile().textContent).toBe('Open findings05 recorded')
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000)
+      })
+      expect(tile().textContent).toBe('Open findings45 recorded')
+    })
+
+    it('sections carry the enter animation', async () => {
+      render(<AboutView />)
+      await screen.findByText('Findings by severity')
+      const section = document.querySelector('section') as HTMLElement
+      expect(section.className).toContain('animate-enter')
+    })
   })
 })

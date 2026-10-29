@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '../../lib/utils.js'
+import { stagger, useCountUp } from '../../lib/motion.js'
 
 /**
  * The About page's chart vocabulary. Everything here is a plain div or an inline
@@ -23,14 +24,16 @@ export function Panel({
   note,
   children,
   className,
+  style,
 }: {
   title: string
   note?: ReactNode
   children: ReactNode
   className?: string
+  style?: CSSProperties
 }): JSX.Element {
   return (
-    <section className={cn('rounded-lg border border-border bg-card p-3.5', className)}>
+    <section className={cn('rounded-lg border border-border bg-card p-3.5', className)} style={style}>
       <header className="mb-3 flex items-baseline gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</h2>
         {note !== undefined && <span className="ml-auto text-[11px] text-muted-foreground">{note}</span>}
@@ -40,24 +43,29 @@ export function Panel({
   )
 }
 
-/** One headline number with a label above and a quiet sub-line under it. */
+/** One headline number with a label above and a quiet sub-line under it. The
+ *  number counts up from zero once, on the first load that has something to show. */
 export function StatTile({
+  index = 0,
   label,
   value,
   sub,
   tone,
   onClick,
 }: {
+  index?: number
   label: string
   value: number | string
   sub?: string
   tone?: string | undefined
   onClick?: (() => void) | undefined
 }): JSX.Element {
+  const counted = useCountUp(typeof value === 'number' ? value : 0, 1400, 350 + index * 50)
+  const shown = typeof value === 'number' ? counted.toLocaleString('en-US') : value
   const body = (
     <>
       <div className="text-[10.5px] font-medium uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={cn('mt-1 text-[24px] font-semibold leading-none tabular-nums', tone)}>{value}</div>
+      <div className={cn('mt-1 text-[24px] font-semibold leading-none tabular-nums', tone)}>{shown}</div>
       <div className="mt-1 truncate text-[11.5px] text-muted-foreground">{sub ?? ''}</div>
     </>
   )
@@ -87,13 +95,16 @@ export function RankedBars({ slices, empty }: { slices: Slice[]; empty?: string 
   }
   return (
     <ul className="flex flex-col gap-1.5">
-      {slices.map((s) => (
+      {slices.map((s, i) => (
         <li key={s.key} className="flex items-center gap-2.5">
           <span className="w-[68px] shrink-0 truncate text-[11.5px] text-muted-foreground">{s.label}</span>
           <div className="h-2.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-2">
             <div
-              className={cn('h-full rounded-full', s.tone)}
-              style={{ width: `${s.value === 0 ? 0 : Math.max(3, (s.value / max) * 100)}%` }}
+              className={cn('h-full origin-left rounded-full motion-safe:animate-grow-x', s.tone)}
+              style={{
+                width: `${s.value === 0 ? 0 : Math.max(3, (s.value / max) * 100)}%`,
+                ...stagger(i, 40, 600),
+              }}
             />
           </div>
           <span className="w-7 shrink-0 text-right text-[12px] tabular-nums">{s.value}</span>
@@ -112,11 +123,11 @@ export function StackedBar({ slices, empty }: { slices: Slice[]; empty: string }
       <div className="flex h-3 w-full overflow-hidden rounded-full bg-surface-2">
         {slices
           .filter((s) => s.value > 0)
-          .map((s) => (
+          .map((s, i) => (
             <div
               key={s.key}
-              className={s.tone}
-              style={{ width: `${(s.value / total) * 100}%` }}
+              className={cn('origin-left motion-safe:animate-grow-x', s.tone)}
+              style={{ width: `${(s.value / total) * 100}%`, ...stagger(i, 50, 800) }}
               title={`${s.label}: ${s.value}`}
             />
           ))}
@@ -161,7 +172,7 @@ export function ActivityChart({ days }: { days: ActivityPoint[] }): JSX.Element 
   return (
     <div>
       <div className="flex h-20 items-end gap-[3px]">
-        {days.map((d) => (
+        {days.map((d, di) => (
           <div
             key={d.date}
             className="flex h-full min-w-0 flex-1 items-end justify-center gap-[2px]"
@@ -170,8 +181,14 @@ export function ActivityChart({ days }: { days: ActivityPoint[] }): JSX.Element 
             {SERIES.map((s) => (
               <div
                 key={s.key}
-                className={cn('w-full max-w-[6px] rounded-sm', d[s.key] === 0 ? 'bg-surface-2' : s.tone)}
-                style={{ height: d[s.key] === 0 ? '2px' : `${Math.max(6, (d[s.key] / max) * 100)}%` }}
+                className={cn(
+                  'w-full max-w-[6px] origin-bottom rounded-sm motion-safe:animate-grow-y',
+                  d[s.key] === 0 ? 'bg-surface-2' : s.tone,
+                )}
+                style={{
+                  height: d[s.key] === 0 ? '2px' : `${Math.max(6, (d[s.key] / max) * 100)}%`,
+                  ...stagger(di, 15, 1000),
+                }}
               />
             ))}
           </div>

@@ -5,6 +5,7 @@ import { useApp } from '../store.js'
 import { useEngineChange } from '../lib/engine-changes.js'
 import { overviewApi, type Overview } from '../api/overview.js'
 import { cn } from '../lib/utils.js'
+import { stagger } from '../lib/motion.js'
 import { friendlyError } from '../lib/api-error.js'
 import { Button } from '../components/ui/button.js'
 import { Input } from '../components/ui/input.js'
@@ -123,20 +124,26 @@ export function AboutView(): JSX.Element {
           <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-3">
             <Identity data={data} agents={agents} />
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <div
+              className="grid grid-cols-2 gap-3 motion-safe:animate-enter sm:grid-cols-3 xl:grid-cols-6"
+              style={stagger(1, 80, 100)}
+            >
               <StatTile
+                index={0}
                 label="In scope"
                 value={data.targets.byScope.in}
                 sub={`of ${data.targets.total} assets`}
                 onClick={() => setActiveView('targets')}
               />
               <StatTile
+                index={1}
                 label="Open findings"
                 value={data.findings.byStatus.open ?? 0}
                 sub={`${data.findings.total} recorded`}
                 onClick={() => setActiveView('findings')}
               />
               <StatTile
+                index={2}
                 label="Critical + high"
                 value={(data.findings.bySeverity.critical ?? 0) + (data.findings.bySeverity.high ?? 0)}
                 sub="worth reporting first"
@@ -148,24 +155,27 @@ export function AboutView(): JSX.Element {
                 onClick={() => setActiveView('findings')}
               />
               <StatTile
+                index={3}
                 label="Agents working"
                 value={agents.working}
                 sub={`${agents.open} open · ${agents.subagents} sub-agents`}
               />
               <StatTile
+                index={4}
                 label="Runs"
                 value={data.runs.running}
                 sub={`running of ${data.runs.total}`}
                 tone={data.runs.running > 0 ? 'text-status-running' : undefined}
               />
               <StatTile
+                index={5}
                 label="Recon facts"
                 value={data.facts.total}
                 sub={`${Object.keys(data.facts.byKind).length} kinds collected`}
               />
             </div>
 
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="grid gap-3 motion-safe:animate-enter lg:grid-cols-2" style={stagger(2, 80, 100)}>
               <Panel title="Findings by severity" note={`${data.findings.total} total`}>
                 <RankedBars slices={severitySlices(data.findings.bySeverity)} empty="Nothing proved yet." />
               </Panel>
@@ -209,7 +219,7 @@ export function AboutView(): JSX.Element {
               </Panel>
             </div>
 
-            <Panel title="Wired up">
+            <Panel title="Wired up" className="motion-safe:animate-enter" style={stagger(3, 80, 100)}>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-[12.5px] sm:grid-cols-4">
                 <Stat label="Workflows" value={data.automation.workflows} />
                 <Stat label="Schedules" value={data.automation.schedules} />
@@ -286,7 +296,10 @@ function Identity({
   }
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
+    <section
+      className="rounded-lg border border-border bg-card p-4 motion-safe:animate-enter"
+      style={stagger(0, 80, 100)}
+    >
       <div className="flex items-start gap-3.5">
         <IconPicker
           value={{
@@ -417,8 +430,8 @@ function TopTargets({ data, onOpen }: { data: Overview; onOpen: (id: string) => 
   }
   return (
     <ul className="flex flex-col gap-0.5">
-      {data.findings.topTargets.map((t) => (
-        <li key={t.id}>
+      {data.findings.topTargets.map((t, i) => (
+        <li key={t.id} className="motion-safe:animate-enter-x" style={stagger(i, 60, 900)}>
           <button
             type="button"
             onClick={() => onOpen(t.id)}
