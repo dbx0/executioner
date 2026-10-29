@@ -40,6 +40,7 @@ import { graphEdgeTypes } from '../components/canvas/AddEdge.js'
 import { useGraphHistory } from '../lib/useGraphHistory.js'
 import type { CatalogEntry } from '../lib/node-catalog.js'
 import { notify } from '../lib/toast.js'
+import { runSummaryMessage } from '../lib/run-summary.js'
 import { useNewIds } from '../lib/motion.js'
 import { useEngineEvents } from '../lib/events.js'
 import { flatten, saveLastWorkflow } from './workflow-editor/helpers.js'
@@ -728,8 +729,12 @@ export function WorkflowEditor({
         setStepExec(result.executionId)
         notify('Stepping. Press Next to advance.')
       } else {
-        if (result.status === 'failed') notify.error('Run failed. See the nodes for details.')
-        else notify('Run complete')
+        if (result.status === 'failed') notify.error(runSummaryMessage('failed', null))
+        else if (result.status === 'cancelled' || result.executionId === undefined) notify('Run complete')
+        else {
+          const summary = await exApi.summary(result.executionId).catch(() => null)
+          notify(runSummaryMessage(result.status, summary))
+        }
       }
     } catch {
       notify.error('Run failed to start')

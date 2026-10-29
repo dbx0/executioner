@@ -99,3 +99,37 @@ describe('GET /api/executions/:id', () => {
     expect(body.nodes[0]?.nodeId).toBe('a')
   })
 })
+
+describe('GET /api/executions/:id/summary', () => {
+  it('counts the findings and distinct targets a run produced', async () => {
+    const exec = project.runs.createExecution({ workflowId: null, targetId: null, backend: 'local', testMode: false })
+    const other = project.runs.createExecution({ workflowId: null, targetId: null, backend: 'local', testMode: false })
+    const hosts = ['a.example.com', 'b.example.com', 'c.example.com'].map(
+      (value) => project.targets.upsert({ kind: 'domain', value, source: 'manual' }).id,
+    )
+    for (const targetId of hosts) {
+      project.facts.record({ targetId, kind: 'port', executionId: exec.id, nodeId: 'n', data: { port: 80, protocol: 'tcp' } })
+      project.facts.record({ targetId, kind: 'port', executionId: exec.id, nodeId: 'n', data: { port: 443, protocol: 'tcp' } })
+    }
+    project.findings.create({ title: 'one', severity: 'low', executionId: exec.id })
+    project.findings.create({ title: 'two', severity: 'low', executionId: exec.id })
+    project.findings.create({ title: 'elsewhere', severity: 'low', executionId: other.id })
+
+    const res = await app.request(`/api/executions/${exec.id}/summary`, auth)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ findings: 2, targets: 3 })
+  })
+
+  it('reports zeros for a run that produced nothing', async () => {
+    const exec = project.runs.createExecution({ workflowId: null, targetId: null, backend: 'local', testMode: false })
+    const res = await app.request(`/api/executions/${exec.id}/summary`, auth)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ findings: 0, targets: 0 })
+  })
+
+  it('returns 404 for an unknown execution', async () => {
+    const res = await app.request('/api/executions/nope/summary', auth)
+    expect(res.status).toBe(404)
+  })
+})
+

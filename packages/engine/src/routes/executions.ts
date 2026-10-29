@@ -127,6 +127,18 @@ export function executionRoutes(deps: ExecutionRouteDeps): Hono {
     return c.json({ ...base, nodes: store.nodesFor(id) })
   })
 
+  // What a run produced, for the "Run finished" toast. A run that produced
+  // nothing is zeros; only an id that matches no execution is a 404.
+  app.get('/executions/:id/summary', (c) => {
+    const id = c.req.param('id')
+    const base = deps.project.executions.get(id) ?? store.getExecution(id)
+    if (base === undefined) return c.json({ error: 'not found' }, 404)
+    return c.json({
+      findings: deps.project.findings.countForExecution(id),
+      targets: deps.project.facts.targetCountForExecution(id),
+    })
+  })
+
   // Persisted per-node output for a run, read from the evidence files the node
   // runner wrote. This is the durable source the UI falls back to once the live
   // event stream has rolled past (or a past run is reopened).

@@ -99,6 +99,11 @@ export class FindingRepository {
     return this.list({ targetId })
   }
 
+  /** How many findings a run recorded. */
+  countForExecution(executionId: string): number {
+    return this.orm.select({ n: sql<number>`count(*)` }).from(findings).where(eq(findings.executionId, executionId)).get()?.n ?? 0
+  }
+
   create(input: FindingInput): Finding {
     const now = isoNow()
     const finding: Finding = {

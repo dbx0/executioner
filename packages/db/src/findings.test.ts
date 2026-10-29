@@ -152,4 +152,12 @@ describe('FindingRepository', () => {
     // Removing what is already gone is not an error.
     expect(() => findings.remove(f.id)).not.toThrow()
   })
+
+  it('counts only the findings a given run recorded', () => {
+    findings.create({ title: 'a', severity: 'low', targetId, executionId: 'run-1' })
+    findings.create({ title: 'b', severity: 'low', targetId, executionId: 'run-1' })
+    findings.create({ title: 'c', severity: 'low', targetId, executionId: 'run-2' })
+    expect(findings.countForExecution('run-1')).toBe(2)
+    expect(findings.countForExecution('nope')).toBe(0)
+  })
 })

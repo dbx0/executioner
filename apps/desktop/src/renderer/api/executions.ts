@@ -9,6 +9,11 @@ export interface ExecutionSummary {
   finishedAt: string | null
 }
 
+export interface RunSummary {
+  findings: number
+  targets: number
+}
+
 /** One node's persisted result, as the runs view renders it. */
 export interface NodeOutputRow {
   nodeId: string
@@ -49,6 +54,9 @@ export const executionsApi = (client: AxiosInstance) => ({
       .get<StandaloneRun[]>('/executions/standalone', limit === undefined ? {} : { params: { limit } })
       .then((r) => r.data),
   get: (id: string) => client.get(`/executions/${id}`).then((r) => r.data),
+  /** What a run produced: findings it saved and targets it enriched. */
+  summary: (id: string) =>
+    client.get<RunSummary>(`/executions/${id}/summary`).then((r) => r.data),
   output: (id: string) =>
     client
       .get<NodeOutputRow[]>(`/executions/${id}/output`)

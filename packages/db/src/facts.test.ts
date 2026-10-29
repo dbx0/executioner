@@ -79,4 +79,13 @@ describe('FactRepository', () => {
       }),
     ).toThrow()
   })
+
+  it('counts the distinct targets a given run recorded facts on', () => {
+    const other = targets.upsert({ kind: 'domain', value: 'other.com', source: 'manual' }).id
+    facts.record({ targetId, kind: 'port', executionId: 'run-1', nodeId: 'n', data: { port: 80, protocol: 'tcp' } })
+    facts.record({ targetId, kind: 'port', executionId: 'run-1', nodeId: 'n', data: { port: 443, protocol: 'tcp' } })
+    facts.record({ targetId: other, kind: 'port', executionId: 'run-2', nodeId: 'n', data: { port: 80, protocol: 'tcp' } })
+    expect(facts.targetCountForExecution('run-1')).toBe(1)
+    expect(facts.targetCountForExecution('nope')).toBe(0)
+  })
 })

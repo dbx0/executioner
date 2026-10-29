@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 import { isoNow, newId, type TargetFact, type TargetFactKind } from '@exe/protocol'
 import type { ProjectDatabase } from './orm.js'
 import { targetFacts } from './tables.js'
@@ -147,5 +147,16 @@ export class FactRepository {
       .orderBy(asc(targetFacts.collectedAt))
       .all()
       .map(toFact)
+  }
+
+  /** How many distinct targets a run recorded facts on. */
+  targetCountForExecution(executionId: string): number {
+    return (
+      this.orm
+        .select({ n: sql<number>`count(distinct ${targetFacts.targetId})` })
+        .from(targetFacts)
+        .where(eq(targetFacts.executionId, executionId))
+        .get()?.n ?? 0
+    )
   }
 }
