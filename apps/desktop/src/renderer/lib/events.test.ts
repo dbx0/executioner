@@ -21,4 +21,9 @@ describe('parseEngineEvent', () => {
   it('returns undefined for a message missing required fields', () => {
     expect(parseEngineEvent(JSON.stringify({ type: 'stdout' }))).toBeUndefined()
   })
+
+  it('parses a change event', () => {
+    const raw = JSON.stringify({ type: 'change', executionId: '', nodeId: 'targets', data: '{}', seq: 1, at: 'now' })
+    expect(parseEngineEvent(raw)?.type).toBe('change')
+  })
 })

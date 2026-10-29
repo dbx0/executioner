@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useEffect } from 'react'
 import { useApp, type ViewId } from '../store.js'
 import { eventsUrl } from '../lib/connection.js'
+import { emitChange, type ChangeTopic } from '../lib/engine-changes.js'
 import { parseEngineEvent } from '../lib/events.js'
 import { playNotificationChime, notifyUser } from '../lib/notify.js'
 import { TooltipProvider } from '../components/ui/tooltip.js'
@@ -146,7 +147,12 @@ function useAgentEvents(): void {
     const ws = new WebSocket(eventsUrl(connection))
     ws.onmessage = (m) => {
       const e = parseEngineEvent(String(m.data))
+      if (e?.type === 'change') {
+        emitChange(e.nodeId as ChangeTopic)
+        return
+      }
       if (e?.type === 'agent') {
+        if (e.nodeId === 'SessionStart' || e.nodeId === 'Stop' || e.nodeId === 'SessionEnd') emitChange('sessions')
         let payload: Record<string, unknown> = {}
         try {
           payload = JSON.parse(e.data) as Record<string, unknown>

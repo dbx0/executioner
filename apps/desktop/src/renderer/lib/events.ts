@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { eventsUrl, type EngineConnection } from './connection.js'
 
 export interface EngineEvent {
-  type: 'status' | 'stdout' | 'stderr' | 'done' | 'agent'
+  type: 'status' | 'stdout' | 'stderr' | 'done' | 'agent' | 'change'
   executionId: string
   nodeId: string
   data: string
@@ -10,7 +10,7 @@ export interface EngineEvent {
   at: string
 }
 
-const TYPES = new Set(['status', 'stdout', 'stderr', 'done', 'agent'])
+const TYPES = new Set(['status', 'stdout', 'stderr', 'done', 'agent', 'change'])
 
 export function parseEngineEvent(raw: string): EngineEvent | undefined {
   let parsed: unknown
