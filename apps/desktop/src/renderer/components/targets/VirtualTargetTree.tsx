@@ -5,10 +5,14 @@ import type { TargetNode } from '../../api/targets.js'
 import { cn } from '../../lib/utils.js'
 import { ScrollArea } from '../ui/scroll-area.js'
 import { Badge } from '../ui/badge.js'
+import { useNewIds } from '../../lib/motion.js'
 import { ScopeBadge } from './ScopeBadge.js'
 
 const ROW_HEIGHT = 32
 const OVERSCAN = 8
+/** How long a new row keeps its highlight; after that a row scrolling into view does not replay it. */
+const FLASH_MS = 1000
+const NO_IDS: ReadonlySet<string> = new Set<string>()
 
 const KIND_ICON: Record<string, typeof Globe> = {
   domain: Globe,
@@ -52,11 +56,58 @@ function collectAllIds(nodes: TargetNode[], into: Set<string>): Set<string> {
   return into
 }
 
+/**
+ * Ids of rows that appeared since the last load, kept for FLASH_MS and then
+ * dropped. The set is computed from the data rather than per mounted row, so a
+ * virtualized row that scrolls into view later does not animate again.
+ */
+export function useFlashIds(ids: readonly string[], resetKey: unknown): ReadonlySet<string> {
+  const fresh = useNewIds(ids, resetKey)
+  const [state, setState] = useState({ resetKey, fresh, active: NO_IDS })
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>())
+
+  // Folded in while rendering, so a new row is flagged on the very render that adds it.
+  // A different engagement starts clean: nothing from the old one lingers.
+  let active = state.active
+  const reset = !Object.is(state.resetKey, resetKey)
+  if (reset || fresh !== state.fresh) {
+    active = reset ? NO_IDS : state.active
+    if (fresh.size > 0) active = new Set([...active, ...fresh])
+    setState({ resetKey, fresh, active })
+  }
+
+  useEffect(() => {
+    if (fresh.size === 0) return
+    const timer = setTimeout(() => {
+      timers.current.delete(timer)
+      setState((prev) => {
+        const next = new Set(prev.active)
+        for (const id of fresh) next.delete(id)
+        return { ...prev, active: next }
+      })
+    }, FLASH_MS)
+    timers.current.add(timer)
+  }, [fresh])
+
+  // Pending expiries die with the engagement and with the component.
+  useEffect(() => {
+    const pending = timers.current
+    return () => {
+      for (const t of pending) clearTimeout(t)
+      pending.clear()
+    }
+  }, [resetKey])
+
+  return active
+}
+
 export interface VirtualTargetTreeProps {
   nodes: TargetNode[]
   selectedId: string | null
   onSelect: (node: TargetNode) => void
   filter: string
+  /** Rows to highlight as freshly arrived. */
+  newIds?: ReadonlySet<string>
   /**
    * Wraps each row, so a caller can put a context menu around it. The menu owns
    * the right-click itself — the tree only decides what a row looks like.
@@ -69,6 +120,7 @@ export function VirtualTargetTree({
   selectedId,
   onSelect,
   filter,
+  newIds,
   renderRow,
 }: VirtualTargetTreeProps): JSX.Element {
   // Track collapsed ids so nodes are expanded by default (matches prior UX).
@@ -139,11 +191,13 @@ export function VirtualTargetTree({
           const index = first + i
           const Icon = KIND_ICON[node.kind] ?? Globe
           const selected = node.id === selectedId
+          const isNew = newIds?.has(node.id) === true
           const rowEl = (
             <div
               role="treeitem"
               aria-selected={selected}
               aria-expanded={hasChildren ? isOpen : undefined}
+              data-new={isNew ? 'true' : undefined}
               tabIndex={-1}
               onClick={() => onRowActivate(row)}
               onKeyDown={(e) => {
@@ -167,6 +221,7 @@ export function VirtualTargetTree({
               className={cn(
                 'group flex items-center gap-2 rounded-md pr-2 text-[13px]',
                 'cursor-pointer',
+                isNew && 'motion-safe:animate-enter-flash-amber',
                 selected
                   ? 'bg-surface-3'
                   : 'hover:bg-surface-2',

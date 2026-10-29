@@ -1,6 +1,8 @@
-import { render, screen, fireEvent } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import { TargetDetailView } from './TargetDetail.js'
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TargetDetailPanel, TargetDetailView } from './TargetDetail.js'
+import { emitChange } from '../../lib/engine-changes.js'
+import type { targetsApi } from '../../api/targets.js'
 import type { ScreenshotItem, TargetDetail } from '../../api/targets.js'
 
 function makeTarget(): TargetDetail {
@@ -141,5 +143,52 @@ describe('TargetDetailView — scope verdict', () => {
   it('stays quiet for an asset that is plainly in scope', () => {
     render(<TargetDetailView target={makeTarget()} screenshots={[]} />)
     expect(screen.queryByText(/in scope by example\.com/i)).toBeNull()
+  })
+})
+
+describe('TargetDetailPanel — live findings', () => {
+  const get = vi.fn()
+  const screenshots = vi.fn()
+  const api = { get, screenshots } as unknown as ReturnType<typeof targetsApi>
+
+  beforeEach(() => {
+    get.mockReset()
+    screenshots.mockReset()
+    screenshots.mockResolvedValue([])
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('shows a finding that arrives while the pane is open', async () => {
+    const base = makeTarget()
+    const added = { ...(base.findings[0] as TargetDetail['findings'][number]), id: 'fd2', title: 'Exposed backup file' }
+    get.mockResolvedValue(base)
+    render(<TargetDetailPanel api={api} targetId="t1" />)
+    await screen.findByText('Open admin panel')
+    expect(screen.queryByText('Exposed backup file')).toBeNull()
+
+    get.mockResolvedValue({ ...base, findings: [...base.findings, added] })
+    emitChange('findings')
+
+    expect(await screen.findByText('Exposed backup file')).toBeTruthy()
+  })
+
+  it('keeps unsaved input and shows no loading state on a live refresh', async () => {
+    const base = makeTarget()
+    get.mockResolvedValue(base)
+    render(<TargetDetailPanel api={api} targetId="t1" />)
+    await screen.findByText('Open admin panel')
+    const input = screen.getByLabelText('Target value') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'half-typed.com' } })
+
+    emitChange('findings')
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(screen.queryByText('Loading…')).toBeNull()
+    expect((screen.getByLabelText('Target value') as HTMLInputElement).value).toBe('half-typed.com')
   })
 })

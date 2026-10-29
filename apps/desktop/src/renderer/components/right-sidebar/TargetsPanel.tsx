@@ -9,6 +9,7 @@ import { setTargetDrag } from '../../lib/target-drag.js'
 import { Button } from '../ui/button.js'
 import { ScrollArea } from '../ui/scroll-area.js'
 import { cn } from '../../lib/utils.js'
+import { useFlashIds } from '../targets/VirtualTargetTree.js'
 
 /** Brand-ish glyph per target kind so the tree reads at a glance. */
 function kindIcon(kind: string): LucideIcon {
@@ -29,6 +30,14 @@ function summariseFact(fact: TargetFact): string {
   return joined.length > 140 ? `${joined.slice(0, 139)}…` : joined
 }
 
+function collectIds(nodes: TargetNode[], into: string[] = []): string[] {
+  for (const n of nodes) {
+    into.push(n.id)
+    collectIds(n.children, into)
+  }
+  return into
+}
+
 /** One tree row: an expander (when it has children), a kind icon, and the value.
  *  Draggable so it can be dropped into a terminal as a reference. */
 function TargetRow({
@@ -36,6 +45,7 @@ function TargetRow({
   depth,
   expanded,
   selectedId,
+  newIds,
   onToggle,
   onSelect,
 }: {
@@ -43,6 +53,7 @@ function TargetRow({
   depth: number
   expanded: Set<string>
   selectedId: string | null
+  newIds: ReadonlySet<string>
   onToggle: (id: string) => void
   onSelect: (node: TargetNode) => void
 }): JSX.Element {
@@ -50,11 +61,13 @@ function TargetRow({
   const hasChildren = node.children.length > 0
   const isOpen = expanded.has(node.id)
   const isSelected = selectedId === node.id
+  const isNew = newIds.has(node.id)
 
   return (
     <div>
       <div
         draggable
+        data-new={isNew ? 'true' : undefined}
         onDragStart={(e) => setTargetDrag(e.dataTransfer, { kind: 'target', text: node.value, target: node.value })}
         onClick={() => {
           onSelect(node)
@@ -63,6 +76,7 @@ function TargetRow({
         title={`${node.value} — drag into a terminal to reference`}
         style={{ paddingLeft: `${depth * 12 + 4}px` }}
         className={cn(
+          isNew && 'motion-safe:animate-enter-flash-amber',
           'group flex h-7 cursor-grab items-center gap-1 rounded-md pr-2 text-[12.5px] transition-colors active:cursor-grabbing',
           isSelected
             ? 'selected-surface text-sidebar-accent-foreground'
@@ -92,6 +106,7 @@ function TargetRow({
               depth={depth + 1}
               expanded={expanded}
               selectedId={selectedId}
+              newIds={newIds}
               onToggle={onToggle}
               onSelect={onSelect}
             />
@@ -171,7 +186,10 @@ function TargetDetailPane({ detail }: { detail: TargetDetail }): JSX.Element {
 export function TargetsPanel(): JSX.Element {
   const client = useApp((s) => s.client)
   const api = useMemo(() => (client === null ? null : targetsApi(client)), [client])
+  const activeRoot = useApp((s) => s.activeRoot)
   const [tree, setTree] = useState<TargetNode[]>([])
+  // Which engagement the tree belongs to, so a switch never diffs against the old one.
+  const [treeRoot, setTreeRoot] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<TargetDetail | null>(null)
@@ -186,16 +204,23 @@ export function TargetsPanel(): JSX.Element {
     setError(null)
     api
       .tree()
-      .then((rows) => !cancelled && setTree(rows))
+      .then((rows) => {
+        if (cancelled) return
+        setTree(rows)
+        setTreeRoot(activeRoot)
+      })
       .catch(() => !cancelled && setError('Couldn’t load targets.'))
       .finally(() => !cancelled && setLoading(false))
     return () => {
       cancelled = true
     }
-  }, [api, nonce])
+  }, [api, nonce, activeRoot])
 
   // The tree stays on screen while the refetch lands; the skeleton only shows when it is empty.
   useEngineChange(['targets', 'scope'], () => setNonce((n) => n + 1))
+
+  const allIds = useMemo(() => (treeRoot === activeRoot ? collectIds(tree) : []), [tree, treeRoot, activeRoot])
+  const newIds = useFlashIds(allIds, activeRoot)
 
   // Fetch the selected target's details (metadata + facts).
   useEffect(() => {
@@ -262,6 +287,7 @@ export function TargetsPanel(): JSX.Element {
                   depth={0}
                   expanded={expanded}
                   selectedId={selectedId}
+                  newIds={newIds}
                   onToggle={toggle}
                   onSelect={(n) => setSelectedId(n.id)}
                 />

@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Trash2, X } from 'lucide-react'
 import {
   type ScreenshotItem,
@@ -9,6 +9,8 @@ import {
 } from '../../api/targets.js'
 import { useApp } from '../../store.js'
 import { cn } from '../../lib/utils.js'
+import { useEngineChange } from '../../lib/engine-changes.js'
+import { stagger } from '../../lib/motion.js'
 import { SeverityChip, StatusChip } from '../../views/findings/chips.js'
 import { Badge } from '../ui/badge.js'
 import { Button } from '../ui/button.js'
@@ -214,29 +216,39 @@ export function TargetDetailView({
 
       {/* Findings first: what was proved about this asset outranks what was observed. */}
       <ScrollArea className="min-h-0 flex-1">
-        <Section title="Findings" count={target.findings.length} defaultOpen={target.findings.length > 0}>
-          <TargetFindings findings={target.findings} />
-        </Section>
+        {/* Sections are keyed by target, so picking another target replays the entrance. */}
+        <div key={`${target.id}-findings`} className="motion-safe:animate-enter" style={stagger(0, 100)}>
+          <Section title="Findings" count={target.findings.length} defaultOpen={target.findings.length > 0}>
+            <TargetFindings findings={target.findings} />
+          </Section>
+        </div>
 
-        {FACT_KIND_ORDER.map((k) => {
+        {FACT_KIND_ORDER.map((k, i) => {
           const facts = grouped.get(k) ?? []
           const Renderer = FACT_RENDERERS[k]
           if (Renderer === undefined) return null
           return (
-            <Section
-              key={k}
-              title={FACT_KIND_LABELS[k] ?? k}
-              count={facts.length}
-              defaultOpen={k === 'raw_output' ? false : facts.length > 0}
-            >
-              <Renderer facts={facts} />
-            </Section>
+            <div key={`${target.id}-${k}`} className="motion-safe:animate-enter" style={stagger(i + 1, 100)}>
+              <Section
+                title={FACT_KIND_LABELS[k] ?? k}
+                count={facts.length}
+                defaultOpen={k === 'raw_output' ? false : facts.length > 0}
+              >
+                <Renderer facts={facts} />
+              </Section>
+            </div>
           )
         })}
 
-        <Section title="Screenshots" count={screenshots.length}>
-          <ScreenshotGallery items={screenshots} />
-        </Section>
+        <div
+          key={`${target.id}-screenshots`}
+          className="motion-safe:animate-enter"
+          style={stagger(FACT_KIND_ORDER.length + 1, 100)}
+        >
+          <Section title="Screenshots" count={screenshots.length}>
+            <ScreenshotGallery items={screenshots} />
+          </Section>
+        </div>
       </ScrollArea>
     </div>
   )
@@ -304,6 +316,22 @@ export function TargetDetailPanel({
       cancelled = true
     }
   }, [api, targetId])
+
+  // A live refresh swaps the findings in place: no loading state, and the
+  // rename input and open sections are untouched because only `target` changes.
+  const current = useRef({ api, targetId })
+  useEffect(() => {
+    current.current = { api, targetId }
+  })
+  useEngineChange(['findings'], () => {
+    const asked = { api, targetId }
+    void api
+      .get(targetId)
+      .then((detail) => {
+        if (current.current.api === asked.api && current.current.targetId === asked.targetId) setTarget(detail)
+      })
+      .catch(() => {})
+  })
 
   const handleRename = (patch: { kind?: string; value?: string }): void => {
     setRenaming(true)

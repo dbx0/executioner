@@ -88,6 +88,7 @@ export default {
         'enter-x': 'enter-x 300ms cubic-bezier(.215,.61,.355,1) both',
         'enter-down': 'enter-down 550ms cubic-bezier(.215,.61,.355,1) both',
         'flash-amber': 'flash-amber 900ms',
+        'enter-flash-amber': 'enter-x 300ms cubic-bezier(.215,.61,.355,1) both, flash-amber 900ms',
         'flash-red': 'flash-red 1600ms ease-out',
         pop: 'pop 250ms cubic-bezier(.34,1.56,.64,1)',
         'grow-x': 'grow-x 900ms cubic-bezier(.215,.61,.355,1) both',

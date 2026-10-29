@@ -11,13 +11,21 @@ import { cn } from '../lib/utils.js'
 import { Button } from '../components/ui/button.js'
 import { Input } from '../components/ui/input.js'
 import { Badge } from '../components/ui/badge.js'
-import { VirtualTargetTree } from '../components/targets/VirtualTargetTree.js'
+import { VirtualTargetTree, useFlashIds } from '../components/targets/VirtualTargetTree.js'
 import { TargetTreeSkeleton } from '../components/targets/TargetTreeSkeleton.js'
 import { TargetDetailPanel } from '../components/targets/TargetDetail.js'
 import { AddTargetModal } from '../components/modals/AddTargetModal.js'
 import { countByScope, filterTreeByScope, type ScopeFilter } from '../components/targets/ScopeBadge.js'
 import { TargetContextMenu } from '../components/targets/TargetContextMenu.js'
 import { LOCAL_BACKEND, type RunBackend } from '../lib/target-actions.js'
+
+function collectIds(nodes: TargetNode[], into: string[] = []): string[] {
+  for (const n of nodes) {
+    into.push(n.id)
+    collectIds(n.children, into)
+  }
+  return into
+}
 
 function countTree(nodes: TargetNode[]): number {
   return nodes.reduce((acc, n) => acc + 1 + countTree(n.children), 0)
@@ -42,7 +50,10 @@ export function TargetsView(): JSX.Element {
   const openTools = useApp((s) => s.openTools)
   const api = useMemo(() => (client === null ? null : targetsApi(client)), [client])
 
+  const activeRoot = useApp((s) => s.activeRoot)
   const [tree, setTree] = useState<TargetNode[]>([])
+  // Which engagement the tree belongs to, so a switch never diffs against the old one.
+  const [treeRoot, setTreeRoot] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadedOnce, setLoadedOnce] = useState(false)
   const [filter, setFilter] = useState('')
@@ -61,7 +72,9 @@ export function TargetsView(): JSX.Element {
     if (api === null) return
     if (!silent) setLoading(true)
     try {
-      setTree(await api.tree())
+      const rows = await api.tree()
+      setTree(rows)
+      setTreeRoot(activeRoot)
       setError(null)
     } catch (e) {
       setError((e as Error).message)
@@ -71,7 +84,7 @@ export function TargetsView(): JSX.Element {
       if (!silent) setLoading(false)
       setLoadedOnce(true)
     }
-  }, [api])
+  }, [api, activeRoot])
 
   useEffect(() => {
     void refresh()
@@ -129,6 +142,9 @@ export function TargetsView(): JSX.Element {
   }, [tree, filter, scopeFilter])
 
   const total = useMemo(() => countTree(tree), [tree])
+
+  const allIds = useMemo(() => (treeRoot === activeRoot ? collectIds(tree) : []), [tree, treeRoot, activeRoot])
+  const newIds = useFlashIds(allIds, activeRoot)
 
   const describeRejudged = (n: number): string =>
     n === 0 ? '' : ` · re-judged ${n} ${n === 1 ? 'target' : 'targets'}`
@@ -300,6 +316,7 @@ export function TargetsView(): JSX.Element {
               selectedId={selectedId}
               onSelect={(n) => setSelectedId(n.id)}
               filter={filter}
+              newIds={newIds}
               renderRow={(node, row) => (
                 <TargetContextMenu
                   node={node}

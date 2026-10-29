@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useApp } from '../store.js'
 import type { AxiosInstance } from 'axios'
@@ -83,15 +83,18 @@ vi.mock('../api/backends.js', () => ({
 
 // The detail panel and virtual tree pull in heavier UI; keep the test focused on
 // the deep-link wiring by stubbing them to reflect only what this view drives.
-vi.mock('../components/targets/VirtualTargetTree.js', () => ({
+vi.mock('../components/targets/VirtualTargetTree.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../components/targets/VirtualTargetTree.js')>()),
   VirtualTargetTree: ({
     selectedId,
     nodes,
+    newIds,
     onSelect,
     renderRow,
   }: {
     selectedId: string | null
     nodes: TargetNode[]
+    newIds?: ReadonlySet<string>
     onSelect: (n: TargetNode) => void
     renderRow?: (n: TargetNode, row: JSX.Element) => JSX.Element
   }) => (
@@ -103,6 +106,9 @@ vi.mock('../components/targets/VirtualTargetTree.js', () => ({
       <button type="button" onClick={() => onSelect(nodes[0] as TargetNode)}>
         pick first
       </button>
+      {nodes.map((n) => (
+        <div key={n.id} data-testid={`node-${n.id}`} data-new={newIds?.has(n.id) === true ? 'true' : 'false'} />
+      ))}
       {nodes[0] !== undefined && renderRow !== undefined
         ? renderRow(nodes[0], <div data-testid="row">{nodes[0].value}</div>)
         : null}
@@ -457,5 +463,61 @@ describe('TargetsView — where a run happens', () => {
     emitChange('targets')
 
     await waitFor(() => expect(fakeApi.tree).toHaveBeenCalledTimes(2))
+  })
+})
+
+describe('TargetsView — new rows', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useApp.setState({ client: {} as AxiosInstance, pendingTargetId: null, activeRoot: '/eng-a' })
+    fakeApi.tree.mockResolvedValue(tree)
+  })
+  afterEach(() => {
+    useApp.setState({ activeRoot: null })
+  })
+
+  const extra: TargetNode = { ...(tree[0] as TargetNode), id: 't3', value: 'new.example.org', children: [] }
+
+  it('rows added by a live refresh are marked new', async () => {
+    render(<TargetsView />)
+    await screen.findByTestId('node-t1')
+    expect(screen.getByTestId('node-t1').getAttribute('data-new')).toBe('false')
+
+    fakeApi.tree.mockResolvedValue([...tree, extra])
+    emitChange('targets')
+
+    await waitFor(() => expect(screen.getByTestId('node-t3').getAttribute('data-new')).toBe('true'))
+    expect(screen.getByTestId('node-t1').getAttribute('data-new')).toBe('false')
+  })
+
+  it('does not mark the first load of another engagement as new', async () => {
+    render(<TargetsView />)
+    await screen.findByTestId('node-t1')
+
+    fakeApi.tree.mockResolvedValue([extra])
+    act(() => {
+      useApp.setState({ client: {} as AxiosInstance, activeRoot: '/eng-b' })
+    })
+
+    await screen.findByTestId('node-t3')
+    expect(screen.getByTestId('node-t3').getAttribute('data-new')).toBe('false')
+  })
+
+  it('stops marking a row as new after a second', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(<TargetsView />)
+      await screen.findByTestId('node-t1')
+      fakeApi.tree.mockResolvedValue([...tree, extra])
+      emitChange('targets')
+      await waitFor(() => expect(screen.getByTestId('node-t3').getAttribute('data-new')).toBe('true'))
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1100)
+      })
+      expect(screen.getByTestId('node-t3').getAttribute('data-new')).toBe('false')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
