@@ -23,7 +23,7 @@ import { targetsApi, type TargetNode } from '../api/targets.js'
 import { AddBackendModal } from '../components/modals/BackendsDialog.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
 import { buildCatalog, categoryColor } from '../lib/node-catalog.js'
-import { graphNodeTypes, type GraphNodeData } from '../components/canvas/GraphNodes.js'
+import { graphNodeTypes, NewNodeIdsContext, type GraphNodeData } from '../components/canvas/GraphNodes.js'
 import { CanvasContext } from '../components/canvas/CanvasContext.js'
 import { Palette } from '../components/canvas/Palette.js'
 import { layoutGraph } from '../lib/autolayout.js'
@@ -40,6 +40,7 @@ import { graphEdgeTypes } from '../components/canvas/AddEdge.js'
 import { useGraphHistory } from '../lib/useGraphHistory.js'
 import type { CatalogEntry } from '../lib/node-catalog.js'
 import { notify } from '../lib/toast.js'
+import { useNewIds } from '../lib/motion.js'
 import { useEngineEvents } from '../lib/events.js'
 import { flatten, saveLastWorkflow } from './workflow-editor/helpers.js'
 import { loadRunBackend, saveRunBackend } from '../store/persistence.js'
@@ -122,6 +123,25 @@ export function WorkflowEditor({
   // recorder skips the resulting nodes/edges change (avoids re-recording it).
   const applyingHistory = useRef(false)
   const history = useGraphHistory<GraphNodeData>()
+
+  // Nodes added after a graph is loaded animate in. Each load, import or blank
+  // canvas bumps the generation and re-baselines; null until the first one, so
+  // the first node dropped on an empty canvas still animates.
+  const [canvasGen, setCanvasGen] = useState<number | null>(null)
+  const nextCanvas = useCallback(() => setCanvasGen((g) => (g ?? 0) + 1), [])
+  const nodeIds = useMemo(() => nodes.map((n) => n.id), [nodes])
+  const newNodeIds = useNewIds(nodeIds, canvasGen, canvasGen !== null)
+
+  // Edges leaving a succeeded node light up. Only those edges are rebuilt, and
+  // only at render time, so the stored edges (history, save) stay untouched.
+  const displayEdges = useMemo(() => {
+    const statusById = new Map(nodes.map((n) => [n.id, n.data.status]))
+    return edges.map((e) => {
+      const sourceStatus = statusById.get(e.source)
+      if (sourceStatus !== 'success') return e
+      return { ...e, data: { ...(e.data as object | undefined), sourceStatus } }
+    })
+  }, [nodes, edges])
 
   // Pre-run validation, recomputed only when the graph changes.
   const issues = useMemo(() => validateWorkflow(nodes, edges), [nodes, edges])
@@ -533,11 +553,12 @@ export function WorkflowEditor({
       applyingHistory.current = true
       setNodes(flow.nodes)
       setEdges(flow.edges)
+      nextCanvas()
       history.reset(flow.nodes, flow.edges)
       setSelectedId(undefined)
       saveLastWorkflow(activeRoot, id)
     },
-    [wfApi, hydrateGraph, setNodes, setEdges, history, activeRoot],
+    [wfApi, hydrateGraph, setNodes, setEdges, nextCanvas, history, activeRoot],
   )
 
   // Load the workflow the hub asked us to open, once the node catalog is ready
@@ -547,13 +568,14 @@ export function WorkflowEditor({
     if (initialLoaded.current) return
     if (initialWorkflowId === 'new') {
       initialLoaded.current = true
+      nextCanvas()
       saveLastWorkflow(activeRoot, null)
       return
     }
     if (catalog.length === 0) return
     initialLoaded.current = true
     void loadWorkflow(initialWorkflowId)
-  }, [initialWorkflowId, catalog, activeRoot, loadWorkflow])
+  }, [initialWorkflowId, catalog, activeRoot, loadWorkflow, nextCanvas])
 
   // Serialize the current canvas to the engine graph shape. The engine reads a
   // node's params as top-level `data` keys, so emit only user params as `data`.
@@ -597,6 +619,7 @@ export function WorkflowEditor({
     applyingHistory.current = true
     setNodes([])
     setEdges([])
+    nextCanvas()
     history.reset([], [])
     setSelectedId(undefined)
     saveLastWorkflow(activeRoot, null)
@@ -656,6 +679,7 @@ export function WorkflowEditor({
       applyingHistory.current = true
       setNodes(hydrated.nodes)
       setEdges(hydrated.edges)
+      nextCanvas()
       history.reset(hydrated.nodes, hydrated.edges)
       setSelectedId(undefined)
     } catch {
@@ -763,34 +787,36 @@ export function WorkflowEditor({
           <CanvasContext.Provider
             value={{ onDuplicate, onDelete, onInsertBetween, onAppend, onRunNode: (id) => void runSingleNode(id) }}
           >
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={graphNodeTypes}
-              edgeTypes={graphEdgeTypes}
-              onInit={(inst) => (rfRef.current = inst)}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onNodesDelete={onNodesDelete}
-              onDrop={onDrop}
-              onDragOver={onDragOver}
-              onNodeClick={(_, n) => setSelectedId(n.id)}
-              onPaneClick={() => setSelectedId(undefined)}
-              deleteKeyCode={['Backspace', 'Delete']}
-              fitView
-              proOptions={{ hideAttribution: true }}
-            >
-              <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="var(--border)" />
-              <Controls className="!rounded-md !border !border-border !bg-card !shadow-sm" showInteractive={false} />
-              <MiniMap
-                pannable
-                zoomable
-                nodeColor={(node) => categoryColor((node.data as GraphNodeData).category)}
-                maskColor="rgba(0,0,0,0.5)"
-                className="!rounded-md !border !border-border !bg-card"
-              />
-            </ReactFlow>
+            <NewNodeIdsContext.Provider value={newNodeIds}>
+              <ReactFlow
+                nodes={nodes}
+                edges={displayEdges}
+                nodeTypes={graphNodeTypes}
+                edgeTypes={graphEdgeTypes}
+                onInit={(inst) => (rfRef.current = inst)}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onNodesDelete={onNodesDelete}
+                onDrop={onDrop}
+                onDragOver={onDragOver}
+                onNodeClick={(_, n) => setSelectedId(n.id)}
+                onPaneClick={() => setSelectedId(undefined)}
+                deleteKeyCode={['Backspace', 'Delete']}
+                fitView
+                proOptions={{ hideAttribution: true }}
+              >
+                <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="var(--border)" />
+                <Controls className="!rounded-md !border !border-border !bg-card !shadow-sm" showInteractive={false} />
+                <MiniMap
+                  pannable
+                  zoomable
+                  nodeColor={(node) => categoryColor((node.data as GraphNodeData).category)}
+                  maskColor="rgba(0,0,0,0.5)"
+                  className="!rounded-md !border !border-border !bg-card"
+                />
+              </ReactFlow>
+            </NewNodeIdsContext.Provider>
           </CanvasContext.Provider>
 
           {nodes.length === 0 && (

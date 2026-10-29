@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
-import { useState } from 'react'
-import { Handle, NodeToolbar, Position, type NodeProps } from 'reactflow'
+import { createContext, useContext, useState } from 'react'
+import { Handle, NodeToolbar, Position, useUpdateNodeInternals, type NodeProps } from 'reactflow'
 import { GitBranch, Repeat, OctagonX, Bot, Wrench, Braces, GitMerge, Database, ShieldAlert, Globe, Bell, MapPin, Radar, ScanSearch, Camera, FileCode, MousePointerClick, Clock, Sparkles, Copy, Trash2, Play, Plus } from 'lucide-react'
 import { categoryColor, type NodeKind } from '../../lib/node-catalog.js'
 import type { ParamSpec } from './ParamDrawer.js'
@@ -18,6 +18,12 @@ export interface GraphNodeData {
   /** Latest captured stdout/output for this node in the current run (live). */
   output?: string
 }
+
+/**
+ * Ids of nodes that were just added (by hand, paste or AI Apply). Provided by the
+ * editor; the default is empty so a node outside it never animates.
+ */
+export const NewNodeIdsContext = createContext<ReadonlySet<string>>(new Set())
 
 const STATUS_RING: Record<string, string> = {
   running: 'ring-2 ring-status-running',
@@ -41,86 +47,96 @@ function Shell({
   const color = categoryColor(data.category)
   const { onDuplicate, onDelete, onAppend, onRunNode } = useCanvas()
   const [hovered, setHovered] = useState(false)
+  const isNew = useContext(NewNodeIdsContext).has(id)
+  const updateNodeInternals = useUpdateNodeInternals()
+  // The animation lives on an inner wrapper, not the reactflow node root, which
+  // positions itself with a transform that an animated transform would override.
+  // Reactflow measured the handles mid-scale, so measure again once it settles.
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className={cn(
-        'relative min-w-[150px] rounded-lg border border-border bg-card text-card-foreground shadow-sm',
-        selected && 'ring-2 ring-ring',
-        data.status !== undefined && STATUS_RING[data.status],
-      )}
+      className={isNew ? 'motion-safe:animate-node-in' : undefined}
+      onAnimationEnd={isNew ? () => updateNodeInternals(id) : undefined}
     >
-      <NodeToolbar isVisible={hovered || selected} position={Position.Top} offset={6}>
-        <div className="flex items-center gap-0.5 rounded-md border border-border bg-popover p-0.5 shadow-floating">
-          {data.kind === 'tool' && (
-            <button
-              type="button"
-              className="nodrag flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-status-success"
-              title="Run this node"
-              onClick={(e) => {
-                e.stopPropagation()
-                onRunNode(id)
-              }}
-            >
-              <Play className="size-3.5" strokeWidth={1.75} />
-            </button>
-          )}
-          {data.kind !== 'stop' && (
+      <div
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className={cn(
+          'relative min-w-[150px] rounded-lg border border-border bg-card text-card-foreground shadow-sm',
+          selected && 'ring-2 ring-ring',
+          data.status !== undefined && STATUS_RING[data.status],
+        )}
+      >
+        <NodeToolbar isVisible={hovered || selected} position={Position.Top} offset={6}>
+          <div className="flex items-center gap-0.5 rounded-md border border-border bg-popover p-0.5 shadow-floating">
+            {data.kind === 'tool' && (
+              <button
+                type="button"
+                className="nodrag flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-status-success"
+                title="Run this node"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRunNode(id)
+                }}
+              >
+                <Play className="size-3.5" strokeWidth={1.75} />
+              </button>
+            )}
+            {data.kind !== 'stop' && (
+              <button
+                type="button"
+                className="nodrag flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+                title="Append node"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onAppend(id)
+                }}
+              >
+                <Plus className="size-3.5" strokeWidth={1.75} />
+              </button>
+            )}
             <button
               type="button"
               className="nodrag flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
-              title="Append node"
+              title="Duplicate"
               onClick={(e) => {
                 e.stopPropagation()
-                onAppend(id)
+                onDuplicate(id)
               }}
             >
-              <Plus className="size-3.5" strokeWidth={1.75} />
+              <Copy className="size-3.5" strokeWidth={1.75} />
             </button>
-          )}
-          <button
-            type="button"
-            className="nodrag flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
-            title="Duplicate"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDuplicate(id)
-            }}
-          >
-            <Copy className="size-3.5" strokeWidth={1.75} />
-          </button>
-          <button
-            type="button"
-            className="nodrag flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-status-error"
-            title="Delete"
-            onClick={(e) => {
-              e.stopPropagation()
-              onDelete(id)
-            }}
-          >
-            <Trash2 className="size-3.5" strokeWidth={1.75} />
-          </button>
-        </div>
-      </NodeToolbar>
-      <div className="absolute left-0 top-0 h-full w-1 rounded-l-lg" style={{ background: color }} />
-      <div className="flex items-center gap-2 px-3 py-2 pl-3.5">
-        <span className="flex size-5 items-center justify-center" style={{ color }}>
-          {icon}
-        </span>
-        <span className="truncate text-[13px] font-medium">{data.label}</span>
-        {data.kind === 'agent' && (
-          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
-            {String(data.params.agent ?? 'claude')}
+            <button
+              type="button"
+              className="nodrag flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-status-error"
+              title="Delete"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(id)
+              }}
+            >
+              <Trash2 className="size-3.5" strokeWidth={1.75} />
+            </button>
+          </div>
+        </NodeToolbar>
+        <div className="absolute left-0 top-0 h-full w-1 rounded-l-lg" style={{ background: color }} />
+        <div className="flex items-center gap-2 px-3 py-2 pl-3.5">
+          <span className="flex size-5 items-center justify-center" style={{ color }}>
+            {icon}
           </span>
-        )}
-        {data.status === 'running' && (
-          <span className="ml-auto size-2 shrink-0 animate-pulse rounded-full bg-status-running" />
-        )}
-        {data.status === 'success' && <span className="ml-auto text-status-success">✓</span>}
-        {data.status === 'error' && <span className="ml-auto text-status-error">✗</span>}
+          <span className="truncate text-[13px] font-medium">{data.label}</span>
+          {data.kind === 'agent' && (
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
+              {String(data.params.agent ?? 'claude')}
+            </span>
+          )}
+          {data.status === 'running' && (
+            <span className="ml-auto size-2 shrink-0 animate-pulse rounded-full bg-status-running" />
+          )}
+          {data.status === 'success' && <span className="ml-auto text-status-success">✓</span>}
+          {data.status === 'error' && <span className="ml-auto text-status-error">✗</span>}
+        </div>
+        {children}
       </div>
-      {children}
     </div>
   )
 }

@@ -1,13 +1,14 @@
 import type { JSX } from 'react'
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from 'reactflow'
 import { useCanvas, type CanvasActions } from './CanvasContext.js'
+import { edgeRunStyle } from './edge-run-style.js'
 
 /**
  * Custom reactflow edge that renders a faint "+" affordance at its midpoint.
  * Clicking the affordance opens the insert-between node picker for this edge.
  */
 export function AddEdge(props: EdgeProps): JSX.Element {
-  const { id, sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, style, markerEnd } = props
+  const { id, sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, style, markerEnd, data } = props
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
@@ -22,8 +23,10 @@ export function AddEdge(props: EdgeProps): JSX.Element {
   const canvas = useCanvas() as CanvasActions & { onInsertBetween?: (edgeId: string) => void }
 
   // exactOptionalPropertyTypes: only forward style/markerEnd when actually present.
+  const lit = edgeRunStyle((data as { sourceStatus?: string } | undefined)?.sourceStatus)
+  const mergedStyle = lit ? { ...style, ...lit } : style
   const baseEdgeProps = {
-    ...(style ? { style } : {}),
+    ...(mergedStyle ? { style: mergedStyle } : {}),
     ...(markerEnd ? { markerEnd } : {}),
   }
 
