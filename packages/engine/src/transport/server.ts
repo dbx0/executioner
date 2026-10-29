@@ -10,6 +10,7 @@ import { newId } from '@exe/protocol'
 import { bearerAuth, isAllowedOrigin, loopbackHostOnly } from './auth.js'
 import { AgentTokenRegistry } from './agent-tokens.js'
 import type { EventBus } from './events.js'
+import { publishChanges } from './change-events.js'
 import type { Executor } from '../execution/executor.js'
 import { AgentRunner } from '../agents/agent-runner.js'
 import { AssistantRunner } from '../agents/assistant-runner.js'
@@ -206,6 +207,10 @@ export function createApp(options: AppOptions): EngineApp {
     project: options.project,
     runWorkflow: runGraphWorkflow,
   })
+
+  // Publish coalesced `change` events so the renderer refetches live. Installed
+  // before the on_create wrap below so that wrap sits on top of it.
+  publishChanges(options.project, options.bus)
 
   // Drive `on_create` schedules from EVERY genuine target creation, not just the
   // POST /targets route. Tool nodes discover targets by calling

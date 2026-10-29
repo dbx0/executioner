@@ -1,4 +1,4 @@
-export type EngineEventType = 'status' | 'stdout' | 'stderr' | 'done' | 'agent'
+export type EngineEventType = 'status' | 'stdout' | 'stderr' | 'done' | 'agent' | 'change'
 
 export interface EngineEventInput {
   type: EngineEventType
