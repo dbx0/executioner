@@ -37,11 +37,15 @@ vi.mock('../api/findings.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api/findings.js')>()),
   findingsApi: () => fakeApi,
 }))
+vi.mock('../lib/toast.js', () => ({
+  notify: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+}))
 vi.mock('../api/targets.js', () => ({
   targetsApi: () => ({ list: () => Promise.resolve([{ id: 't1', value: 'example.com' }]) }),
 }))
 
 const { FindingsView } = await import('./FindingsView.js')
+const { notify } = await import('../lib/toast.js')
 
 describe('FindingsView', () => {
   beforeEach(() => {
@@ -140,14 +144,14 @@ describe('FindingsView', () => {
     expect(await screen.findByDisplayValue('New finding')).toBeTruthy()
   })
 
-  it('exports a report and says where it landed', async () => {
+  it('export shows a toast with the written path', async () => {
     render(<FindingsView />)
     await screen.findByText('AWS key in bundle.js')
 
     fireEvent.click(screen.getByRole('button', { name: /export report/i }))
 
     await waitFor(() => expect(fakeApi.report).toHaveBeenCalledWith({}))
-    expect(await screen.findByText('reports/findings-2026-09-10-1200.md')).toBeTruthy()
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith('Report written to reports/findings-2026-09-10-1200.md'))
   })
 
   it('opens the finding a target panel deep-linked to', async () => {

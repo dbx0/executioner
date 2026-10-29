@@ -39,6 +39,7 @@ import { NodePicker } from '../components/canvas/NodePicker.js'
 import { graphEdgeTypes } from '../components/canvas/AddEdge.js'
 import { useGraphHistory } from '../lib/useGraphHistory.js'
 import type { CatalogEntry } from '../lib/node-catalog.js'
+import { notify } from '../lib/toast.js'
 import { useEngineEvents } from '../lib/events.js'
 import { flatten, saveLastWorkflow } from './workflow-editor/helpers.js'
 import { loadRunBackend, saveRunBackend } from '../store/persistence.js'
@@ -99,7 +100,6 @@ export function WorkflowEditor({
   const [profiles, setProfiles] = useState<BackendProfile[]>([])
   const [backendsOpen, setBackendsOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
   const [runSeq, setRunSeq] = useState(0)
   const [showValidation, setShowValidation] = useState(false)
   const [stepMode, setStepMode] = useState(false)
@@ -122,11 +122,6 @@ export function WorkflowEditor({
   // recorder skips the resulting nodes/edges change (avoids re-recording it).
   const applyingHistory = useRef(false)
   const history = useGraphHistory<GraphNodeData>()
-
-  const flash = useCallback((message: string) => {
-    setToast(message)
-    setTimeout(() => setToast(null), 2500)
-  }, [])
 
   // Pre-run validation, recomputed only when the graph changes.
   const issues = useMemo(() => validateWorkflow(nodes, edges), [nodes, edges])
@@ -155,7 +150,7 @@ export function WorkflowEditor({
         const remembered = loadRunBackend(activeRoot)
         if (remembered !== 'local' && !list.some((p) => p.id === remembered)) {
           setBackendId('local')
-          setToast('That run backend no longer exists — runs will use this machine.')
+          notify('That run backend no longer exists. Runs will use this machine.')
         }
       })
       .catch(() => setProfiles([]))
@@ -243,9 +238,9 @@ export function WorkflowEditor({
     )
     if (done) {
       setStepExec(null)
-      flash('Run complete')
+      notify('Run complete')
     }
-  }, [stepExec, events, flash])
+  }, [stepExec, events])
 
   // Build a fresh graph node from a catalog entry (shared by palette add, drop,
   // edge-insert and node-append).
@@ -468,7 +463,7 @@ export function WorkflowEditor({
         setTargetId(tId)
       }
       if (tId === undefined) {
-        flash('Add a target first to run a node')
+        notify('Add a target first to run a node')
         return
       }
       const baseline = events.length > 0 ? (events[events.length - 1]?.seq ?? 0) : 0
@@ -486,10 +481,10 @@ export function WorkflowEditor({
         }
       } catch {
         setNodes((cur) => cur.map((n) => (n.id === id ? { ...n, data: { ...n.data, status: 'error' } } : n)))
-        flash('Node run failed to start')
+        notify.error('Node run failed to start')
       }
     },
-    [nodes, targetId, client, events, setNodes, flash],
+    [nodes, targetId, client, events, setNodes],
   )
 
   const setParam = useCallback(
@@ -591,9 +586,9 @@ export function WorkflowEditor({
       setNodes(hydrated.nodes)
       setEdges(hydrated.edges)
       setSelectedId(undefined)
-      flash('Applied the proposed workflow — review and Save')
+      notify('Applied the proposed workflow. Review and Save.')
     },
-    [hydrateGraph, setNodes, setEdges, flash],
+    [hydrateGraph, setNodes, setEdges],
   )
 
   const newWorkflow = (): void => {
@@ -652,7 +647,7 @@ export function WorkflowEditor({
     try {
       const parsed = parseWorkflowFile(await file.text())
       if (parsed === null) {
-        flash('Import failed — not a valid workflow file')
+        notify.error('Import failed. Not a valid workflow file.')
         return
       }
       const hydrated = hydrateGraph(parsed.graph)
@@ -664,7 +659,7 @@ export function WorkflowEditor({
       history.reset(hydrated.nodes, hydrated.edges)
       setSelectedId(undefined)
     } catch {
-      flash('Import failed — could not read the file')
+      notify.error('Import failed. Could not read the file.')
     }
   }
 
@@ -707,26 +702,26 @@ export function WorkflowEditor({
       })) as { status?: string; executionId?: string }
       if (stepped && result.executionId !== undefined) {
         setStepExec(result.executionId)
-        setToast('Stepping — press Next to advance')
+        notify('Stepping. Press Next to advance.')
       } else {
-        setToast(result.status === 'failed' ? 'Run failed — see nodes' : 'Run complete')
+        if (result.status === 'failed') notify.error('Run failed. See the nodes for details.')
+        else notify('Run complete')
       }
     } catch {
-      setToast('Run failed to start')
+      notify.error('Run failed to start')
     }
-    setTimeout(() => setToast(null), 2500)
   }
 
   const stepNext = async (): Promise<void> => {
     if (stepExec === null) return
-    await exApi.step(stepExec).catch(() => flash('Step failed'))
+    await exApi.step(stepExec).catch(() => notify.error('Step failed'))
   }
 
   const stepResume = async (): Promise<void> => {
     if (stepExec === null) return
     const id = stepExec
     setStepExec(null)
-    await exApi.resume(id).catch(() => flash('Resume failed'))
+    await exApi.resume(id).catch(() => notify.error('Resume failed'))
   }
 
   const selected = nodes.find((n) => n.id === selectedId)
@@ -882,11 +877,6 @@ export function WorkflowEditor({
             />
           )}
 
-          {toast !== null && (
-            <div className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-1.5 text-xs shadow-floating">
-              {toast}
-            </div>
-          )}
         </div>
 
         {selected && <NodeInspector selected={selected} edges={edges} setParam={setParam} />}

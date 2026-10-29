@@ -5,6 +5,7 @@ import { eventsUrl } from '../lib/connection.js'
 import { emitChange, type ChangeTopic } from '../lib/engine-changes.js'
 import { parseEngineEvent } from '../lib/events.js'
 import { playNotificationChime, notifyUser } from '../lib/notify.js'
+import { Toaster } from 'sonner'
 import { TooltipProvider } from '../components/ui/tooltip.js'
 import { CommandPalette } from '../components/CommandPalette.js'
 import { FloatingNotepad } from '../components/FloatingNotepad.js'
@@ -211,6 +212,15 @@ export function Shell(): JSX.Element {
       <OnboardingModal />
       <NewEngagementModal />
       <PageTour />
+      <Toaster
+        position="bottom-center"
+        theme="dark"
+        toastOptions={{
+          classNames: {
+            toast: 'bg-popover border-border text-foreground text-[13px]',
+          },
+        }}
+      />
     </TooltipProvider>
   )
 }

@@ -8,6 +8,7 @@ import { targetsApi } from '../api/targets.js'
 import { Button } from '../components/ui/button.js'
 import { Select } from '../components/ui/select.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
+import { notify } from '../lib/toast.js'
 import { FindingList } from './findings/FindingList.js'
 import { FindingListSkeleton } from './findings/FindingListSkeleton.js'
 import { FindingDetail } from './findings/FindingDetail.js'
@@ -42,8 +43,6 @@ export function FindingsView(): JSX.Element {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Finding | null>(null)
-  /** Where the last export landed, shown until the next action replaces it. */
-  const [exported, setExported] = useState<string | null>(null)
   /** Give the open finding the whole page, list column and all — a full write-up
    *  is a document, and reading one in a 384px-narrower column is the worse half
    *  of the trade. Only honoured while a finding is open, or expanding would
@@ -138,10 +137,9 @@ export function FindingsView(): JSX.Element {
     setExporting(true)
     try {
       const written = await api.report(statusFilter === 'all' ? {} : { status: statusFilter })
-      setExported(written.relativePath)
+      notify.success(`Report written to ${written.relativePath}`)
       setError(null)
     } catch {
-      setExported(null)
       setError('Could not write the report.')
     } finally {
       setExporting(false)
@@ -182,11 +180,6 @@ export function FindingsView(): JSX.Element {
 
       {error !== null && (
         <p className="border-b border-border px-4 py-2 text-[12px] text-status-error break-words">{error}</p>
-      )}
-      {exported !== null && (
-        <p className="border-b border-border px-4 py-2 text-[12px] text-muted-foreground break-words">
-          Report written to <code className="font-mono text-foreground">{exported}</code>
-        </p>
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
