@@ -1,16 +1,21 @@
 /**
- * Per-launch MCP injection for the agent CLIs that read their MCP config from an
- * environment variable or launch flag (never a shared file), so the engine can
- * point a spawned agent at the project MCP server without persisting the
+ * Per-launch MCP injection for the agent CLIs other than Claude, so the engine
+ * can point a spawned agent at the project MCP server without persisting the
  * per-launch scoped token anywhere on disk.
  *
  * Claude is deliberately absent: it has its own injection path
- * (`writeAgentMcpConfig` + `--mcp-config`). This map covers the *other* agents.
- * Codex, Gemini and Cursor are feasible too (Codex via `-c` flags + env, Gemini
- * and Cursor via a per-launch config file in the engagement dir) and can be
- * added here as each is wired end to end.
+ * (`writeAgentMcpConfig` + `--mcp-config`). This map covers the *other* agents:
+ *
+ * - opencode: inline config JSON in an env var.
+ * - codex: `-c mcp_servers.project.*` flags, the token read from an env var.
+ * - gemini and cursor: a `project` entry merged into the launch directory's
+ *   workspace config (`.gemini/settings.json`, `.cursor/mcp.json`). Both CLIs
+ *   expand an env var reference in a header, so the file names the token's
+ *   variable and never holds the token itself.
  */
 
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { TOOL_ACCESS, type ToolName } from './toolset.js'
 import { OPENCODE_HEADLESS_AGENT } from '../agents/headless-cli.js'
 
@@ -19,14 +24,23 @@ export interface McpInjection {
   env?: Record<string, string>
   /** Extra argv appended to the agent's command line. */
   args?: string[]
+  /**
+   * The project tools the agent was wired with, present only when the project
+   * MCP server is. A headless launch opens its CLI's own lockdown to exactly
+   * these (see headless-cli.ts).
+   */
+  tools?: readonly ToolName[]
 }
+
+/** The env var that carries the scoped token to codex, gemini and cursor. */
+export const MCP_TOKEN_ENV = 'EXECUTIONER_MCP_TOKEN'
 
 /**
  * The agents this module can inject the project MCP into via env/flags. Drives
  * which agent cards show a "Project MCP" toggle. Kept in sync with the cases in
  * `buildAgentMcpInjection` (asserted by its tests).
  */
-export const MCP_INJECTABLE_AGENTS: readonly string[] = ['opencode']
+export const MCP_INJECTABLE_AGENTS: readonly string[] = ['opencode', 'codex', 'gemini', 'cursor']
 
 /** True when `buildAgentMcpInjection` can wire the project MCP into `agent`. */
 export function isMcpInjectableAgent(agent: string): boolean {
@@ -39,8 +53,33 @@ function projectMcpUrl(port: number): string {
 }
 
 /**
+ * Set `mcpServers.project` in the JSON config at `path`, keeping everything
+ * else in it. A file that is not plain JSON (gemini allows comments) is left
+ * untouched and the launch goes without the project MCP: returns false.
+ */
+function upsertProjectServer(path: string, server: Record<string, unknown>): boolean {
+  let config: Record<string, unknown> = {}
+  try {
+    if (existsSync(path)) {
+      const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return false
+      config = parsed as Record<string, unknown>
+    }
+    const servers = config.mcpServers
+    const others = typeof servers === 'object' && servers !== null && !Array.isArray(servers) ? servers : {}
+    config.mcpServers = { ...others, project: server }
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Build the injection for `agent`, or `undefined` when this agent has no
- * env/flag injection wired (including claude, which is handled elsewhere).
+ * injection wired (including claude, which is handled elsewhere). gemini and
+ * cursor need `cwd`, the directory they launch in, for their workspace config.
  */
 export function buildAgentMcpInjection(
   agent: string,
@@ -53,8 +92,45 @@ export function buildAgentMcpInjection(
      * agent, which may only read files and call the allowed project tools.
      */
     headless?: boolean
+    /** The agent's launch directory, where gemini and cursor read workspace config. */
+    cwd?: string
   },
 ): McpInjection | undefined {
+  if (agent === 'codex' || agent === 'gemini' || agent === 'cursor') {
+    if (input.mcp === undefined) return undefined
+    const url = projectMcpUrl(input.mcp.port)
+    const allowed = input.mcp.tools
+    const env: Record<string, string> = { [MCP_TOKEN_ENV]: input.mcp.token }
+    const tools = allowed ?? (Object.keys(TOOL_ACCESS) as ToolName[])
+    if (agent === 'codex') {
+      // `-c` values are TOML; a JSON string or string array is valid TOML too.
+      const args = ['-c', `mcp_servers.project.url=${JSON.stringify(url)}`, '-c', `mcp_servers.project.bearer_token_env_var="${MCP_TOKEN_ENV}"`]
+      if (allowed !== undefined) args.push('-c', `mcp_servers.project.enabled_tools=${JSON.stringify(allowed)}`)
+      // Headless exec runs with approval_policy "never", which refuses every
+      // MCP call that needs approval; the allowed tools are pre-approved, the
+      // way claude's --allowedTools are. Verified against codex 0.162.
+      if (input.headless === true) args.push('-c', 'mcp_servers.project.default_tools_approval_mode="approve"')
+      return { env, args, tools }
+    }
+    if (input.cwd === undefined) return undefined
+    if (agent === 'gemini') {
+      // Gemini expands `$VAR` in settings values. Workspace settings load only
+      // in a trusted folder, so this launch trusts its own directory.
+      const server = {
+        httpUrl: url,
+        headers: { Authorization: `Bearer $${MCP_TOKEN_ENV}` },
+        ...(allowed === undefined ? {} : { includeTools: [...allowed] }),
+      }
+      if (!upsertProjectServer(join(input.cwd, '.gemini', 'settings.json'), server)) return undefined
+      return { env: { ...env, GEMINI_CLI_TRUST_WORKSPACE: 'true' }, tools }
+    }
+    // cursor expands `${env:VAR}`. Its approval of a server is keyed on the
+    // resolved config, token included, so each launch would need approving
+    // again: --approve-mcps does it for this session without writing anything.
+    const server = { url, headers: { Authorization: `Bearer \${env:${MCP_TOKEN_ENV}}` } }
+    if (!upsertProjectServer(join(input.cwd, '.cursor', 'mcp.json'), server)) return undefined
+    return { env, args: ['--approve-mcps'], tools }
+  }
   if (agent === 'opencode') {
     // opencode reads inline config JSON from OPENCODE_CONFIG_CONTENT and merges
     // it over the user's own config, so the project server (and any instruction
@@ -132,7 +208,7 @@ export function buildAgentMcpInjection(
       env.OPENCODE_DISABLE_CLAUDE_CODE = '1'
       env.OPENCODE_DISABLE_AUTOUPDATE = '1'
     }
-    return { env }
+    return input.mcp === undefined ? { env } : { env, tools: allowed ?? (Object.keys(TOOL_ACCESS) as ToolName[]) }
   }
   return undefined
 }

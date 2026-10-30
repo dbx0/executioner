@@ -11,6 +11,7 @@ import { AgentTokenRegistry } from './agent-tokens.js'
 import { Executor } from '../execution/executor.js'
 import { PROFILE_TOOLS } from '../mcp/toolset.js'
 import { OPENCODE_HEADLESS_AGENT } from '../agents/headless-cli.js'
+import { MCP_TOKEN_ENV } from '../mcp/agent-mcp-injection.js'
 
 const TOKEN = 'master-token-master-token-master-tok'
 
@@ -187,8 +188,35 @@ describe('headless agent launches', () => {
     expect(args[args.indexOf('--sandbox') + 1]).toBe('read-only')
     expect(args.some((a, i) => a === '--disable' && args[i + 1] === 'shell_tool')).toBe(true)
     expect(args).toContain('--ignore-user-config')
+    // The project server, limited to the workflow tools, on a scoped token.
+    expect(args).toContain(`mcp_servers.project.enabled_tools=${JSON.stringify(PROFILE_TOOLS.workflow)}`)
+    expect(args.indexOf('mcp_servers.project.url="http://127.0.0.1:4100/mcp"')).toBeLessThan(args.indexOf('--'))
+    const token = launch.options.env?.[MCP_TOKEN_ENV] ?? ''
+    expect(agentTokens.verify(token)?.profile).toBe('workflow')
     launch.exit()
     await run
+    expect(agentTokens.verify(token)).toBeUndefined()
+  })
+
+  it('give a headless gemini agent node the workflow tools through its run directory settings', async () => {
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    const graph = { nodes: [{ id: 'a', type: 'agent', data: { agent: 'gemini', prompt: 'x' } }], edges: [] }
+    project.workflows.create('wf', JSON.stringify(graph), { id: 'wf-gm' })
+    const run = app.request('/api/workflows/wf-gm/run', { method: 'POST', headers, body: JSON.stringify({ targetId: target.id }) })
+
+    const launch = await pty.next()
+    expect(launch.options.command).toBe('gemini')
+    const args = argsOf(launch)
+    expect(args[args.indexOf('--allowed-mcp-server-names') + 1]).toBe('project')
+    const settings = JSON.parse(readFileSync(join(launch.options.cwd ?? '', '.gemini', 'settings.json'), 'utf8')) as {
+      mcpServers: { project: { includeTools: string[] } }
+    }
+    expect(settings.mcpServers.project.includeTools).toEqual([...PROFILE_TOOLS.workflow])
+    const token = launch.options.env?.[MCP_TOKEN_ENV] ?? ''
+    expect(agentTokens.verify(token)?.profile).toBe('workflow')
+    launch.exit()
+    await run
+    expect(agentTokens.verify(token)).toBeUndefined()
   })
 
   it.each(['cursor', 'hermes'])('refuse a headless %s agent node that has not opted in, without launching it', async (agent) => {
@@ -199,6 +227,7 @@ describe('headless agent launches', () => {
     expect(res.status).toBeLessThan(500)
     expect(pty.launches).toHaveLength(0)
     expect(agentTokens.size).toBe(0)
+    expect(existsSync(join(project.root, '.cursor'))).toBe(false)
   })
 
   it('launch an opted-in cursor agent node with its deny-all permissions', async () => {
@@ -289,8 +318,37 @@ describe('interactive agent launches', () => {
   })
 })
 
+describe('interactive codex, gemini and cursor launches', () => {
+  it.each([
+    ['codex', 'AGENTS.md'],
+    ['gemini', 'GEMINI.md'],
+    ['cursor', 'AGENTS.md'],
+  ])('give a %s terminal the full toolset and a briefing that names it', async (agent, contextFile) => {
+    await app.request('/api/terminals', { method: 'POST', headers, body: JSON.stringify({ kind: 'agent', agent }) })
+    const launch = await pty.next()
+    const token = launch.options.env?.[MCP_TOKEN_ENV] ?? ''
+    expect(agentTokens.verify(token)?.profile).toBe('interactive')
+    // The token rides in the env only, never on the command line or on disk.
+    expect(argsOf(launch).join(' ')).not.toContain(token)
+    if (agent === 'gemini') expect(readFileSync(join(project.root, '.gemini', 'settings.json'), 'utf8')).not.toContain(token)
+    if (agent === 'cursor') expect(readFileSync(join(project.root, '.cursor', 'mcp.json'), 'utf8')).not.toContain(token)
+    expect(readFileSync(join(project.root, contextFile), 'utf8')).toContain('run_command')
+
+    launch.exit()
+    expect(agentTokens.verify(token)).toBeUndefined()
+  })
+
+  it('keep the briefing MCP-free for hermes, which has no project server', async () => {
+    await app.request('/api/terminals', { method: 'POST', headers, body: JSON.stringify({ kind: 'agent', agent: 'hermes' }) })
+    const launch = await pty.next()
+    expect(launch.options.env?.[MCP_TOKEN_ENV]).toBeUndefined()
+    expect(readFileSync(join(project.root, 'AGENTS.md'), 'utf8')).not.toContain('run_command')
+    expect(agentTokens.size).toBe(0)
+  })
+})
+
 describe('an interactive launch that fails', () => {
-  it.each(['claude', 'opencode'])('revokes the %s terminal token when the spawn throws', async (agent) => {
+  it.each(['claude', 'opencode', 'codex', 'gemini', 'cursor'])('revokes the %s terminal token when the spawn throws', async (agent) => {
     pty.failNext = true
     const res = await app.request('/api/terminals', { method: 'POST', headers, body: JSON.stringify({ kind: 'agent', agent }) })
     expect(res.status).toBe(500)

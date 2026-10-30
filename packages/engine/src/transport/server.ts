@@ -288,33 +288,41 @@ export function createApp(options: AppOptions): EngineApp {
     return { mcpConfig, settings }
   }
 
-  // The per-launch injection (project MCP + engagement briefing) for a
-  // non-Claude agent that reads its config from env/flags — opencode today.
-  // Gated by the per-agent wiring toggle (default on); returns undefined when
-  // the agent is not injectable, the toggle is off, or there is no connection.
-  // The briefing is the same orientation Claude gets via --append-system-prompt,
-  // delivered through the agent's own system-prompt channel (opencode
-  // `instructions`). Best-effort throughout: nothing here blocks a spawn.
+  // Whether `agent` gets the project MCP at launch: a non-Claude agent this
+  // engine can inject, with its wiring toggle on (the default).
+  const projectMcpWired = (agent: string): boolean =>
+    connection !== undefined && isMcpInjectableAgent(agent) && isAgentWiringEnabled(readAgentMcpWiring(), agent)
+
+  // The per-launch injection (project MCP, and opencode's engagement briefing)
+  // for a non-Claude agent launching in `cwd`. Gated by the per-agent wiring
+  // toggle (default on); returns undefined when the agent is not injectable,
+  // the toggle is off, or there is no connection. opencode's briefing is the
+  // same orientation Claude gets via --append-system-prompt, delivered through
+  // its `instructions`; the others read theirs from a context file (see
+  // writeAgentContext). Best-effort throughout: nothing here blocks a spawn.
   const agentLaunchInjection = (
     agent: string,
     profile: AgentProfile,
     sessionId: string,
     defer: DeferCleanup,
+    cwd: string,
   ): McpInjection | undefined => {
     if (connection === undefined) return undefined
     if (agent === 'claude' || !isMcpInjectableAgent(agent)) return undefined
     // The MCP server is gated by the wiring toggle; the briefing (context) is
     // not — an agent always gets oriented, and the briefing is rendered to match
     // whether it actually has the toolset.
-    const wired = isAgentWiringEnabled(readAgentMcpWiring(), agent)
+    const wired = projectMcpWired(agent)
     const instructionsFiles: string[] = []
-    try {
-      const memoryDir = ensureEngagementMemory(options.project.root, options.project.config.name)
-      // The briefing names exactly the tools this launch's profile has.
-      const briefing = buildProjectBriefing(options.project, memoryDir, wired ? { profile } : { mcp: false })
-      instructionsFiles.push(writeAgentBriefingFile(briefing, options.project.root, profile))
-    } catch {
-      /* launch without the briefing rather than not at all */
+    if (contextFileForAgent(agent) === undefined) {
+      try {
+        const memoryDir = ensureEngagementMemory(options.project.root, options.project.config.name)
+        // The briefing names exactly the tools this launch's profile has.
+        const briefing = buildProjectBriefing(options.project, memoryDir, wired ? { profile } : { mcp: false })
+        instructionsFiles.push(writeAgentBriefingFile(briefing, options.project.root, profile))
+      } catch {
+        /* launch without the briefing rather than not at all */
+      }
     }
     const headless = profile !== 'interactive'
     let mcp: { port: number; token: string; tools?: readonly ToolName[] } | undefined
@@ -327,21 +335,28 @@ export function createApp(options: AppOptions): EngineApp {
       ...(mcp !== undefined ? { mcp } : {}),
       ...(instructionsFiles.length > 0 ? { instructionsFiles } : {}),
       ...(headless ? { headless } : {}),
+      cwd,
     })
   }
 
   // Deliver the engagement briefing to an agent that has no system-prompt flag
   // and instead reads a working-directory context file (codex/gemini/cursor/
   // hermes → AGENTS.md / GEMINI.md). Written into the agent's launch `cwd` as a
-  // managed block that coexists with the user's file and the skills block. These
-  // agents don't carry the MCP toolset, so the briefing is rendered MCP-free.
+  // managed block that coexists with the user's file and the skills block. The
+  // briefing lists the interactive tools when this agent is wired to the
+  // project MCP, and is MCP-free otherwise (hermes, or the toggle off).
   // Best-effort and unconditional: context does not depend on the MCP toggle.
+  // codex, cursor and hermes share AGENTS.md, so it reflects the last launch.
   const writeAgentContext = (agent: string, cwd: string): void => {
     const filename = contextFileForAgent(agent)
     if (filename === undefined) return
     try {
       const memoryDir = ensureEngagementMemory(options.project.root, options.project.config.name)
-      const briefing = buildProjectBriefing(options.project, memoryDir, { mcp: false })
+      const briefing = buildProjectBriefing(
+        options.project,
+        memoryDir,
+        projectMcpWired(agent) ? { profile: 'interactive' } : { mcp: false },
+      )
       writeBriefingContextBlock(cwd, filename, briefing)
     } catch {
       /* context is best-effort; never block the spawn */
@@ -390,23 +405,26 @@ export function createApp(options: AppOptions): EngineApp {
           project: options.project,
           registry: ptyRegistry,
           toolsetDeps,
-          buildArgv: ({ prompt, agent, sessionId, allowUnrestrictedCli, defer }) => {
+          buildArgv: ({ prompt, agent, sessionId, allowUnrestrictedCli, defer, cwd }) => {
             const requested = agent ?? 'claude'
             // An unknown name runs claude, as the adapter lookup always has.
             const name = HEADLESS_CLI_RESTRICTION[requested] === undefined ? 'claude' : requested
             // Every other CLI runs with its own shell, edit and web tools locked
-            // down as far as it allows, or is refused (see headless-cli.ts).
-            if (name !== 'claude') return headlessCliLaunch(name, prompt, { allowUnrestricted: allowUnrestrictedCli, defer })
+            // down as far as it allows, or is refused (see headless-cli.ts),
+            // and gets the project MCP limited to the workflow profile's tools.
+            if (name !== 'claude') {
+              return headlessCliLaunch(name, prompt, {
+                allowUnrestricted: allowUnrestrictedCli,
+                defer,
+                mcp: () => agentLaunchInjection(name, 'workflow', sessionId, defer, cwd),
+              })
+            }
             const { mcpConfig } = claudeLaunchFiles(connection.port, 'workflow', defer, { id: sessionId })
             // Pre-allow the workflow profile's tools one by one so set_node_output
             // isn't denied in headless mode while run_command stays denied.
             // --allowedTools is variadic, so keep --mcp-config last.
             return ['claude', '-p', prompt, '--allowedTools', ...claudeAllowedTools('workflow'), '--mcp-config', mcpConfig]
           },
-          // Env-based MCP + briefing injection for non-Claude agents (opencode
-          // today). Claude is wired via flags above; this covers the agents that
-          // read their config from env, sharing the terminal path's helper.
-          buildEnv: ({ agent, sessionId, defer }) => agentLaunchInjection(agent ?? 'claude', 'workflow', sessionId, defer)?.env,
         })
       : undefined)
 
@@ -540,10 +558,10 @@ export function createApp(options: AppOptions): EngineApp {
             } catch {
               /* skills wiring is best-effort; never block the spawn */
             }
-            // Non-Claude agents that read their MCP config from env/flags get the
-            // project MCP + engagement briefing wired the same spirit as Claude's
-            // flag tail: per launch, gated by the wiring toggle. opencode today.
-            const mcpInjection = agentLaunchInjection(adapterName, 'interactive', id, cleanup.defer)
+            // Non-Claude agents get the project MCP (and opencode its briefing)
+            // wired in the same spirit as Claude's flag tail: per launch, gated
+            // by the wiring toggle.
+            const mcpInjection = agentLaunchInjection(adapterName, 'interactive', id, cleanup.defer, options.project.root)
             const mcpSpawnEnv = mcpInjection?.env
             if (mcpInjection?.args !== undefined) tail.push(...mcpInjection.args)
             // Agents without a system-prompt flag get the briefing through the

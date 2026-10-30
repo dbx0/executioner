@@ -51,6 +51,6 @@ describe('agent-mcp routes', () => {
     const app = agentMcpRoutes()
     const res = await app.request('/agent-mcp/injectable')
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ agents: ['opencode'] })
+    expect(await res.json()).toEqual({ agents: ['opencode', 'codex', 'gemini', 'cursor'] })
   })
 })

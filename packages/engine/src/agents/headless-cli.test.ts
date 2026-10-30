@@ -3,10 +3,25 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { HEADLESS_CLI_RESTRICTION, HeadlessCliRefused, OPENCODE_HEADLESS_AGENT, headlessCliLaunch } from './headless-cli.js'
 import { LaunchCleanup } from './launch-cleanup.js'
+import type { McpInjection } from '../mcp/agent-mcp-injection.js'
 
-function launch(agent: string, allowUnrestricted = false) {
+function launch(agent: string, allowUnrestricted = false, mcp?: McpInjection) {
   const cleanup = new LaunchCleanup()
-  return { cleanup, ...headlessCliLaunch(agent, 'summarise {{ target }}', { allowUnrestricted, defer: cleanup.defer }) }
+  return {
+    cleanup,
+    ...headlessCliLaunch(agent, 'summarise {{ target }}', {
+      allowUnrestricted,
+      defer: cleanup.defer,
+      ...(mcp === undefined ? {} : { mcp: () => mcp }),
+    }),
+  }
+}
+
+/** A project MCP injection limited to two workflow tools. */
+const PROJECT_MCP: McpInjection = {
+  env: { EXECUTIONER_MCP_TOKEN: 'tok' },
+  args: ['--project-flag'],
+  tools: ['list_targets', 'set_node_output'],
 }
 
 /** The value that follows `flag` in an argv. */
@@ -31,6 +46,12 @@ describe('headless codex', () => {
     expect(argv).not.toContain('--dangerously-bypass-approvals-and-sandbox')
     // The prompt is a positional after `--`, so one starting with a dash is not a flag.
     expect(argv.slice(-2)).toEqual(['--', 'summarise {{ target }}'])
+  })
+
+  it('puts the project server flags before the prompt separator and passes its env', () => {
+    const { argv, env } = launch('codex', false, PROJECT_MCP)
+    expect(argv.slice(-3)).toEqual(['--project-flag', '--', 'summarise {{ target }}'])
+    expect(env).toEqual({ EXECUTIONER_MCP_TOKEN: 'tok' })
   })
 })
 
@@ -58,6 +79,15 @@ describe('headless gemini', () => {
     cleanup.run()
     expect(existsSync(adminDir)).toBe(false)
   })
+
+  it('allows only the project server, and only its node tools, when it is wired', () => {
+    const { argv, env } = launch('gemini', false, PROJECT_MCP)
+    expect(after(argv, '--allowed-mcp-server-names')).toBe('project')
+    expect(env).toEqual({ EXECUTIONER_MCP_TOKEN: 'tok' })
+    const policy = readFileSync(join(after(argv, '--admin-policy') ?? '', 'headless.toml'), 'utf8')
+    expect(policy).toMatch(/toolName = "\*"\ndecision = "deny"/)
+    expect(policy).toContain('mcpName = "project"\ntoolName = ["list_targets", "set_node_output"]\ndecision = "allow"')
+  })
 })
 
 describe('headless opencode', () => {
@@ -70,6 +100,15 @@ describe('CLIs that cannot be restricted headless', () => {
   it.each(['cursor', 'hermes'])('refuses %s unless the node opts in', (agent) => {
     expect(HEADLESS_CLI_RESTRICTION[agent]).toBe('opt-in')
     expect(() => launch(agent)).toThrow(HeadlessCliRefused)
+    // A refused node never builds its MCP injection, so it never gets a token.
+    let built = false
+    const cleanup = new LaunchCleanup()
+    const mcp = () => {
+      built = true
+      return PROJECT_MCP
+    }
+    expect(() => headlessCliLaunch(agent, 'x', { allowUnrestricted: false, defer: cleanup.defer, mcp })).toThrow(HeadlessCliRefused)
+    expect(built).toBe(false)
     expect(() => launch(agent)).toThrow(/allow_unrestricted_cli/)
     // User-facing text never carries an em dash.
     expect(() => launch(agent)).toThrow(/^[^—]*$/)
@@ -87,6 +126,22 @@ describe('CLIs that cannot be restricted headless', () => {
     expect(config.permissions.deny).toEqual(expect.arrayContaining(['Shell(*)', 'Write(**)', 'WebFetch(*)', 'Mcp(*:*)']))
     cleanup.run()
     expect(existsSync(env?.CURSOR_CONFIG_DIR ?? '')).toBe(false)
+  })
+
+  it('allows an opted-in cursor only the node tools of the project server', () => {
+    const { argv, env } = launch('cursor', true, PROJECT_MCP)
+    expect(argv.slice(-2)).toEqual(['--project-flag', 'summarise {{ target }}'])
+    expect(env).toMatchObject({ EXECUTIONER_MCP_TOKEN: 'tok', CURSOR_CONFIG_DIR: expect.any(String) })
+    const config = JSON.parse(readFileSync(join(env?.CURSOR_CONFIG_DIR ?? '', 'cli-config.json'), 'utf8')) as {
+      permissions: { allow: string[]; deny: string[] }
+    }
+    expect(config.permissions.allow).toEqual(['Mcp(project:list_targets)', 'Mcp(project:set_node_output)'])
+    // A deny beats an allow in cursor, so the blanket MCP deny has to go.
+    expect(config.permissions.deny).toEqual(['Shell(*)', 'Write(**)', 'WebFetch(*)'])
+  })
+
+  it('never wires the project MCP into hermes', () => {
+    expect(launch('hermes', true, PROJECT_MCP).env).toBeUndefined()
   })
 
   it('still gives an opted-in hermes no toolset and never yolo', () => {

@@ -28,6 +28,8 @@ export interface AgentInvocation {
   allowUnrestrictedCli: boolean
   /** Registers work to run when the agent exits, such as revoking its token. */
   defer: DeferCleanup
+  /** The directory the agent runs in: this execution's evidence dir. */
+  cwd: string
 }
 
 /** An argv, optionally with environment the same builder prepared for it. */
@@ -43,12 +45,6 @@ export interface AgentRunnerDeps {
    * {@link HeadlessCliRefused} fails the node with that message.
    */
   buildArgv: (invocation: AgentInvocation) => AgentLaunch
-  /**
-   * Optional per-launch environment for the agent process (e.g. the project
-   * MCP config for agents that read it from an env var). Optional so tests that
-   * only exercise argv can omit it.
-   */
-  buildEnv?: (invocation: AgentInvocation) => Record<string, string> | undefined
   /**
    * The MCP toolset's deps object. The runner binds this run's session in its
    * `sessions` for the duration of the run, so only a `set_node_output` call
@@ -84,7 +80,7 @@ export class AgentRunner {
   constructor(private readonly deps: AgentRunnerDeps) {}
 
   runAuto(input: AgentAutoInput): Promise<AgentAutoOutput> {
-    const { bus, project, registry, buildArgv, buildEnv, toolsetDeps } = this.deps
+    const { bus, project, registry, buildArgv, toolsetDeps } = this.deps
     const { nodeId, executionId, prompt, agent } = input
     const runDir = project.evidenceDir(executionId)
 
@@ -98,6 +94,7 @@ export class AgentRunner {
         sessionId,
         allowUnrestrictedCli: input.allowUnrestrictedCli === true,
         defer: cleanup.defer,
+        cwd: runDir,
       }
       let transcript = ''
       let captured: Record<string, unknown> | undefined
@@ -119,10 +116,7 @@ export class AgentRunner {
         // anywhere from here to the spawn must still revoke and remove them.
         const launch = buildArgv(invocation)
         const argv = Array.isArray(launch) ? launch : launch.argv
-        const launchEnv = Array.isArray(launch) ? undefined : launch.env
-        const injectedEnv = buildEnv?.(invocation)
-        const spawnEnv =
-          launchEnv === undefined && injectedEnv === undefined ? undefined : { ...launchEnv, ...injectedEnv }
+        const spawnEnv = Array.isArray(launch) ? undefined : launch.env
         const [command, ...args] = argv
         session = registry.create(newId(), {
           command: command ?? process.execPath,
