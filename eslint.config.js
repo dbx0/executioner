@@ -13,6 +13,8 @@ export default tseslint.config(
       '**/build/**',
       '**/*.tsbuildinfo',
       'apps/desktop/src/renderer/assets/**',
+      // Local, git-ignored README video scenes (plain browser scripts).
+      'docs/.readme-media/**',
       // Agent worktrees are whole repo checkouts; linting them double-counts.
       '.claude/**',
     ],
