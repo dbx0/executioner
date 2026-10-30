@@ -13,6 +13,7 @@ import {
   loadTheme,
   saveEditorState,
   saveFiles,
+  saveLayouts,
   saveSessions,
   saveTabMeta,
 } from './persistence.js'
@@ -20,6 +21,7 @@ import type { SliceCtx } from './slices/context.js'
 import { createAgentsSlice } from './slices/agents.js'
 import { createEditorSlice } from './slices/editor.js'
 import { createEngagementsSlice } from './slices/engagements.js'
+import { createLayoutsSlice } from './slices/layouts.js'
 import { createSessionsSlice } from './slices/sessions.js'
 import { createTabsSlice } from './slices/tabs.js'
 import { createUiSlice } from './slices/ui.js'
@@ -34,6 +36,16 @@ export const useApp = create<AppState>((set, get) => {
     const { open, activeRoot } = get()
     const next = open.map((e) => (e.root === activeRoot ? fn(e) : e))
     set({ open: next, ...mirror(next, activeRoot) })
+    // Layouts change through many actions; saving where they all land keeps the splits across a restart.
+    const before = open.find((e) => e.root === activeRoot)
+    const after = next.find((e) => e.root === activeRoot)
+    if (
+      activeRoot !== null &&
+      before !== undefined &&
+      after !== undefined &&
+      (before.layouts !== after.layouts || before.activeLayoutId !== after.activeLayoutId)
+    )
+      saveLayouts(activeRoot, after.layouts, after.activeLayoutId)
   }
 
   /** Persist one engagement's open sessions so they can be restored on restart. */
@@ -114,6 +126,8 @@ export const useApp = create<AppState>((set, get) => {
     editorDrafts: {},
     diskBaselines: {},
     externalMutation: {},
+    layouts: [],
+    activeLayoutId: null,
     renameRequest: null,
 
     recents: loadRecents(),
@@ -128,5 +142,6 @@ export const useApp = create<AppState>((set, get) => {
     ...createEngagementsSlice(ctx),
     ...createSessionsSlice(ctx),
     ...createTabsSlice(ctx),
+    ...createLayoutsSlice(ctx),
   }
 })

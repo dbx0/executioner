@@ -22,7 +22,7 @@ import {
 
 /** Every standalone agent the menu can launch, in display order. Filtered at
  *  render time by the machine-wide installed-agent list. */
-const ALL_AGENT_ROWS: { id: string; label: string; Icon: (p: { className?: string }) => JSX.Element }[] = [
+export const ALL_AGENT_ROWS: { id: string; label: string; Icon: (p: { className?: string }) => JSX.Element }[] = [
   { id: 'claude', label: 'Claude', Icon: ClaudeLogo },
   { id: 'codex', label: 'Codex', Icon: CodexLogo },
   { id: 'opencode', label: 'OpenCode', Icon: OpenCodeLogo },

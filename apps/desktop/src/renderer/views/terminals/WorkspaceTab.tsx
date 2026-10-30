@@ -1,8 +1,11 @@
 import type { JSX } from 'react'
+import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { X, Pin, PinOff, Pencil } from 'lucide-react'
+import { X, Pin, PinOff, Pencil, Columns2 } from 'lucide-react'
 import { useApp, type ActiveTab } from '../../store.js'
 import { Input } from '../../components/ui/input.js'
+import { ConfirmModal } from '../../components/modals/ConfirmModal.js'
+import { ITEM_DRAG_TYPE } from '../../lib/pane-tree.js'
 import { cn } from '../../lib/utils.js'
 import { TabMenuItem, TabMenuSeparator } from './TabMenu.js'
 
@@ -49,6 +52,14 @@ export function WorkspaceTab({
   preview = false,
   dirty = false,
   onPromote,
+  split = false,
+  bare = false,
+  onSplit,
+  onMovePaneOut,
+  confirmClose,
+  onCloseAll,
+  confirmCloseAll,
+  confirmBulk,
 }: {
   tab: ActiveTab
   title: string
@@ -74,12 +85,29 @@ export function WorkspaceTab({
   dirty?: boolean | undefined
   /** Promote a preview tab to permanent (double-click). */
   onPromote?: (() => void) | undefined
+  /** The tab holds more than one pane: show the split icon. */
+  split?: boolean | undefined
+  /** A layout holding only empty panes: no item to rename, pin, colour or anchor a bulk close on. */
+  bare?: boolean | undefined
+  /** Split the tab's focused pane; the new pane starts as a picker. */
+  onSplit: (dir: 'row' | 'col') => void
+  /** Break the focused pane out into its own tab. Only given when the tab holds 2 or more panes. */
+  onMovePaneOut?: (() => void) | undefined
+  /** Ask this question before calling `onClose`. */
+  confirmClose?: string | undefined
+  /** Close every pane of a split tab. Only given when the tab holds 2 or more panes; `onClose` then closes the focused one. */
+  onCloseAll?: (() => void) | undefined
+  /** Closing every pane ends other panes' work: ask this question before calling `onCloseAll`. */
+  confirmCloseAll?: string | undefined
+  /** The question to ask before each bulk close, when it would end a working agent. */
+  confirmBulk?: { others?: string | undefined; right?: string | undefined; left?: string | undefined } | undefined
 }): JSX.Element {
   const renameTab = useApp((s) => s.renameTab)
   const renameRequest = useApp((s) => s.renameRequest)
   const clearTabRename = useApp((s) => s.clearTabRename)
   const [editing, setEditing] = useState(false)
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
+  const [confirming, setConfirming] = useState<{ message: string; run: () => void } | null>(null)
   // Escape unmounts the input, which still fires blur; this suppresses the
   // trailing blur-commit so a cancel cannot commit the typed value.
   const cancelled = useRef(false)
@@ -111,15 +139,30 @@ export function WorkspaceTab({
     }
   }, [renameRequest, tab.kind, tab.id, clearTabRename, startRename])
 
+  // Every close path (button, middle-click, menu) asks first when the layout warrants it.
+  const requestClose = (): void => {
+    ask(confirmClose, onClose)
+  }
+  const ask = (message: string | undefined, run: () => void): void => {
+    if (message === undefined) run()
+    else setConfirming({ message, run })
+  }
+
   return (
     <div
+      draggable={!bare && !editing}
+      onDragStart={(e) => {
+        // The tab stands for its focused item; dropping it on a pane edge moves that item there.
+        e.dataTransfer.setData(ITEM_DRAG_TYPE, JSON.stringify({ kind: tab.kind, id: tab.id }))
+        e.dataTransfer.effectAllowed = 'move'
+      }}
       onClick={onSelect}
       onMouseDown={(e) => {
         // Middle-click closes the tab (prevent the OS autoscroll cursor) — but a
         // pinned tab is protected.
         if (e.button === 1) {
           e.preventDefault()
-          if (!pinned) onClose()
+          if (!pinned) requestClose()
         }
       }}
       onContextMenu={(e) => {
@@ -134,6 +177,7 @@ export function WorkspaceTab({
       {statusDot}
       {pinned && <Pin className="size-3 shrink-0 fill-current text-muted-foreground" strokeWidth={1.75} aria-label="Pinned" />}
       {icon}
+      {split && <Columns2 className="size-3 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-label="Split tab" />}
       {/* A colored tab that isn't active still advertises its color with a small dot. */}
       {color !== undefined && !active && (
         <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden />
@@ -166,7 +210,7 @@ export function WorkspaceTab({
             // A preview tab's double-click promotes it; a permanent
             // tab's double-click renames it.
             if (preview) onPromote?.()
-            else startRename()
+            else if (!bare) startRename()
           }}
         >
           {title}
@@ -180,7 +224,7 @@ export function WorkspaceTab({
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              onClose()
+              requestClose()
             }}
             className="ml-0.5 flex size-4 items-center justify-center rounded p-0.5 text-muted-foreground hover:bg-surface-3"
             aria-label="Close tab (unsaved changes)"
@@ -193,7 +237,7 @@ export function WorkspaceTab({
             type="button"
             onClick={(e) => {
               e.stopPropagation()
-              onClose()
+              requestClose()
             }}
             className="ml-0.5 rounded p-0.5 text-transparent hover:bg-surface-3 group-hover:text-muted-foreground"
             aria-label="Close tab"
@@ -210,6 +254,29 @@ export function WorkspaceTab({
           }}
         />
       )}
+      {confirming !== null &&
+        createPortal(
+          // A portal keeps the tab's hover styles off the modal; React events still bubble to the tab, so stop them.
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.stopPropagation()}
+            onDragStart={(e) => e.stopPropagation()}
+          >
+            <ConfirmModal
+              title="Close tab"
+              message={confirming.message}
+              confirmLabel="Close all"
+              destructive
+              onCancel={() => setConfirming(null)}
+              onConfirm={() => {
+                setConfirming(null)
+                confirming.run()
+              }}
+            />
+          </div>,
+          document.body,
+        )}
       {menuPos !== null && (
         <div
           className="fixed inset-0 z-[70]"
@@ -224,65 +291,90 @@ export function WorkspaceTab({
             onClick={(e) => e.stopPropagation()}
             className="fixed z-[71] min-w-[192px] rounded-md border border-border bg-popover p-1 text-[13px] text-foreground shadow-floating"
           >
-            <TabMenuItem
-              icon={pinned ? <PinOff className="size-3.5 shrink-0" /> : <Pin className="size-3.5 shrink-0" />}
-              onClick={() => { setMenuPos(null); onTogglePin() }}
-            >
-              {pinned ? 'Unpin Tab' : 'Pin Tab'}
-            </TabMenuItem>
-            <TabMenuSeparator />
+            {!bare && (
+              <>
+                <TabMenuItem
+                  icon={pinned ? <PinOff className="size-3.5 shrink-0" /> : <Pin className="size-3.5 shrink-0" />}
+                  onClick={() => { setMenuPos(null); onTogglePin() }}
+                >
+                  {pinned ? 'Unpin Tab' : 'Pin Tab'}
+                </TabMenuItem>
+                <TabMenuSeparator />
+                <TabMenuItem onClick={() => { setMenuPos(null); onSplit('row') }}>
+                  Split right
+                </TabMenuItem>
+                <TabMenuItem onClick={() => { setMenuPos(null); onSplit('col') }}>
+                  Split down
+                </TabMenuItem>
+                {onMovePaneOut !== undefined && (
+                  <TabMenuItem onClick={() => { setMenuPos(null); onMovePaneOut() }}>
+                    Move pane to new tab
+                  </TabMenuItem>
+                )}
+                <TabMenuSeparator />
+              </>
+            )}
             <TabMenuItem
               icon={<X className="size-3.5 shrink-0" />}
               shortcut={`${MOD}W`}
               disabled={pinned}
-              onClick={() => { setMenuPos(null); onClose() }}
+              onClick={() => { setMenuPos(null); requestClose() }}
             >
-              Close
+              {split ? 'Close pane' : 'Close'}
             </TabMenuItem>
-            <TabMenuItem disabled={!canCloseOthers} onClick={() => { setMenuPos(null); onCloseOthers() }}>
-              Close Others
-            </TabMenuItem>
-            <TabMenuItem disabled={!canCloseToRight} onClick={() => { setMenuPos(null); onCloseToRight() }}>
-              Close Tabs To The Right
-            </TabMenuItem>
-            <TabMenuItem disabled={!canCloseToLeft} onClick={() => { setMenuPos(null); onCloseToLeft() }}>
-              Close Tabs To The Left
-            </TabMenuItem>
-            <TabMenuSeparator />
-            <TabMenuItem
-              icon={<Pencil className="size-3.5 shrink-0" />}
-              shortcut={`${MOD}R`}
-              onClick={() => { setMenuPos(null); startRename() }}
-            >
-              Change Title
-            </TabMenuItem>
-            <div className="px-2 pb-1 pt-1.5">
-              <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">Tab Color</div>
-              <div className="flex flex-wrap gap-2">
-                {TAB_COLORS.map((c) => {
-                  const selected = color === c.value
-                  return (
-                    <button
-                      key={c.label}
-                      type="button"
-                      aria-label={c.label}
-                      title={c.label}
-                      onClick={() => { setMenuPos(null); onSetColor(c.value) }}
-                      className={cn(
-                        'relative size-4 rounded-full border',
-                        c.value !== undefined ? 'border-transparent' : 'border-border-strong bg-transparent',
-                        selected ? 'ring-1 ring-border-strong ring-offset-1 ring-offset-popover' : '',
-                      )}
-                      style={c.value !== undefined ? { backgroundColor: c.value } : undefined}
-                    >
-                      {c.value === undefined && (
-                        <span className="absolute left-1/2 top-1/2 block h-px w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-tertiary-foreground" />
-                      )}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+            {onCloseAll !== undefined && (
+              <TabMenuItem disabled={pinned} onClick={() => { setMenuPos(null); ask(confirmCloseAll, onCloseAll) }}>
+                Close all panes
+              </TabMenuItem>
+            )}
+            {!bare && (
+              <>
+                <TabMenuItem disabled={!canCloseOthers} onClick={() => { setMenuPos(null); ask(confirmBulk?.others, onCloseOthers) }}>
+                  Close Others
+                </TabMenuItem>
+                <TabMenuItem disabled={!canCloseToRight} onClick={() => { setMenuPos(null); ask(confirmBulk?.right, onCloseToRight) }}>
+                  Close Tabs To The Right
+                </TabMenuItem>
+                <TabMenuItem disabled={!canCloseToLeft} onClick={() => { setMenuPos(null); ask(confirmBulk?.left, onCloseToLeft) }}>
+                  Close Tabs To The Left
+                </TabMenuItem>
+                <TabMenuSeparator />
+                <TabMenuItem
+                  icon={<Pencil className="size-3.5 shrink-0" />}
+                  shortcut={`${MOD}R`}
+                  onClick={() => { setMenuPos(null); startRename() }}
+                >
+                  Change Title
+                </TabMenuItem>
+                <div className="px-2 pb-1 pt-1.5">
+                  <div className="mb-1.5 text-[11px] font-medium text-muted-foreground">Tab Color</div>
+                  <div className="flex flex-wrap gap-2">
+                    {TAB_COLORS.map((c) => {
+                      const selected = color === c.value
+                      return (
+                        <button
+                          key={c.label}
+                          type="button"
+                          aria-label={c.label}
+                          title={c.label}
+                          onClick={() => { setMenuPos(null); onSetColor(c.value) }}
+                          className={cn(
+                            'relative size-4 rounded-full border',
+                            c.value !== undefined ? 'border-transparent' : 'border-border-strong bg-transparent',
+                            selected ? 'ring-1 ring-border-strong ring-offset-1 ring-offset-popover' : '',
+                          )}
+                          style={c.value !== undefined ? { backgroundColor: c.value } : undefined}
+                        >
+                          {c.value === undefined && (
+                            <span className="absolute left-1/2 top-1/2 block h-px w-3 -translate-x-1/2 -translate-y-1/2 rotate-45 bg-tertiary-foreground" />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
             {filePath !== undefined && (
               <>
                 <TabMenuSeparator />

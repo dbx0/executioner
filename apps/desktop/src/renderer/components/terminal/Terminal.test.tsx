@@ -295,3 +295,37 @@ describe('Terminal — pastes from other routes', () => {
     expect(event.defaultPrevented).toBe(false)
   })
 })
+
+describe('Terminal - pane shortcuts', () => {
+  beforeEach(() => {
+    sent.length = 0
+    keyHandler = undefined
+  })
+
+  it('a split shortcut in the terminal does not reach the pty', () => {
+    render(<Terminal connection={connection} sessionId="s1" />)
+    const split = new KeyboardEvent('keydown', { key: 'D', ctrlKey: true, shiftKey: true, cancelable: true })
+    const focus = new KeyboardEvent('keydown', { key: 'ArrowLeft', ctrlKey: true, altKey: true, cancelable: true })
+    const stopSplit = vi.spyOn(split, 'stopPropagation')
+    const stopFocus = vi.spyOn(focus, 'stopPropagation')
+    // false tells xterm to skip the key, so nothing is written to the pty.
+    expect(keyHandler!(split)).toBe(false)
+    expect(keyHandler!(focus)).toBe(false)
+    // The window listener still has to see them, so the events are neither stopped nor consumed.
+    expect(stopSplit).not.toHaveBeenCalled()
+    expect(stopFocus).not.toHaveBeenCalled()
+    expect(split.defaultPrevented).toBe(false)
+    expect(focus.defaultPrevented).toBe(false)
+  })
+
+  it('keys a shell owns still reach the pty', () => {
+    render(<Terminal connection={connection} sessionId="s1" />)
+    for (const k of [
+      { key: 'd', ctrlKey: true },
+      { key: 'w', ctrlKey: true },
+      { key: 'ArrowLeft', ctrlKey: true },
+    ]) {
+      expect(keyHandler!(new KeyboardEvent('keydown', { ...k, cancelable: true }))).toBe(true)
+    }
+  })
+})

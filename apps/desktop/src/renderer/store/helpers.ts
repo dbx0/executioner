@@ -97,6 +97,8 @@ export function mirror(open: OpenEngagement[], activeRoot: string | null): Pick<
   | 'editorDrafts'
   | 'diskBaselines'
   | 'externalMutation'
+  | 'layouts'
+  | 'activeLayoutId'
 > {
   const a = open.find((e) => e.root === activeRoot)
   if (a === undefined) {
@@ -116,6 +118,8 @@ export function mirror(open: OpenEngagement[], activeRoot: string | null): Pick<
       editorDrafts: {},
       diskBaselines: {},
       externalMutation: {},
+      layouts: [],
+      activeLayoutId: null,
     }
   }
   return {
@@ -134,5 +138,7 @@ export function mirror(open: OpenEngagement[], activeRoot: string | null): Pick<
     editorDrafts: a.editorDrafts,
     diskBaselines: a.diskBaselines,
     externalMutation: a.externalMutation,
+    layouts: a.layouts,
+    activeLayoutId: a.activeLayoutId,
   }
 }

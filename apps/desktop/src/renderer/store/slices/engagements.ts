@@ -1,3 +1,4 @@
+import type { ItemRef, PaneNode } from '../../lib/pane-tree.js'
 import { createClient } from '../../lib/connection.js'
 import { terminalsApi, type TerminalSpec } from '../../api/terminals.js'
 import { projectApi } from '../../api/project.js'
@@ -6,14 +7,30 @@ import {
   loadEditorState,
   loadFiles,
   loadSession,
+  loadLayouts,
   loadSessions,
   loadTabMeta,
   saveSession,
   saveSessionRoots,
+  saveLayouts,
   saveSessions,
 } from '../persistence.js'
 import type { ActiveTab, AppState, FileTab, OpenEngagement, Session } from '../types.js'
 import type { SliceCtx } from './context.js'
+import { reconcileLayouts, syncActive } from './layouts.js'
+
+/**
+ * Point a saved pane tree's terminals at their new engine ids. A terminal that failed to
+ * come back maps to an empty id, which matches no live session (an unmapped old id could
+ * collide with a new one) so reconciling drops its pane.
+ */
+function remapTerminals(node: PaneNode, newIdOf: Map<string, string>): PaneNode {
+  if (node.type === 'split') {
+    return { ...node, a: remapTerminals(node.a, newIdOf), b: remapTerminals(node.b, newIdOf) }
+  }
+  if (node.item === null || node.item.kind !== 'terminal') return node
+  return { ...node, item: { kind: 'terminal', id: newIdOf.get(node.item.id) ?? '' } }
+}
 
 /** Guards against re-running the one-time startup restore (e.g. React StrictMode double-mount). */
 let restored = false
@@ -71,6 +88,8 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       editorDrafts: {},
       diskBaselines: {},
       externalMutation: {},
+      layouts: [],
+      activeLayoutId: null,
     }
   }
 
@@ -95,6 +114,9 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
     // tabs. File-tab ids are stable across a restart (toPersistedFile keeps
     // `id`, and the restore above reuses it), so drafts key straight back on.
     const restoredEditor = loadEditorState(root)
+    // Read before the awaits below: the engagement is visible without layouts while its terminals
+    // are recreated, and a layout change in that window saves over the stored splits.
+    const savedLayouts = loadLayouts(root)
     if (
       persisted.length === 0 &&
       restoredFiles.length === 0 &&
@@ -106,6 +128,8 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
     if (engagement === undefined) return
     const api = terminalsApi(engagement.client)
     const restoredSessions: Session[] = []
+    // Terminals come back under new engine ids; saved layouts name the old ones.
+    const newIdOf = new Map<string, string>()
     for (const ps of persisted) {
       try {
         const spec: TerminalSpec =
@@ -119,6 +143,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
         if (ps.title !== undefined && ps.title !== '') s.title = ps.title
         if (ps.resume !== undefined && ps.resume !== '') s.resume = ps.resume
         restoredSessions.push(s)
+        newIdOf.set(ps.id, id)
       } catch {
         /* a session that fails to recreate is dropped rather than blocking the rest */
       }
@@ -131,10 +156,22 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       : firstFile
         ? { kind: 'file', id: firstFile.id }
         : null
+    const items: ItemRef[] = [
+      ...restoredSessions.map((s) => ({ kind: 'terminal', id: s.id })),
+      ...restoredFiles.map((f) => ({ kind: 'file', id: f.id })),
+    ]
+    const { layouts, activeLayoutId } = reconcileLayouts(
+      savedLayouts === null
+        ? null
+        : savedLayouts.layouts.map((l) => ({ ...l, root: remapTerminals(l.root, newIdOf) })),
+      items,
+      activeTab,
+      savedLayouts?.activeLayoutId,
+    )
     set((state) => {
       const open = state.open.map((e) =>
         e.root === root
-          ? {
+          ? syncActive({
               ...e,
               sessions: restoredSessions,
               // A restored tab carrying a draft must come back dirty, or its
@@ -151,12 +188,15 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
               // re-derives any conflict from the restored baseline, so a
               // persisted mark could only show one that no longer exists.
               externalMutation: {},
-            }
+              layouts,
+              activeLayoutId,
+            })
           : e,
       )
       return { open, ...mirror(open, state.activeRoot) }
     })
     saveSessions(root, restoredSessions)
+    saveLayouts(root, layouts, activeLayoutId)
   }
 
   /** Pull the authoritative name + badge from the engagement folder and patch
@@ -242,6 +282,8 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       editorDrafts: {},
       diskBaselines: {},
       externalMutation: {},
+      layouts: [],
+      activeLayoutId: null,
     })
     // Opening an engagement by hand has to bring its tabs back exactly as the
     // startup restore does. Without this an engagement opened from the recents
@@ -309,6 +351,8 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
             editorDrafts: {},
             diskBaselines: {},
             externalMutation: {},
+            layouts: [],
+            activeLayoutId: null,
           }
           if (input.icon !== undefined && input.icon !== '') engagement.icon = input.icon
           if (photo !== null && photo !== '') engagement.photo = photo

@@ -2,6 +2,7 @@ import type { AxiosInstance } from 'axios'
 import type { EngineConnection } from '../lib/connection.js'
 import type { TerminalSpec } from '../api/terminals.js'
 import type { ScopeProposal } from '../api/scope.js'
+import type { ItemRef, PaneNode } from '../lib/pane-tree.js'
 
 /** One ephemeral "phone-message" progress bubble from a scope parse. */
 export interface ScopeBubble {
@@ -124,6 +125,16 @@ export interface TabMeta {
   color?: string
 }
 
+/**
+ * One workspace tab: a tree of panes, each showing one item. Its id is the item key of
+ * the item it was created for (so `tabMeta` keys keep working), or `layout:<id>` if taken.
+ */
+export interface Layout {
+  id: string
+  root: PaneNode
+  focusedLeafId: string
+}
+
 export interface Subagent {
   id: string
   description: string
@@ -163,6 +174,9 @@ export interface OpenEngagement {
   diskBaselines: Record<string, DiskBaseline>
   /** Unresolved external mutations, per file-tab id. Drives the conflict banner. */
   externalMutation: Record<string, ExternalMutation>
+  /** The workspace tab strip: every session and file sits in exactly one leaf of one layout. */
+  layouts: Layout[]
+  activeLayoutId: string | null
 }
 
 /**
@@ -262,6 +276,8 @@ export interface AppState {
   diskBaselines: Record<string, DiskBaseline>
   /** Unresolved external mutations, per file-tab id. Drives the conflict banner. */
   externalMutation: Record<string, ExternalMutation>
+  layouts: Layout[]
+  activeLayoutId: string | null
 
   /** A global request to begin inline-renaming a tab (from the ⌘R shortcut or the
    *  "Change Title" menu item); the target tab consumes and clears it. */
@@ -344,7 +360,8 @@ export interface AppState {
   switchEngagement: (root: string) => void
   closeEngagement: (root?: string) => void
 
-  createSession: (spec: TerminalSpec) => Promise<void>
+  /** With `into`, fills that empty pane of the active layout instead of opening a new tab. */
+  createSession: (spec: TerminalSpec, opts?: { into?: string }) => Promise<void>
   closeSession: (id: string) => void
   setActiveSession: (id: string) => void
   pulseSession: (id: string) => void
@@ -355,7 +372,7 @@ export interface AppState {
    * single preview slot; a permanent open (default) promotes an already-open
    * preview of the same file.
    */
-  openFile: (path: string, name: string, opts?: { preview: boolean }) => void
+  openFile: (path: string, name: string, opts?: { preview?: boolean; into?: string }) => void
   /** Promote a preview tab to a permanent one (double-click / first edit). */
   promoteFileTab: (id: string) => void
   /** Set or clear a file tab's unsaved-changes flag (drives the dirty dot). */
@@ -386,6 +403,26 @@ export interface AppState {
   closeTabsToRight: (tab: ActiveTab) => void
   /** Close every tab to the left of `tab` (pinned tabs are never closed). */
   closeTabsToLeft: (tab: ActiveTab) => void
+
+  /** Focus a pane (and activate its layout). */
+  focusPane: (layoutId: string, leafId: string) => void
+  /**
+   * Split a pane of the active layout and focus the new one; without `item` it is empty.
+   * The new pane is right of / below the old one, or left of / above it when `before`.
+   */
+  splitPane: (leafId: string, dir: 'row' | 'col', item?: ItemRef, before?: boolean) => void
+  /** Put an item into an empty pane of the active layout, moving it out of any other pane. */
+  fillPane: (leafId: string, item: ItemRef) => void
+  /** Close an empty pane, or close the pane's item. */
+  closePane: (leafId: string) => void
+  /** Close every item of a layout. */
+  closeLayout: (layoutId: string) => void
+  /** Break a pane out into a new single-pane layout right after the current one. */
+  movePaneToNewTab: (leafId: string) => void
+  setPaneRatio: (leafIdInA: string, ratio: number) => void
+  /** Split the pane holding `item` with `newItem`, leaving the active layout and focus alone. */
+  splitBeside: (item: ItemRef, dir: 'row' | 'col', newItem: ItemRef) => void
+  moveFocus: (dir: 'left' | 'right' | 'up' | 'down') => void
 
   handleAgentEvent: (sessionId: string, event: string, payload: Record<string, unknown>) => void
 }

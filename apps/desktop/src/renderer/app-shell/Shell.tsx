@@ -26,6 +26,7 @@ import { WorkflowsView } from '../views/WorkflowsView.js'
 import { ToolsView } from '../views/ToolsView.js'
 import { TerminalsView } from '../views/TerminalsView.js'
 import { SettingsView } from '../views/SettingsView.js'
+import { isMacPlatform, workspaceShortcut } from '../lib/shortcuts.js'
 
 function NonTerminalView({ view }: { view: ViewId }): JSX.Element | null {
   switch (view) {
@@ -72,12 +73,23 @@ function ActivePage(): JSX.Element {
 // ⌘1…⌘6, in the order the sidebar lists them.
 const NUMBER_VIEWS: ViewId[] = ['scope', 'targets', 'findings', 'workflows', 'terminals', 'settings']
 
-function useKeybindings(): void {
+export function useKeybindings(): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const mod = e.metaKey || e.ctrlKey
       if (!mod) return
       const s = useApp.getState()
+      const shortcut = workspaceShortcut(e, isMacPlatform())
+      // The workbench stays mounted while hidden, so these only act while it is the view on screen.
+      if (shortcut !== null) {
+        if (s.activeView !== 'terminals') return
+        const layout = s.layouts.find((l) => l.id === s.activeLayoutId)
+        if (layout === undefined) return
+        e.preventDefault()
+        if (shortcut.kind === 'split') s.splitPane(layout.focusedLeafId, shortcut.dir)
+        else s.moveFocus(shortcut.dir)
+        return
+      }
       if (e.key.toLowerCase() === 'k') {
         e.preventDefault()
         s.setPalette(!s.paletteOpen)
@@ -89,16 +101,12 @@ function useKeybindings(): void {
         else s.toggleSidebar()
         return
       }
-      // ⌘/Ctrl+W closes the active workspace tab (pinned tabs are protected).
+      // ⌘/Ctrl+W closes the focused pane (a pinned tab is protected).
       if (e.key.toLowerCase() === 'w' && !e.shiftKey) {
-        const active = s.activeTab
-        if (active !== null) {
+        const layout = s.layouts.find((l) => l.id === s.activeLayoutId)
+        if (layout !== undefined) {
           e.preventDefault()
-          const pinned = s.tabMeta[`${active.kind}:${active.id}`]?.pinned === true
-          if (!pinned) {
-            if (active.kind === 'terminal') s.closeSession(active.id)
-            else s.closeFile(active.id)
-          }
+          if (s.tabMeta[layout.id]?.pinned !== true) s.closePane(layout.focusedLeafId)
         }
         return
       }

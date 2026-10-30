@@ -1,8 +1,10 @@
+import type { ItemRef, PaneNode } from '../lib/pane-tree.js'
 import { isKnownTheme, DEFAULT_THEME } from '../lib/themes.js'
 import type {
   DiskBaseline,
   ExecutionMode,
   FileTab,
+  Layout,
   OpenEngagement,
   PersistedFile,
   PersistedSession,
@@ -136,6 +138,73 @@ export function loadFiles(root: string): PersistedFile[] {
     )
   } catch {
     return []
+  }
+}
+
+/** localStorage key holding one engagement's workspace layouts, keyed by its root. */
+const LAYOUTS_KEY_PREFIX = 'exe.layouts:'
+function layoutsKey(root: string): string {
+  return `${LAYOUTS_KEY_PREFIX}${root}`
+}
+
+export function saveLayouts(root: string, layouts: Layout[], activeLayoutId: string | null): void {
+  try {
+    localStorage.setItem(layoutsKey(root), JSON.stringify({ layouts, activeLayoutId }))
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function parseItem(raw: unknown): ItemRef | null | undefined {
+  if (raw === null) return null
+  if (typeof raw !== 'object') return undefined
+  const { kind, id } = raw as { kind?: unknown; id?: unknown }
+  return typeof kind === 'string' && typeof id === 'string' ? { kind, id } : undefined
+}
+
+/** The same bounds `setRatio` enforces while dragging a divider. */
+const MIN_SAVED_RATIO = 0.1
+const MAX_SAVED_RATIO = 0.9
+
+/** A pane tree rebuilt field by field, or null when any part of it is malformed. */
+function parsePaneNode(raw: unknown): PaneNode | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const n = raw as Record<string, unknown>
+  if (n.type === 'leaf') {
+    const item = parseItem(n.item)
+    return typeof n.id === 'string' && item !== undefined ? { type: 'leaf', id: n.id, item } : null
+  }
+  if (n.type === 'split' && (n.dir === 'row' || n.dir === 'col') && typeof n.ratio === 'number') {
+    const a = parsePaneNode(n.a)
+    const b = parsePaneNode(n.b)
+    // A hand-edited or overflowed ratio must not break the geometry: non-finite becomes an even split.
+    const ratio = Number.isFinite(n.ratio) ? Math.min(MAX_SAVED_RATIO, Math.max(MIN_SAVED_RATIO, n.ratio)) : 0.5
+    return a !== null && b !== null ? { type: 'split', dir: n.dir, ratio, a, b } : null
+  }
+  return null
+}
+
+/** The saved layouts, or null when none were saved (an engagement from before splits) or the data is unusable. */
+export function loadLayouts(root: string): { layouts: Layout[]; activeLayoutId: string | null } | null {
+  try {
+    const raw = localStorage.getItem(layoutsKey(root))
+    if (raw === null) return null
+    const parsed = JSON.parse(raw) as unknown
+    if (typeof parsed !== 'object' || parsed === null) return null
+    const { layouts: rawLayouts, activeLayoutId } = parsed as { layouts?: unknown; activeLayoutId?: unknown }
+    if (!Array.isArray(rawLayouts)) return null
+    const layouts: Layout[] = []
+    for (const l of rawLayouts as unknown[]) {
+      if (typeof l !== 'object' || l === null) continue
+      const { id, root: rawRoot, focusedLeafId } = l as { id?: unknown; root?: unknown; focusedLeafId?: unknown }
+      const tree = parsePaneNode(rawRoot)
+      if (typeof id !== 'string' || tree === null) continue
+      // A missing focus is repaired when the layouts are reconciled, so the layout itself stays.
+      layouts.push({ id, root: tree, focusedLeafId: typeof focusedLeafId === 'string' ? focusedLeafId : '' })
+    }
+    return { layouts, activeLayoutId: typeof activeLayoutId === 'string' ? activeLayoutId : null }
+  } catch {
+    return null
   }
 }
 

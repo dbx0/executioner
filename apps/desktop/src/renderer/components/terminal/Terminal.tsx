@@ -6,6 +6,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { ptyUrl } from '../../lib/pty.js'
 import { readTargetDrag, TARGET_DND_MIME } from '../../lib/target-drag.js'
+import { isMacPlatform, workspaceShortcut } from '../../lib/shortcuts.js'
 import type { EngineConnection } from '../../lib/connection.js'
 
 function terminalTheme(): { background: string; foreground: string; cursor: string; selectionBackground: string } {
@@ -138,6 +139,10 @@ export function Terminal({
     term.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true
       const mod = e.ctrlKey || e.metaKey
+
+      // Pane shortcuts belong to the workspace. Returning false keeps them from the PTY; the event
+      // is not consumed, so it still bubbles to the window listener that acts on it.
+      if (workspaceShortcut(e, isMacPlatform()) !== null) return false
 
       // Paste. xterm maps Ctrl+V to the ^V control code and preventDefaults it,
       // so the browser's paste event never fires; without this there is no way

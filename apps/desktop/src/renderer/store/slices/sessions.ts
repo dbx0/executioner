@@ -1,8 +1,8 @@
 import { terminalsApi } from '../../api/terminals.js'
 import { isTeamAgent } from '../../api/teams.js'
-import { tabMetaKey } from '../helpers.js'
 import type { AppState } from '../types.js'
 import type { SliceCtx } from './context.js'
+import { dropItem, healLayouts, placeItem, relayout } from './layouts.js'
 
 const pulseTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const lastActivityAt = new Map<string, number>()
@@ -16,7 +16,7 @@ export function createSessionsSlice(ctx: SliceCtx): Pick<AppState, 'createSessio
   const { set, get, patchActive, persistSessions, persistTabMeta } = ctx
 
   return {
-    createSession: async (spec) => {
+    createSession: async (spec, opts) => {
       const client = get().client
       if (client === null) return
       const agent = 'agent' in spec ? spec.agent : 'shell'
@@ -25,12 +25,15 @@ export function createSessionsSlice(ctx: SliceCtx): Pick<AppState, 'createSessio
         const n = get().sessions.length + 1
         const label =
           agent === 'shell' ? `terminal ${n}` : isTeamAgent(agent) ? `claude team ${n}` : `${agent} ${n}`
-        patchActive((e) => ({
-          ...e,
-          sessions: [...e.sessions, { id, label, agent }],
-          activeSessionId: id,
-          activeTab: { kind: 'terminal', id },
-        }))
+        patchActive((e) =>
+          relayout(e, (x) =>
+            placeItem(
+              { ...x, sessions: [...x.sessions, { id, label, agent }], activeSessionId: id },
+              { kind: 'terminal', id },
+              opts?.into,
+            ),
+          ),
+        )
         persistSessions(get().activeRoot)
         set({ activeView: 'terminals' })
       } catch (e) {
@@ -41,30 +44,22 @@ export function createSessionsSlice(ctx: SliceCtx): Pick<AppState, 'createSessio
     // Only a user-initiated close removes a session from the persisted set, so
     // it does not come back on the next restart.
     closeSession: (id) => {
-      patchActive((e) => {
+      patchActive((e0) => {
+        const e = healLayouts(e0)
         const sessions = e.sessions.filter((x) => x.id !== id)
         const { [id]: _drop, ...rest } = e.sessionState
         const activeSessionId =
           e.activeSessionId === id ? (sessions[sessions.length - 1]?.id ?? null) : e.activeSessionId
-        // If the closed terminal was the workspace's active tab, fall back to the
-        // next terminal, then to a file tab, then to nothing.
-        let activeTab = e.activeTab
-        if (e.activeTab?.kind === 'terminal' && e.activeTab.id === id) {
-          activeTab = activeSessionId
-            ? { kind: 'terminal', id: activeSessionId }
-            : e.files.length > 0
-              ? { kind: 'file', id: e.files[e.files.length - 1]!.id }
-              : null
-        }
-        const { [tabMetaKey({ kind: 'terminal', id })]: _dropMeta, ...tabMeta } = e.tabMeta
-        return { ...e, sessions, sessionState: rest, activeSessionId, activeTab, tabMeta }
+        // The pane goes with the session; the layout code picks what to show next.
+        return relayout({ ...e, sessions, sessionState: rest, activeSessionId }, (x) =>
+          dropItem(x, { kind: 'terminal', id }),
+        )
       })
       persistSessions(get().activeRoot)
       persistTabMeta(get().activeRoot)
     },
 
-    setActiveSession: (id) =>
-      patchActive((e) => ({ ...e, activeSessionId: id, activeTab: { kind: 'terminal', id } })),
+    setActiveSession: (id) => get().setActiveTab({ kind: 'terminal', id }),
 
     pulseSession: (id) => {
       const now = Date.now()

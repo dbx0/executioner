@@ -30,6 +30,8 @@ function seed(): void {
     editorDrafts: {},
     diskBaselines: {},
     externalMutation: {},
+    layouts: [],
+    activeLayoutId: null,
   } satisfies OpenEngagement
   useApp.setState({
     open: [engagement],

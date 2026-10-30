@@ -1,6 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useApp, type Session } from '../../store.js'
+import { leaf, splitLeaf } from '../../lib/pane-tree.js'
+import type { Layout, OpenEngagement } from '../../store/types.js'
 
 // The spawn menu reaches for the teams API on mount; the "+" affordance itself
 // is all this file cares about.
@@ -84,5 +86,48 @@ describe('SessionsSection', () => {
     render(<SessionsSection />)
     expect(screen.queryByLabelText('idle')).toBeNull()
     expect(screen.queryByLabelText('working')).toBeNull()
+  })
+
+  it('clicking a session in the sidebar focuses its pane in a background layout', () => {
+    const split = leaf({ kind: 'terminal', id: 'a' }, 'pa')
+    const two = splitLeaf(split, 'pa', 'row', { kind: 'terminal', id: 'b' })
+    const sessions = [
+      session({ id: 'a', label: 'one' }),
+      session({ id: 'b', label: 'two' }),
+      session({ id: 'c', label: 'three' }),
+    ]
+    const layouts: Layout[] = [
+      { id: 'terminal:a', root: two.root, focusedLeafId: 'pa' },
+      { id: 'terminal:c', root: leaf({ kind: 'terminal', id: 'c' }, 'pc'), focusedLeafId: 'pc' },
+    ]
+    const engagement = {
+      root: '/r',
+      sessions,
+      files: [],
+      layouts,
+      activeLayoutId: 'terminal:c',
+      activeTab: { kind: 'terminal', id: 'c' },
+      activeSessionId: 'c',
+      sessionState: {},
+      subagents: {},
+      tabMeta: {},
+      editorDrafts: {},
+      diskBaselines: {},
+      externalMutation: {},
+    } as unknown as OpenEngagement
+    useApp.setState({
+      open: [engagement],
+      activeRoot: '/r',
+      sessions,
+      layouts,
+      activeLayoutId: 'terminal:c',
+      activeTab: { kind: 'terminal', id: 'c' },
+      activeSessionId: 'c',
+    })
+    render(<SessionsSection />)
+    fireEvent.click(screen.getByText('two'))
+    expect(useApp.getState().activeLayoutId).toBe('terminal:a')
+    expect(useApp.getState().layouts[0]!.focusedLeafId).toBe(two.newLeafId)
+    expect(useApp.getState().activeSessionId).toBe('b')
   })
 })

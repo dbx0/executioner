@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadSession, loadSessions, saveFiles, saveRecents, saveSession, saveSessions } from '../persistence.js'
+import { leaf, leaves, splitLeaf } from '../../lib/pane-tree.js'
+import { loadSession, loadSessions, saveFiles, saveLayouts, saveRecents, saveSession, saveSessions } from '../persistence.js'
 import type { AppState } from '../types.js'
 
 const ROOT = '/tmp/acme'
@@ -246,6 +247,36 @@ describe('opening an engagement by hand', () => {
     await useApp.getState().openRecent(ROOT)
 
     expect(useApp.getState().files.map((f) => f.path)).toEqual(['notes/scope.md'])
+  })
+
+  it('keeps a saved split when the layout changes while the agents are still coming back', async () => {
+    // The engagement is already visible with no layouts while its terminals are recreated; a
+    // change made in that window saves over the stored splits, so they must be read up front.
+    saveSessions(ROOT, [{ id: 'old', label: 'claude 1', agent: 'claude' }])
+    saveFiles(ROOT, [{ id: 'f1', path: 'notes/scope.md', name: 'scope.md' }])
+    const { root } = splitLeaf(leaf({ kind: 'terminal', id: 'old' }, 'la'), 'la', 'row', { kind: 'file', id: 'f1' })
+    saveLayouts(ROOT, [{ id: 'terminal:old', root, focusedLeafId: 'la' }], 'terminal:old')
+    let release: () => void = () => undefined
+    engine.post.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ data: { id: 'new1' } })
+        }),
+    )
+
+    const useApp = await freshStore()
+    const opening = useApp.getState().openRecent(ROOT)
+    await vi.waitFor(() => expect(engine.post).toHaveBeenCalledWith('/terminals', { agent: 'claude' }))
+    useApp.getState().openFile('other.md', 'other.md')
+    release()
+    await opening
+
+    const layouts = useApp.getState().layouts
+    expect(layouts).toHaveLength(1)
+    expect(leaves(layouts[0]!.root).map((p) => p.item)).toEqual([
+      { kind: 'terminal', id: 'new1' },
+      { kind: 'file', id: 'f1' },
+    ])
   })
 })
 
