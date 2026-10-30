@@ -7,6 +7,7 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  Menu,
   nativeImage,
   nativeTheme,
   session,
@@ -18,6 +19,7 @@ import {
 import { globalLayout } from '@exe/protocol'
 import { collectConnectionHints } from './connection-hints.js'
 import { EngineSupervisor } from './engine-supervisor.js'
+import { editMenuTemplate } from './edit-menu.js'
 import { createIpcHandlers } from './ipc.js'
 import { allowPermission, externalUrl, isAppUrl } from './security.js'
 import { checkForUpdate, installKind, startInstall } from './update.js'
@@ -227,6 +229,13 @@ function createWindow(): void {
   })
   mainWindow.webContents.on('will-redirect', (event, url) => {
     if (!isAppUrl(url, appUrl)) event.preventDefault()
+  })
+
+  // Electron shows no right-click menu of its own. Text fields and the terminal
+  // get Cut, Copy, Paste and Select all; everywhere else stays menu-less.
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    const template = editMenuTemplate(params)
+    if (template !== null) Menu.buildFromTemplate(template).popup({ window: win })
   })
 
   if (process.env.ELECTRON_RENDERER_URL !== undefined) {
