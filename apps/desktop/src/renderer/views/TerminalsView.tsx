@@ -138,7 +138,7 @@ export function TerminalsView(): JSX.Element {
     <div className="flex h-full flex-col">
       {/* Tab strip: terminals then files. */}
       <div className="flex h-9 shrink-0 items-center border-b border-border pl-1 pr-2">
-        <div className="scrollbar-none flex min-w-0 flex-1 items-stretch overflow-x-auto">
+        <div className="scrollbar-none flex min-w-0 items-stretch overflow-x-auto">
           {strip.map(({ layout, tab: itemTab, split: isSplit }) => {
             const meta = tabMeta[layout.id]
             // The empty-only placeholder has no item; its handlers are never reached (bare menu).
@@ -230,7 +230,7 @@ export function TerminalsView(): JSX.Element {
           })}
         </div>
         <SpawnMenu>
-          <Button variant="ghost" size="icon-sm" className="ml-auto" aria-label="New session">
+          <Button variant="ghost" size="icon-sm" className="ml-1 shrink-0" aria-label="New session">
             <Plus className="size-4" strokeWidth={1.75} />
           </Button>
         </SpawnMenu>
