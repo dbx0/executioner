@@ -3,6 +3,7 @@ import { basename } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { z } from 'zod'
 import {
+  BROWSER_APP_CLOSED,
   canonicaliseAsset,
   evaluateScope,
   isCanonicalAsset,
@@ -18,6 +19,9 @@ import { writeProgramDescription, type Project } from '@exe/project'
 import { launcherForProfile, type CommandLauncher } from '../infra/launcher.js'
 import { buildNodeTypes } from './node-types.js'
 import { normaliseScopePattern, type RunRepository } from '@exe/db'
+import { BrowserTools, type BrowserToolName } from '../browser/tools.js'
+import type { BrowserRegistry } from '../browser/registry.js'
+import type { BrowserHostHub } from '../browser/host-hub.js'
 import type { AgentSessionSinks, ScopeDraftSink } from './agent-sessions.js'
 
 export interface RunWorkflowFn {
@@ -50,6 +54,8 @@ export interface ToolsetDeps {
   launcherFactory?: (profile: BackendProfile | undefined) => CommandLauncher
   /** Hard timeout for run_command (ms). Defaults to 120s. */
   commandTimeoutMs?: number
+  /** The embedded browsers behind the browser_* tools. Absent, those tools report the app closed. */
+  browsers?: { registry: BrowserRegistry; hub: BrowserHostHub }
 }
 
 /**
@@ -155,6 +161,18 @@ export const TOOL_ACCESS = {
   run_command: 'dangerous',
   // Runs a saved workflow's tool and script nodes.
   run_workflow: 'dangerous',
+  // Drive a browser the operator sees, on pages an attacker controls.
+  browser_open: 'dangerous',
+  browser_navigate: 'dangerous',
+  browser_snapshot: 'dangerous',
+  browser_click: 'dangerous',
+  browser_type: 'dangerous',
+  browser_press: 'dangerous',
+  browser_select: 'dangerous',
+  browser_eval: 'dangerous',
+  browser_wait: 'dangerous',
+  browser_screenshot: 'dangerous',
+  browser_log: 'dangerous',
 } as const satisfies Record<string, ToolAccess>
 
 export type ToolName = keyof typeof TOOL_ACCESS
@@ -188,7 +206,17 @@ const KILL_GRACE_MS = 2_000
 
 /** Maps MCP tool calls to project operations. Transport-agnostic and pure of process concerns. */
 export class ProjectToolset {
-  constructor(private readonly deps: ToolsetDeps) {}
+  private readonly browserTools: BrowserTools | undefined
+
+  constructor(private readonly deps: ToolsetDeps) {
+    this.browserTools =
+      deps.browsers === undefined ? undefined : new BrowserTools({ ...deps.browsers, project: deps.project })
+  }
+
+  private browser(name: BrowserToolName, args: Record<string, unknown>, caller: ToolCaller): Promise<unknown> {
+    if (this.browserTools === undefined) throw new Error(BROWSER_APP_CLOSED)
+    return this.browserTools.call(name, args, caller)
+  }
 
   private ownerByValue(value: string) {
     const p = this.deps.project.targets
@@ -451,6 +479,19 @@ export class ProjectToolset {
         const a = runCommandArgs.parse(args)
         return this.runCommand(a.command, a.backend)
       }
+
+      case 'browser_open':
+      case 'browser_navigate':
+      case 'browser_snapshot':
+      case 'browser_click':
+      case 'browser_type':
+      case 'browser_press':
+      case 'browser_select':
+      case 'browser_eval':
+      case 'browser_wait':
+      case 'browser_screenshot':
+      case 'browser_log':
+        return this.browser(name, args, caller)
 
       default:
         throw new Error(`unknown tool: ${name}`)

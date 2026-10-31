@@ -42,6 +42,17 @@ const TOOL_BRIEFS: Record<ToolName, string> = {
   get_workflow_graph: 'the workflow graph this run is editing',
   propose_workflow: 'hand the operator a workflow graph to review and apply',
   set_node_output: 'return this agent node’s structured result to the workflow',
+  browser_open: 'open the browser the operator shares with you, optionally at a url',
+  browser_navigate: 'go to a url in the shared browser; the result reports scope without blocking',
+  browser_snapshot: 'read the page as text with refs for its elements',
+  browser_click: 'click an element by its snapshot ref',
+  browser_type: 'type into an element by its snapshot ref',
+  browser_press: 'press a key on the page',
+  browser_select: 'choose options in a select by its snapshot ref',
+  browser_eval: 'evaluate JavaScript in the page',
+  browser_wait: 'wait for a selector or a navigation',
+  browser_screenshot: 'save a screenshot as evidence and see it',
+  browser_log: 'console messages and dialogs, including ones the operator triggered',
 }
 
 /** Targets listed inline before the briefing switches to "call list_targets". */

@@ -214,3 +214,49 @@ describe('EngineSupervisor — one engine per project', () => {
     expect(supervisor.served()).toEqual([])
   })
 })
+
+describe('EngineSupervisor browser hooks', () => {
+  it('calls onReady after the engine is healthy', async () => {
+    const child = new FakeChild()
+    const onReady = vi.fn()
+    const supervisor = new EngineSupervisor({
+      enginePath: '/engine.js',
+      spawnFn: () => child as never,
+      fetchFn: async () => ({ ok: true }) as Response,
+      onReady,
+    })
+    const started = supervisor.start('/tmp/acme')
+    queueMicrotask(() => child.stdout.emit('data', Buffer.from(HANDSHAKE + '\n')))
+    const connection = await started
+    expect(onReady).toHaveBeenCalledTimes(1)
+    expect(onReady).toHaveBeenCalledWith(connection)
+  })
+
+  it('calls onExit when the child closes and on stop', async () => {
+    const onExit = vi.fn()
+    const boot = async () => {
+      const child = new FakeChild()
+      const supervisor = new EngineSupervisor({
+        enginePath: '/engine.js',
+        spawnFn: () => child as never,
+        fetchFn: async () => ({ ok: true }) as Response,
+        onExit,
+      })
+      const started = supervisor.start('/tmp/acme')
+      queueMicrotask(() => child.stdout.emit('data', Buffer.from(HANDSHAKE + '\n')))
+      await started
+      return { child, supervisor }
+    }
+
+    const first = await boot()
+    first.child.exitCode = 1
+    first.child.emit('close', 1)
+    expect(onExit).toHaveBeenCalledWith('/tmp/acme')
+
+    onExit.mockClear()
+    const second = await boot()
+    second.supervisor.stop('/tmp/acme')
+    expect(onExit).toHaveBeenCalledTimes(1)
+    expect(onExit).toHaveBeenCalledWith('/tmp/acme')
+  })
+})

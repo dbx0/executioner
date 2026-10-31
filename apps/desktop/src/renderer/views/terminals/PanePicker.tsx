@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { Command } from 'cmdk'
-import { FileText, TerminalSquare } from 'lucide-react'
+import { FileText, Globe, TerminalSquare } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { ALL_AGENT_ROWS } from '../../components/SpawnMenu.js'
 import { Button } from '../../components/ui/button.js'
@@ -18,11 +18,13 @@ const headingClass =
 export function PanePicker({ leafId }: { leafId: string }): JSX.Element {
   const sessions = useApp((s) => s.sessions)
   const files = useApp((s) => s.files)
+  const browsers = useApp((s) => s.browsers)
   const layouts = useApp((s) => s.layouts)
   const activeLayoutId = useApp((s) => s.activeLayoutId)
   const installedAgents = useApp((s) => s.installedAgents)
   const fillPane = useApp((s) => s.fillPane)
   const createSession = useApp((s) => s.createSession)
+  const openBrowser = useApp((s) => s.openBrowser)
   const closePane = useApp((s) => s.closePane)
 
   const layout = layouts.find((l) => l.id === activeLayoutId)
@@ -32,6 +34,7 @@ export function PanePicker({ leafId }: { leafId: string }): JSX.Element {
   const others: { ref: ItemRef; title: string }[] = [
     ...sessions.map((s) => ({ ref: { kind: 'terminal', id: s.id }, title: s.title ?? s.label })),
     ...files.map((f) => ({ ref: { kind: 'file', id: f.id }, title: f.title ?? f.name })),
+    ...browsers.map((b) => ({ ref: { kind: 'browser', id: b.id }, title: b.title === '' ? 'New tab' : b.title })),
   ].filter((x) => !here.has(itemKey(x.ref)))
   const agentRows = ALL_AGENT_ROWS.filter((r) => installedAgents === null || installedAgents.includes(r.id))
 
@@ -55,6 +58,8 @@ export function PanePicker({ leafId }: { leafId: string }): JSX.Element {
               >
                 {ref.kind === 'file' ? (
                   <FileText className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                ) : ref.kind === 'browser' ? (
+                  <Globe className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
                 ) : (
                   <TerminalSquare className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
                 )}
@@ -67,6 +72,10 @@ export function PanePicker({ leafId }: { leafId: string }): JSX.Element {
           <Command.Item value="new Shell" onSelect={() => void createSession({ kind: 'shell' }, { into: leafId })} className={itemClass}>
             <TerminalSquare className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
             Shell
+          </Command.Item>
+          <Command.Item value="new Browser" onSelect={() => void openBrowser({ into: leafId })} className={itemClass}>
+            <Globe className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+            Browser
           </Command.Item>
           {agentRows.map(({ id, label, Icon }) => (
             <Command.Item

@@ -129,6 +129,7 @@ export function healLayouts(e: OpenEngagement): OpenEngagement {
   const items: ItemRef[] = [
     ...e.sessions.map((s) => ({ kind: 'terminal', id: s.id })),
     ...e.files.map((f) => ({ kind: 'file', id: f.id })),
+    ...e.browsers.map((b) => ({ kind: 'browser', id: b.id })),
   ]
   let layouts = e.layouts
   for (const item of items) {
@@ -202,6 +203,7 @@ export function syncActive(e: OpenEngagement): OpenEngagement {
   let activeTab: ActiveTab | null = null
   if (item?.kind === 'terminal') activeTab = { kind: 'terminal', id: item.id }
   else if (item?.kind === 'file') activeTab = { kind: 'file', id: item.id }
+  else if (item?.kind === 'browser') activeTab = { kind: 'browser', id: item.id }
   return {
     ...e,
     activeTab,
@@ -306,6 +308,12 @@ export function placeItem(e: OpenEngagement, item: ItemRef, into?: string): Open
   return { ...e, layouts: [...e.layouts, layout], activeLayoutId: layout.id }
 }
 
+/** Split the pane holding `item` with `newItem`, leaving the active layout and focus alone. */
+export function splitItemBeside(e: OpenEngagement, item: ItemRef, dir: 'row' | 'col', newItem: ItemRef): OpenEngagement {
+  const at = locate(e, item)
+  return at === null ? e : splitWith(e, at.layoutId, at.leafId, dir, newItem, at.layoutId === e.activeLayoutId)
+}
+
 /** Layouts and their panes: split, fill, move, resize and focus. */
 export function createLayoutsSlice(
   ctx: SliceCtx,
@@ -326,6 +334,7 @@ export function createLayoutsSlice(
   const closeItem = (item: ItemRef): void => {
     if (item.kind === 'terminal') get().closeSession(item.id)
     else if (item.kind === 'file') get().closeFile(item.id)
+    else if (item.kind === 'browser') get().closeBrowser(item.id)
   }
 
   return {
@@ -396,10 +405,7 @@ export function createLayoutsSlice(
 
     splitBeside: (item, dir, newItem) =>
       patchActive((e) =>
-        relayout(e, (x) => {
-          const at = locate(x, item)
-          return at === null ? x : splitWith(x, at.layoutId, at.leafId, dir, newItem, at.layoutId === x.activeLayoutId)
-        }),
+        relayout(e, (x) => splitItemBeside(x, item, dir, newItem)),
       ),
 
     moveFocus: (dir) =>

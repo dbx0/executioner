@@ -11,6 +11,7 @@ import {
   loadRightCollapsed,
   loadRightTab,
   loadTheme,
+  saveBrowsers,
   saveEditorState,
   saveFiles,
   saveLayouts,
@@ -19,6 +20,7 @@ import {
 } from './persistence.js'
 import type { SliceCtx } from './slices/context.js'
 import { createAgentsSlice } from './slices/agents.js'
+import { createBrowsersSlice } from './slices/browsers.js'
 import { createEditorSlice } from './slices/editor.js'
 import { createEngagementsSlice } from './slices/engagements.js'
 import { createLayoutsSlice } from './slices/layouts.js'
@@ -62,6 +64,13 @@ export const useApp = create<AppState>((set, get) => {
     if (e !== undefined) saveFiles(root, e.files)
   }
 
+  /** Persist one engagement's open browsers so they come back on restart. */
+  const persistBrowsers = (root: string | null): void => {
+    if (root === null) return
+    const e = get().open.find((x) => x.root === root)
+    if (e !== undefined) saveBrowsers(root, e.browsers)
+  }
+
   /** Persist one engagement's per-tab pin/color state. */
   const persistTabMeta = (root: string | null): void => {
     if (root === null) return
@@ -82,6 +91,7 @@ export const useApp = create<AppState>((set, get) => {
     patchActive,
     persistSessions,
     persistFiles,
+    persistBrowsers,
     persistTabMeta,
     persistEditorState,
   }
@@ -120,6 +130,8 @@ export const useApp = create<AppState>((set, get) => {
     sessionState: {},
     subagents: {},
     files: [],
+    browsers: [],
+    browserActivity: {},
     activeTab: null,
     tabMeta: {},
     editorAutoSave: loadEditorAutoSave(),
@@ -143,5 +155,6 @@ export const useApp = create<AppState>((set, get) => {
     ...createSessionsSlice(ctx),
     ...createTabsSlice(ctx),
     ...createLayoutsSlice(ctx),
+    ...createBrowsersSlice(ctx),
   }
 })

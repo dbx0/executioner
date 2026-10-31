@@ -6,6 +6,84 @@ export interface ToolSchema {
 
 const str = { type: 'string' }
 
+const dialogProps = {
+  dialog: { type: 'string', enum: ['accept', 'dismiss'], description: "How to answer a dialog this action opens. Dialogs are dismissed unless this is 'accept'." },
+  promptText: { type: 'string', description: "Text to enter when accepting a prompt() dialog." },
+}
+const refProp = { type: 'string', description: 'An element ref from the latest browser_snapshot. Refs go stale after the page changes.' }
+const shared =
+  ' The browser is shared with the operator and visible to them.'
+
+const BROWSER_SCHEMAS: ToolSchema[] = [
+  {
+    name: 'browser_open',
+    description: 'Open the embedded browser for this session, optionally at a url, and report whether the url is in scope.' + shared,
+    inputSchema: { type: 'object', properties: { url: str } },
+  },
+  {
+    name: 'browser_navigate',
+    description: 'Go to a url. The result carries scopeStatus (in/out/unknown); out of scope pages are reported, not blocked, so check it.' + shared,
+    inputSchema: { type: 'object', properties: { url: str, ...dialogProps }, required: ['url'] },
+  },
+  {
+    name: 'browser_snapshot',
+    description: 'Return the page as text with a ref for each interactive element. Use these refs for click, type and select; they go stale after the page changes, so take a new snapshot.' + shared,
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'browser_click',
+    description: 'Click the element with the given ref from browser_snapshot.' + shared,
+    inputSchema: { type: 'object', properties: { ref: refProp, ...dialogProps }, required: ['ref'] },
+  },
+  {
+    name: 'browser_type',
+    description: 'Type text into the element with the given ref, optionally clearing it first and pressing Enter after.' + shared,
+    inputSchema: {
+      type: 'object',
+      properties: { ref: refProp, text: str, clear: { type: 'boolean' }, submit: { type: 'boolean' }, ...dialogProps },
+      required: ['ref', 'text'],
+    },
+  },
+  {
+    name: 'browser_press',
+    description: 'Press a key such as Enter, Tab or Escape on the page.' + shared,
+    inputSchema: { type: 'object', properties: { key: str, ...dialogProps }, required: ['key'] },
+  },
+  {
+    name: 'browser_select',
+    description: 'Choose option values in the select element with the given ref.' + shared,
+    inputSchema: {
+      type: 'object',
+      properties: { ref: refProp, values: { type: 'array', items: str } },
+      required: ['ref', 'values'],
+    },
+  },
+  {
+    name: 'browser_eval',
+    description: 'Evaluate a JavaScript expression in the page and return its value.' + shared,
+    inputSchema: { type: 'object', properties: { expression: str, ...dialogProps }, required: ['expression'] },
+  },
+  {
+    name: 'browser_wait',
+    description: 'Wait for a css selector to appear or for a navigation, up to timeoutMs (default 5000, at most 30000). matched says whether it happened.' + shared,
+    inputSchema: {
+      type: 'object',
+      properties: { selector: str, navigation: { type: 'boolean' }, timeoutMs: { type: 'number' } },
+    },
+  },
+  {
+    name: 'browser_screenshot',
+    description: 'Take a png screenshot of the page. It is saved under the engagement evidence folder and its path is returned along with the image.' + shared,
+    inputSchema: { type: 'object', properties: { fullPage: { type: 'boolean' } } },
+  },
+  {
+    name: 'browser_log',
+    description:
+      'Return console messages and dialogs seen since the cursor, including those the operator triggered, which is how an XSS alert becomes evidence. Pass the returned next as since to read on.' + shared,
+    inputSchema: { type: 'object', properties: { since: { type: 'number' } } },
+  },
+]
+
 /** JSON-schema tool definitions returned by tools/list. */
 export const TOOL_SCHEMAS: ToolSchema[] = [
   { name: 'list_targets', description: 'List all targets in the project.', inputSchema: { type: 'object', properties: {} } },
@@ -122,4 +200,5 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
       required: ['graph', 'summary'],
     },
   },
+  ...BROWSER_SCHEMAS,
 ]

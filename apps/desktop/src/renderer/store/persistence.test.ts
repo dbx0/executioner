@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { leaf, leaves, splitLeaf, type ItemRef, type PaneNode } from '../lib/pane-tree.js'
-import { loadLayouts, saveLayouts } from './persistence.js'
+import { loadBrowsers, loadLayouts, saveBrowsers, saveLayouts } from './persistence.js'
 import { reconcileLayouts } from './slices/layouts.js'
 import type { Layout } from './types.js'
 
@@ -144,5 +144,24 @@ describe('layout persistence', () => {
     expect(saved?.layouts.map((l) => l.id)).toEqual(['ok'])
     const { layouts } = reconcileLayouts(saved?.layouts ?? null, [t('s1')], null, saved?.activeLayoutId)
     expect(layouts[0]?.focusedLeafId).toBe('l1')
+  })
+})
+
+describe('browser persistence', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('browsers persist and restore with their ids', () => {
+    saveBrowsers(ROOT, [{ id: 'b1', owner: 't1', url: 'https://x.test', title: 'X' }])
+    expect(JSON.parse(localStorage.getItem(`exe.browsers:${ROOT}`) ?? 'null')).toEqual([
+      { id: 'b1', url: 'https://x.test', title: 'X' },
+    ])
+    expect(loadBrowsers(ROOT)).toEqual([{ id: 'b1', url: 'https://x.test', title: 'X' }])
+  })
+
+  it('a browser pane survives reconcile under its stable id', () => {
+    const b: ItemRef = { kind: 'browser', id: 'b1' }
+    const { layouts } = reconcileLayouts([splitLayout(t('s1'), b)], [t('s1'), b], null)
+    expect(layouts).toHaveLength(1)
+    expect(leaves(layouts[0]?.root ?? leaf(null)).map((p) => p.item)).toEqual([t('s1'), b])
   })
 })

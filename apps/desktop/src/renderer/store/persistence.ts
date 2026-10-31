@@ -3,9 +3,11 @@ import { isKnownTheme, DEFAULT_THEME } from '../lib/themes.js'
 import type {
   DiskBaseline,
   ExecutionMode,
+  BrowserTab,
   FileTab,
   Layout,
   OpenEngagement,
+  PersistedBrowser,
   PersistedFile,
   PersistedSession,
   Recent,
@@ -135,6 +137,40 @@ export function loadFiles(root: string): PersistedFile[] {
         typeof (f as PersistedFile).id === 'string' &&
         typeof (f as PersistedFile).path === 'string' &&
         typeof (f as PersistedFile).name === 'string',
+    )
+  } catch {
+    return []
+  }
+}
+
+/** localStorage key holding one engagement's open browsers, keyed by its root. */
+const BROWSERS_KEY_PREFIX = 'exe.browsers:'
+function browsersKey(root: string): string {
+  return `${BROWSERS_KEY_PREFIX}${root}`
+}
+
+export function saveBrowsers(root: string, browsers: BrowserTab[]): void {
+  try {
+    const persisted: PersistedBrowser[] = browsers.map((b) => ({ id: b.id, url: b.url, title: b.title }))
+    localStorage.setItem(browsersKey(root), JSON.stringify(persisted))
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+export function loadBrowsers(root: string): PersistedBrowser[] {
+  try {
+    const raw = localStorage.getItem(browsersKey(root))
+    if (raw === null) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter(
+      (b): b is PersistedBrowser =>
+        typeof b === 'object' &&
+        b !== null &&
+        typeof (b as PersistedBrowser).id === 'string' &&
+        typeof (b as PersistedBrowser).url === 'string' &&
+        typeof (b as PersistedBrowser).title === 'string',
     )
   } catch {
     return []

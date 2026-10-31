@@ -59,6 +59,8 @@ function seed(): void {
     sessionState: {},
     subagents: {},
     files: [],
+    browsers: [],
+    browserActivity: {},
     activeTab: { kind: 'terminal', id: 't1' },
     tabMeta: {},
     editorDrafts: {},
@@ -533,5 +535,89 @@ describe('TerminalsView tab drag and close', () => {
     fireEvent.contextMenu(screen.getByText('Close all 2 panes? An agent is still working.'))
     expect(screen.queryByText('Close Others')).toBeNull()
     expect(screen.getByText('Close all 2 panes? An agent is still working.')).toBeTruthy()
+  })
+})
+
+describe('TerminalsView browser tabs', () => {
+  const browserApi = {
+    place: vi.fn(),
+    setOccluded: vi.fn(),
+    operator: vi.fn(() => Promise.resolve()),
+    onState: vi.fn(() => () => undefined),
+  }
+  const stripEl = (): HTMLElement => document.querySelector('.scrollbar-none') as HTMLElement
+
+  beforeEach(() => {
+    seed()
+    window.executioner = { browser: browserApi } as unknown as typeof window.executioner
+    const layouts = [
+      ...state().layouts,
+      { id: 'browser:b1', root: { type: 'leaf', id: 'pb', item: { kind: 'browser', id: 'b1' } }, focusedLeafId: 'pb' },
+    ]
+    const sessions = [
+      { id: 't1', label: 'Shell 1', agent: 'shell' },
+      { id: 't2', label: 'Claude 1', agent: 'claude' },
+    ] as never
+    const browsers = [{ id: 'b1', url: 'https://a.test/', title: 'Docs', owner: null }]
+    // Layout edits re-derive the top level from the engagement, so seed both.
+    useApp.setState({
+      open: [{ ...state().open[0]!, sessions, browsers, layouts: layouts as never }],
+      sessions,
+      browsers,
+      browserActivity: {},
+      layouts: layouts as never,
+    })
+  })
+
+  it('a browser tab shows the page title and a background activity dot', () => {
+    render(<TerminalsView />)
+    expect(within(stripEl()).getByText('Docs')).toBeTruthy()
+    expect(within(stripEl()).queryByLabelText('Agent active')).toBeNull()
+    act(() => useApp.setState({ browserActivity: { b1: true } }))
+    expect(within(stripEl()).getByLabelText('Agent active')).toBeTruthy()
+    // The browser is not the active layout: its view is parked.
+    expect(browserApi.place).toHaveBeenCalledWith({ root: '/r', id: 'b1', bounds: null })
+  })
+
+  it('an empty title reads New tab', () => {
+    useApp.setState({ browsers: [{ id: 'b1', url: 'about:blank', title: '', owner: null }] })
+    render(<TerminalsView />)
+    expect(within(stripEl()).getByText('New tab')).toBeTruthy()
+  })
+
+  it('Hand to agent lists agent sessions only and sets the owner', () => {
+    const setBrowserOwner = vi.fn(() => Promise.resolve())
+    useApp.setState({ setBrowserOwner })
+    render(<TerminalsView />)
+    fireEvent.contextMenu(within(stripEl()).getByText('Docs'))
+    expect(screen.queryByText('Take back')).toBeNull()
+    fireEvent.click(screen.getByText('Hand to agent…'))
+    const menu = document.querySelector('.z-\\[71\\]') as HTMLElement
+    expect(within(menu).queryByText('Shell 1')).toBeNull()
+    fireEvent.click(within(menu).getByText('Claude 1'))
+    expect(setBrowserOwner).toHaveBeenCalledWith('b1', 't2')
+  })
+
+  it('Take back clears the owner', () => {
+    const setBrowserOwner = vi.fn(() => Promise.resolve())
+    useApp.setState({ setBrowserOwner, browsers: [{ id: 'b1', url: 'https://a.test/', title: 'Docs', owner: 't2' }] })
+    render(<TerminalsView />)
+    fireEvent.contextMenu(within(stripEl()).getByText('Docs'))
+    fireEvent.click(screen.getByText('Take back'))
+    expect(setBrowserOwner).toHaveBeenCalledWith('b1', null)
+  })
+
+  it('the pane picker offers Browser and fills the pane', () => {
+    const openBrowser = vi.fn(() => Promise.resolve())
+    useApp.setState({ openBrowser })
+    render(<TerminalsView />)
+    act(() => state().splitPane('p1', 'row'))
+    const root = state().layouts[0]!.root
+    const id = root.type === 'split' && root.b.type === 'leaf' ? root.b.id : ''
+    const slot = within(screen.getByTestId(`empty-pane-${id}`))
+    // An open browser outside this layout is listed under Open.
+    expect(slot.getByText('Docs')).toBeTruthy()
+    fireEvent.click(slot.getByText('Browser'))
+    expect(openBrowser).toHaveBeenCalledWith({ into: id })
   })
 })

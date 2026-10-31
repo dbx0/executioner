@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createIpcHandlers } from './ipc.js'
+import { createIpcHandlers, validBrowserTarget } from './ipc.js'
 
 const connection = { port: 5000, token: 't'.repeat(40), projectRoot: '/tmp/acme' }
 
@@ -221,5 +221,19 @@ describe('closeProject', () => {
     handlers.closeProject({ dir: '/tmp/a' })
     expect(supervisor.stop).toHaveBeenCalledWith('/tmp/a')
     expect(supervisor.stop).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('browser request validation', () => {
+  it('rejects unknown roots and bad ids', () => {
+    const served = ['/tmp/a']
+    expect(validBrowserTarget(served, { root: '/tmp/a', id: 'tab_1-x' })).toBe(true)
+    expect(validBrowserTarget(served, { root: '/tmp/b', id: 'x' })).toBe(false)
+    expect(validBrowserTarget(served, { root: '/tmp/a', id: '' })).toBe(false)
+    expect(validBrowserTarget(served, { root: '/tmp/a', id: 'a/b' })).toBe(false)
+    expect(validBrowserTarget(served, { root: '/tmp/a', id: 'x'.repeat(65) })).toBe(false)
+    expect(validBrowserTarget(served, { root: '/tmp/a' })).toBe(false)
+    expect(validBrowserTarget(served, null)).toBe(false)
+    expect(validBrowserTarget(served, 'x')).toBe(false)
   })
 })

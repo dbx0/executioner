@@ -20,6 +20,8 @@ function seedEngagement(): void {
     sessionState: {},
     subagents: {},
     files: [{ id: 'f1', path: 'a.txt', name: 'a.txt' }],
+    browsers: [],
+    browserActivity: {},
     activeTab: { kind: 'file', id: 'f1' },
     tabMeta: {},
     editorDrafts: {},

@@ -14,6 +14,9 @@ import { CancellationRegistry } from './execution/cancellation.js'
 import { createApp } from './transport/server.js'
 import { attachEventSocket } from './transport/ws.js'
 import { attachPtySocket } from './transport/pty-ws.js'
+import { attachBrowserHostSocket } from './browser/socket.js'
+import { BrowserHostHub } from './browser/host-hub.js'
+import { BrowserRegistry, busBrowserPublisher } from './browser/registry.js'
 
 const VERSION = '0.0.1'
 
@@ -163,7 +166,8 @@ export async function runCli(argv: string[]): Promise<number> {
     // Port is unknown until the server binds below; the app reads it lazily
     // through this mutable holder when it builds argv for spawned agents.
     const connection = { port: 0, token }
-    const app = createApp({ project, token, bus, registry, executor, runs, ptyRegistry, connection })
+    const browsers = { registry: new BrowserRegistry(busBrowserPublisher(bus)), hub: new BrowserHostHub() }
+    const app = createApp({ project, token, bus, registry, executor, runs, ptyRegistry, connection, browsers })
 
     const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
       const s = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 }, () => resolve(s))
@@ -182,6 +186,7 @@ export async function runCli(argv: string[]): Promise<number> {
 
     attachEventSocket(server as unknown as import('node:http').Server, bus, token)
     attachPtySocket(server as unknown as import('node:http').Server, ptyRegistry, token)
+    attachBrowserHostSocket(server as unknown as import('node:http').Server, browsers.hub, token)
 
     process.stdout.write(
       `${formatHandshake({

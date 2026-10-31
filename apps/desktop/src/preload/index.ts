@@ -36,6 +36,39 @@ contextBridge.exposeInMainWorld('executioner', {
   writeEngagementPhoto: (req: { root: string; dataUrl: string }): Promise<string | null> =>
     ipcRenderer.invoke('write-engagement-photo', req),
   clearEngagementPhoto: (req: { root: string }): void => ipcRenderer.send('clear-engagement-photo', req),
+  // Embedded browser: main owns the native views; the renderer reports where a
+  // pane sits, drives the address bar and hears the page's state.
+  browser: {
+    place: (req: {
+      root: string
+      id: string
+      bounds: { x: number; y: number; width: number; height: number } | null
+    }): void => ipcRenderer.send('browser-place', req),
+    setOccluded: (occluded: boolean): void => ipcRenderer.send('browser-occluded', { occluded }),
+    operator: (req: {
+      root: string
+      id: string
+      op: 'back' | 'forward' | 'reload' | 'stop' | { navigate: string }
+    }): Promise<void> => ipcRenderer.invoke('browser-operator', req) as Promise<void>,
+    onState: (
+      listener: (e: {
+        root: string
+        id: string
+        state: {
+          url: string
+          title: string
+          loading: boolean
+          canGoBack: boolean
+          canGoForward: boolean
+          crashed: boolean
+        }
+      }) => void,
+    ): (() => void) => {
+      const handler = (_event: unknown, e: Parameters<typeof listener>[0]): void => listener(e)
+      ipcRenderer.on('browser-state', handler)
+      return () => ipcRenderer.removeListener('browser-state', handler)
+    },
+  },
   // Startup update notice: the newer release, if any, and the in-place install.
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
   installUpdate: (): Promise<void> => ipcRenderer.invoke('install-update') as Promise<void>,

@@ -111,8 +111,17 @@ export interface FileTab {
   dirty?: boolean
 }
 
-/** Which tab the unified workspace strip has selected: a terminal or a file. */
-export type ActiveTab = { kind: 'terminal'; id: string } | { kind: 'file'; id: string }
+/** One embedded browser, shown as a pane. The engine owns its id and who (if anyone) drives it. */
+export interface BrowserTab {
+  id: string
+  url: string
+  title: string
+  /** The session whose agent drives this browser, or null when the user does. */
+  owner: string | null
+}
+
+/** Which tab the unified workspace strip has selected: a terminal, a file or a browser. */
+export type ActiveTab = { kind: 'terminal'; id: string } | { kind: 'file'; id: string } | { kind: 'browser'; id: string }
 
 /**
  * Per-tab presentation state that isn't part of the tab's identity: whether it's
@@ -164,6 +173,10 @@ export interface OpenEngagement {
   subagents: Record<string, Subagent[]>
   /** Files opened as tabs in this engagement's workspace. */
   files: FileTab[]
+  /** Embedded browsers open in this engagement's workspace. */
+  browsers: BrowserTab[]
+  /** Which browsers an agent is acting in right now, keyed by browser id. */
+  browserActivity: Record<string, boolean>
   /** The unified workspace selection: a terminal tab or a file tab (or none). */
   activeTab: ActiveTab | null
   /** Per-tab pin/color state, keyed by `${kind}:${id}`. */
@@ -198,6 +211,13 @@ export interface PersistedFile {
   path: string
   name: string
   title?: string
+}
+
+/** The serializable shape of one open browser, persisted per engagement root. */
+export interface PersistedBrowser {
+  id: string
+  url: string
+  title: string
 }
 
 /** The user's preferred execution backend kind, chosen during onboarding. */
@@ -268,6 +288,8 @@ export interface AppState {
   sessionState: Record<string, SessionState>
   subagents: Record<string, Subagent[]>
   files: FileTab[]
+  browsers: BrowserTab[]
+  browserActivity: Record<string, boolean>
   activeTab: ActiveTab | null
   tabMeta: Record<string, TabMeta>
   /** Unsaved buffer per file-tab id. Outlives the editor component. */
@@ -385,6 +407,20 @@ export interface AppState {
   clearDiskBaseline: (id: string) => void
   setExternalMutation: (id: string, mutation: ExternalMutation | null) => void
   closeFile: (id: string) => void
+
+  /** Open a browser as a pane; with `into` it fills that empty pane of the active layout. */
+  openBrowser: (opts?: { into?: string; url?: string }) => Promise<void>
+  /** Close a browser on the engine and drop its pane. */
+  closeBrowser: (id: string) => void
+  /** Hand a browser to a session's agent, or take it back with null. */
+  setBrowserOwner: (id: string, owner: string | null) => Promise<void>
+  /** Apply a browser event the engine published to the active engagement. */
+  handleBrowserEvent: (
+    event: 'opened' | 'owner' | 'closed' | 'activity',
+    item: BrowserTab & { active?: boolean },
+  ) => void
+  /** Reconcile the active engagement's browsers with the engine's. */
+  syncBrowsers: () => Promise<void>
   /** Select any tab in the workspace strip (terminal or file). */
   setActiveTab: (tab: ActiveTab) => void
   /** Rename a terminal or file tab's display title (empty reverts to default). */

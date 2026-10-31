@@ -92,6 +92,8 @@ export function mirror(open: OpenEngagement[], activeRoot: string | null): Pick<
   | 'sessionState'
   | 'subagents'
   | 'files'
+  | 'browsers'
+  | 'browserActivity'
   | 'activeTab'
   | 'tabMeta'
   | 'editorDrafts'
@@ -113,6 +115,8 @@ export function mirror(open: OpenEngagement[], activeRoot: string | null): Pick<
       sessionState: {},
       subagents: {},
       files: [],
+      browsers: [],
+      browserActivity: {},
       activeTab: null,
       tabMeta: {},
       editorDrafts: {},
@@ -133,6 +137,8 @@ export function mirror(open: OpenEngagement[], activeRoot: string | null): Pick<
     sessionState: a.sessionState,
     subagents: a.subagents,
     files: a.files,
+    browsers: a.browsers,
+    browserActivity: a.browserActivity,
     activeTab: a.activeTab,
     tabMeta: a.tabMeta,
     editorDrafts: a.editorDrafts,

@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useEffect, useState } from 'react'
-import { TerminalSquare } from 'lucide-react'
+import { Globe, TerminalSquare } from 'lucide-react'
 import { useApp } from '../store.js'
 import { ClaudeLogo } from './brand/ClaudeLogo.js'
 import { CodexLogo } from './brand/CodexLogo.js'
@@ -40,6 +40,7 @@ export function SpawnMenu({
   align?: 'start' | 'end'
 }): JSX.Element {
   const createSession = useApp((s) => s.createSession)
+  const openBrowser = useApp((s) => s.openBrowser)
   const client = useApp((s) => s.client)
   const installedAgents = useApp((s) => s.installedAgents)
   const [teams, setTeams] = useState<TeamSummary[]>([])
@@ -80,6 +81,10 @@ export function SpawnMenu({
           <DropdownMenuItem onSelect={() => void createSession({ kind: 'shell' })}>
             <TerminalSquare />
             Terminal
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void openBrowser()}>
+            <Globe />
+            Browser
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {agentRows.length > 0 && <DropdownMenuLabel>Agents</DropdownMenuLabel>}

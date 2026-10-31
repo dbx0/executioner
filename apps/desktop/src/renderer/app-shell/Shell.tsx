@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import { useEffect } from 'react'
 import { useApp, type ViewId } from '../store.js'
+import type { BrowserTab } from '../store/types.js'
 import { eventsUrl } from '../lib/connection.js'
 import { emitChange, type ChangeTopic } from '../lib/engine-changes.js'
 import { parseEngineEvent } from '../lib/events.js'
@@ -24,6 +25,7 @@ import { TargetsView } from '../views/TargetsView.js'
 import { FindingsView } from '../views/FindingsView.js'
 import { WorkflowsView } from '../views/WorkflowsView.js'
 import { ToolsView } from '../views/ToolsView.js'
+import { useBrowserOcclusion } from '../lib/browser-occlusion.js'
 import { TerminalsView } from '../views/TerminalsView.js'
 import { SettingsView } from '../views/SettingsView.js'
 import { isMacPlatform, workspaceShortcut } from '../lib/shortcuts.js'
@@ -151,6 +153,12 @@ function useAgentStatusRefresh(): void {
 function useAgentEvents(): void {
   const connection = useApp((s) => s.connection)
   const handleAgentEvent = useApp((s) => s.handleAgentEvent)
+  const handleBrowserEvent = useApp((s) => s.handleBrowserEvent)
+  const syncBrowsers = useApp((s) => s.syncBrowsers)
+  // Browsers opened while this engagement was in the background arrive here, not as events.
+  useEffect(() => {
+    if (connection !== null) void syncBrowsers()
+  }, [connection, syncBrowsers])
   useEffect(() => {
     if (connection === null) return
     const ws = new WebSocket(eventsUrl(connection))
@@ -158,6 +166,15 @@ function useAgentEvents(): void {
       const e = parseEngineEvent(String(m.data))
       if (e?.type === 'change') {
         emitChange(e.nodeId as ChangeTopic)
+        return
+      }
+      if (e?.type === 'browser') {
+        if (e.nodeId !== 'opened' && e.nodeId !== 'owner' && e.nodeId !== 'closed' && e.nodeId !== 'activity') return
+        try {
+          handleBrowserEvent(e.nodeId, JSON.parse(e.data) as BrowserTab & { active?: boolean })
+        } catch {
+          /* ignore malformed payloads */
+        }
         return
       }
       if (e?.type === 'agent') {
@@ -182,7 +199,7 @@ function useAgentEvents(): void {
       }
     }
     return () => ws.close()
-  }, [connection, handleAgentEvent])
+  }, [connection, handleAgentEvent, handleBrowserEvent])
 }
 
 /** On launch, re-open the engagements that were open last time so the user lands back in their session. */
@@ -200,6 +217,7 @@ export function Shell(): JSX.Element {
   useKeybindings()
   useAgentEvents()
   useAgentStatusRefresh()
+  useBrowserOcclusion()
 
   return (
     <TooltipProvider delayDuration={300}>

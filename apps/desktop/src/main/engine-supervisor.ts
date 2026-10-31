@@ -29,6 +29,10 @@ export interface SupervisorOptions {
   spawnEnv?: NodeJS.ProcessEnv
   spawnFn?: SpawnFn
   fetchFn?: FetchFn
+  /** Called once an engine is healthy, e.g. to connect the browser host to it. */
+  onReady?: (conn: EngineConnection) => void
+  /** Called with the project dir when its engine is gone, by exit or by stop. */
+  onExit?: (dir: string) => void
 }
 
 /** A live engine: the child process and the connection that reaches it. */
@@ -61,6 +65,8 @@ export class EngineSupervisor {
   private readonly spawnEnv: NodeJS.ProcessEnv
   private readonly spawnFn: SpawnFn
   private readonly fetchFn: FetchFn
+  private readonly onReady: ((conn: EngineConnection) => void) | undefined
+  private readonly onExit: ((dir: string) => void) | undefined
 
   constructor(options: SupervisorOptions) {
     this.enginePath = options.enginePath
@@ -68,6 +74,8 @@ export class EngineSupervisor {
     this.spawnEnv = options.spawnEnv ?? process.env
     this.spawnFn = options.spawnFn ?? (spawn as unknown as SpawnFn)
     this.fetchFn = options.fetchFn ?? ((url) => fetch(url).then((r) => ({ ok: r.ok })))
+    this.onReady = options.onReady
+    this.onExit = options.onExit
   }
 
   /**
@@ -140,7 +148,10 @@ export class EngineSupervisor {
       child.on('close', (code) => {
         // However it ends, it is no longer serving this project. Guard on
         // identity so a restart's new child is never evicted by the old one.
-        if (this.engines.get(projectDir)?.child === child) this.engines.delete(projectDir)
+        if (this.engines.get(projectDir)?.child === child) {
+          this.engines.delete(projectDir)
+          this.onExit?.(projectDir)
+        }
         if (!settled) {
           settled = true
           const detail = stderr.trim() === '' ? '' : `: ${stderr.trim().split('\n').slice(-8).join('\n')}`
@@ -175,6 +186,7 @@ export class EngineSupervisor {
           }
           this.engines.set(projectDir, { child, connection })
           resolve(connection)
+          this.onReady?.(connection)
           return
         }
       } catch {
@@ -190,6 +202,7 @@ export class EngineSupervisor {
     const engine = this.engines.get(projectDir)
     if (engine === undefined) return
     this.engines.delete(projectDir)
+    this.onExit?.(projectDir)
     engine.child.kill('SIGTERM')
   }
 

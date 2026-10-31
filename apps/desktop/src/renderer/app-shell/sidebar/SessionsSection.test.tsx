@@ -104,6 +104,8 @@ describe('SessionsSection', () => {
       root: '/r',
       sessions,
       files: [],
+      browsers: [],
+      browserActivity: {},
       layouts,
       activeLayoutId: 'terminal:c',
       activeTab: { kind: 'terminal', id: 'c' },

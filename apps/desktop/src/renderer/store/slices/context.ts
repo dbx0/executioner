@@ -16,6 +16,8 @@ export interface SliceCtx {
   persistSessions: (root: string | null) => void
   /** Persist one engagement's open file tabs so they (and their titles) come back. */
   persistFiles: (root: string | null) => void
+  /** Persist one engagement's open browsers so they come back on restart. */
+  persistBrowsers: (root: string | null) => void
   /** Persist one engagement's per-tab pin/color state. */
   persistTabMeta: (root: string | null) => void
   /** Persist one engagement's unsaved buffers and disk baselines. */

@@ -3,6 +3,7 @@ import type { EngineConnection } from './lib/connection.js'
 import type { BackendProfileInput, BackendTestResult, SshEnrollResult } from './api/backends.js'
 import type { ConnectionHints } from '../main/connection-hints.js'
 import type { UpdateInfo } from '../main/update.js'
+import type { BrowserState } from '../main/browser/page.js'
 
 declare global {
   interface Window {
@@ -41,6 +42,19 @@ declare global {
        *  hand. Served by the main process, hence asynchronous. */
       clipboardRead(): Promise<string>
       clipboardWrite(text: string): Promise<void>
+      /** Embedded browser. Main owns the native views; this reports where a pane
+       *  sits (null = not on screen), hides them under overlays, drives the address
+       *  bar and delivers each page's state. */
+      browser: {
+        place(req: { root: string; id: string; bounds: { x: number; y: number; width: number; height: number } | null }): void
+        setOccluded(occluded: boolean): void
+        operator(req: {
+          root: string
+          id: string
+          op: 'back' | 'forward' | 'reload' | 'stop' | { navigate: string }
+        }): Promise<void>
+        onState(listener: (e: { root: string; id: string; state: BrowserState }) => void): () => void
+      }
       /** A newer release than the running one, or null when up to date or offline. */
       checkForUpdate(): Promise<UpdateInfo | null>
       /** Quit and install the release found by checkForUpdate, then reopen. */

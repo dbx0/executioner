@@ -99,6 +99,31 @@ export function isEngagementRoot(root: unknown): root is string {
   }
 }
 
+const BROWSER_ID = /^[A-Za-z0-9_-]{1,64}$/
+
+/** True for a browser IPC request aimed at a served engagement with a well-formed browser id. */
+export function validBrowserTarget(served: string[], req: unknown): req is { root: string; id: string } {
+  if (typeof req !== 'object' || req === null) return false
+  const { root, id } = req as { root?: unknown; id?: unknown }
+  return typeof root === 'string' && served.includes(root) && typeof id === 'string' && BROWSER_ID.test(id)
+}
+
+/** The bounds the renderer reports for a browser pane; null means not on screen. */
+export function validBounds(b: unknown): b is { x: number; y: number; width: number; height: number } | null {
+  if (b === null) return true
+  if (typeof b !== 'object') return false
+  const { x, y, width, height } = b as Record<string, unknown>
+  return [x, y, width, height].every((n) => typeof n === 'number' && Number.isFinite(n))
+}
+
+/** An address-bar operation: a fixed verb, or a navigation to a string URL. */
+export function validBrowserOp(op: unknown): op is 'back' | 'forward' | 'reload' | 'stop' | { navigate: string } {
+  if (op === 'back' || op === 'forward' || op === 'reload' || op === 'stop') return true
+  return (
+    typeof op === 'object' && op !== null && typeof (op as { navigate?: unknown }).navigate === 'string'
+  )
+}
+
 export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
 
   return {

@@ -92,4 +92,21 @@ describe('dispatchRpc', () => {
       expect((res.result as { isError?: boolean }).isError).toBeUndefined()
     })
   })
+
+  it('an image result becomes text plus image content', async () => {
+    vi.spyOn(toolset, 'call').mockResolvedValue({
+      __mcpImage: { data: 'AAAA', mimeType: 'image/png' },
+      result: { path: '/tmp/x.png' },
+    })
+    const res = await dispatchRpc(toolset, {
+      jsonrpc: '2.0',
+      id: 9,
+      method: 'tools/call',
+      params: { name: 'browser_screenshot', arguments: {} },
+    })
+    expect((res.result as { content: unknown[] }).content).toEqual([
+      { type: 'text', text: JSON.stringify({ path: '/tmp/x.png' }) },
+      { type: 'image', data: 'AAAA', mimeType: 'image/png' },
+    ])
+  })
 })

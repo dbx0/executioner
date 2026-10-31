@@ -60,6 +60,7 @@ export function WorkspaceTab({
   onCloseAll,
   confirmCloseAll,
   confirmBulk,
+  menuExtra,
 }: {
   tab: ActiveTab
   title: string
@@ -101,6 +102,8 @@ export function WorkspaceTab({
   confirmCloseAll?: string | undefined
   /** The question to ask before each bulk close, when it would end a working agent. */
   confirmBulk?: { others?: string | undefined; right?: string | undefined; left?: string | undefined } | undefined
+  /** Extra menu entries for this kind of tab (a browser's hand-off), drawn above Close; `close` dismisses the menu. */
+  menuExtra?: ((close: () => void) => JSX.Element) | undefined
 }): JSX.Element {
   const renameTab = useApp((s) => s.renameTab)
   const renameRequest = useApp((s) => s.renameRequest)
@@ -311,6 +314,12 @@ export function WorkspaceTab({
                     Move pane to new tab
                   </TabMenuItem>
                 )}
+                <TabMenuSeparator />
+              </>
+            )}
+            {menuExtra !== undefined && (
+              <>
+                {menuExtra(() => setMenuPos(null))}
                 <TabMenuSeparator />
               </>
             )}

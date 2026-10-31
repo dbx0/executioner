@@ -1,6 +1,6 @@
 import type { CSSProperties, JSX, MouseEvent as ReactMouseEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Plus, TerminalSquare, FileText, SquareDashed } from 'lucide-react'
+import { Plus, TerminalSquare, FileText, Globe, SquareDashed } from 'lucide-react'
 import { useApp, type ActiveTab } from '../store.js'
 import { Terminal } from '../components/terminal/Terminal.js'
 import { FileViewer, isMarkdownPath } from '../components/workspace/FileViewer.js'
@@ -13,6 +13,7 @@ import { keepsNativeMenu } from '../lib/native-context-menu.js'
 import { itemKey, leaves, rects, type Rect } from '../lib/pane-tree.js'
 import { cn } from '../lib/utils.js'
 import { bulkCloseConfirmation, bulkCloseTargets, closeConfirmation, type BulkClose } from '../store/slices/layouts.js'
+import { BrowserHandoffItems, BrowserPane } from './terminals/BrowserPane.js'
 import { EmptySessionActions } from './terminals/EmptySessionActions.js'
 import { PaneMenu, PaneOverlay } from './terminals/PaneOverlay.js'
 import { RunAgentCards } from './terminals/RunAgentCards.js'
@@ -29,6 +30,9 @@ export function TerminalsView(): JSX.Element {
   const client = useApp((s) => s.client)
   const sessions = useApp((s) => s.sessions)
   const files = useApp((s) => s.files)
+  const browsers = useApp((s) => s.browsers)
+  const browserActivity = useApp((s) => s.browserActivity)
+  const activeRoot = useApp((s) => s.activeRoot)
   const layouts = useApp((s) => s.layouts)
   const activeLayoutId = useApp((s) => s.activeLayoutId)
   const activeView = useApp((s) => s.activeView)
@@ -51,7 +55,7 @@ export function TerminalsView(): JSX.Element {
 
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number; leafId: string } | null>(null)
 
-  const empty = sessions.length === 0 && files.length === 0
+  const empty = sessions.length === 0 && files.length === 0 && browsers.length === 0
   const hostRef = useRef<HTMLDivElement>(null)
 
   const activeLayout = layouts.find((l) => l.id === activeLayoutId)
@@ -119,7 +123,7 @@ export function TerminalsView(): JSX.Element {
   const strip = layouts.map((layout) => {
     const panes = leaves(layout.root)
     const item = (panes.find((p) => p.id === layout.focusedLeafId)?.item ?? panes.find((p) => p.item !== null)?.item) ?? null
-    const tab: ActiveTab | null = item === null ? null : { kind: item.kind === 'file' ? 'file' : 'terminal', id: item.id }
+    const tab: ActiveTab | null = item === null ? null : { kind: item.kind === 'file' ? 'file' : item.kind === 'browser' ? 'browser' : 'terminal', id: item.id }
     return { layout, tab, split: panes.length >= 2 }
   })
   const isPinned = (layoutId: string): boolean => tabMeta[layoutId]?.pinned === true
@@ -208,6 +212,24 @@ export function TerminalsView(): JSX.Element {
                 />
               )
             }
+            if (tab.kind === 'browser') {
+              const b = browsers.find((x) => x.id === tab.id)
+              if (b === undefined) return null
+              return (
+                <WorkspaceTab
+                  key={`l-${layout.id}`}
+                  {...common}
+                  title={b.title === '' ? 'New tab' : b.title}
+                  icon={<Globe className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />}
+                  statusDot={
+                    browserActivity[b.id] === true ? (
+                      <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-foreground" role="img" aria-label="Agent active" />
+                    ) : undefined
+                  }
+                  menuExtra={isSplit ? undefined : (close) => <BrowserHandoffItems id={b.id} close={close} />}
+                />
+              )
+            }
             const f = files.find((x) => x.id === tab.id)
             if (f === undefined) return null
             return (
@@ -291,6 +313,22 @@ export function TerminalsView(): JSX.Element {
                 return (
                   <div key={f.id} className={cn('absolute', shown ? 'block' : 'hidden')} style={pane.style} {...pane.focus}>
                     <FileViewer client={client} file={f} />
+                  </div>
+                )
+              })}
+            {activeRoot !== null &&
+              browsers.map((b) => {
+                const pane = paneProps(itemKey({ kind: 'browser', id: b.id }))
+                const shown = pane.style !== undefined
+                const leafId = placements.get(itemKey({ kind: 'browser', id: b.id }))?.leafId
+                return (
+                  <div key={b.id} className={cn('absolute', shown ? 'block' : 'hidden')} style={pane.style} {...pane.focus}>
+                    <BrowserPane
+                      root={activeRoot}
+                      browser={b}
+                      active={shown && activeLayout?.focusedLeafId === leafId}
+                      visible={shown && activeView === 'terminals'}
+                    />
                   </div>
                 )
               })}

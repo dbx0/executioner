@@ -82,6 +82,9 @@ import {
 import { writeOpencodeTeamAgents } from '../agents/opencode-agents.js'
 import type { SavedAgent, SavedAgentMember } from '@exe/db'
 import { teamRoutes } from '../routes/teams.js'
+import { BrowserHostHub } from '../browser/host-hub.js'
+import { BrowserRegistry, busBrowserPublisher } from '../browser/registry.js'
+import { browserRoutes } from '../routes/browsers.js'
 
 export interface AppOptions {
   project: Project
@@ -102,6 +105,8 @@ export interface AppOptions {
   connection?: { port: number; token: string }
   /** The scoped tokens issued to spawned agents. Injectable for tests. */
   agentTokens?: AgentTokenRegistry
+  /** The embedded browsers and their desktop host. Omitted, the app makes its own. */
+  browsers?: { registry: BrowserRegistry; hub: BrowserHostHub }
 }
 
 /**
@@ -186,8 +191,13 @@ export function createApp(options: AppOptions): EngineApp {
     return executor.run({ graph, workflowId, targetId, testMode: false })
   }
 
+  const browsers = options.browsers ?? {
+    registry: new BrowserRegistry(busBrowserPublisher(options.bus)),
+    hub: new BrowserHostHub(),
+  }
   const toolsetDeps: ToolsetDeps = {
     project: options.project,
+    browsers,
     // Reads the shared executions tables so the assistant can inspect past runs.
     executionStore: mcpStore,
     // Fresh each call so newly-created custom nodes appear in the assistant's
@@ -663,6 +673,7 @@ export function createApp(options: AppOptions): EngineApp {
   if (assistantRunner !== undefined) {
     api.route('/', assistantRoutes({ project: options.project, runner: assistantRunner }))
   }
+  api.route('/', browserRoutes(browsers.registry, browsers.hub))
   api.route('/', agentHookRoutes(options.bus, new TranscriptWatchers(options.bus)))
 
   // "Start with AI": parse a free-form scope into targets. When claude is the

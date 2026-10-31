@@ -5,6 +5,7 @@ import { useApp } from '../../store.js'
 import { cn } from '../../lib/utils.js'
 import type { Layout } from '../../store/types.js'
 import { PanePicker } from './PanePicker.js'
+import { BrowserHandoffItems } from './BrowserPane.js'
 import { TabMenuItem, TabMenuSeparator } from './TabMenu.js'
 
 const pct = (n: number): string => `${n * 100}%`
@@ -82,6 +83,8 @@ export function PaneMenu({
   const layout = useApp((s) => s.layouts.find((l) => l.id === s.activeLayoutId))
   const pinned = useApp((s) => s.activeLayoutId !== null && s.tabMeta[s.activeLayoutId]?.pinned === true)
   const multi = layout !== undefined && leaves(layout.root).length >= 2
+  const item = layout === undefined ? undefined : leaves(layout.root).find((p) => p.id === leafId)?.item
+  const browserId = item?.kind === 'browser' ? item.id : undefined
   const run = (fn: () => void) => (): void => {
     onClose()
     fn()
@@ -103,6 +106,12 @@ export function PaneMenu({
         <TabMenuItem onClick={run(() => splitPane(leafId, 'row'))}>Split right</TabMenuItem>
         <TabMenuItem onClick={run(() => splitPane(leafId, 'col'))}>Split down</TabMenuItem>
         {multi && <TabMenuItem onClick={run(() => movePaneToNewTab(leafId))}>Move pane to new tab</TabMenuItem>}
+        {browserId !== undefined && (
+          <>
+            <TabMenuSeparator />
+            <BrowserHandoffItems id={browserId} close={onClose} />
+          </>
+        )}
         <TabMenuSeparator />
         <TabMenuItem disabled={pinned} onClick={run(() => closePane(leafId))}>
           Close pane

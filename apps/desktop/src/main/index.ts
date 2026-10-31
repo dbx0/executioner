@@ -1,6 +1,7 @@
 import { spawn, execFile } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { dirname, join } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import {
   app,
   BrowserWindow,
@@ -16,11 +17,13 @@ import {
   type IpcMainInvokeEvent,
   type OpenDialogOptions,
 } from 'electron'
-import { globalLayout } from '@exe/protocol'
+import { BROWSER_APP_CLOSED, globalLayout } from '@exe/protocol'
 import { collectConnectionHints } from './connection-hints.js'
-import { EngineSupervisor } from './engine-supervisor.js'
+import { BrowserHostClient } from './browser/host-client.js'
+import { BrowserManager, type DialogInfo } from './browser/manager.js'
+import { EngineSupervisor, type EngineConnection } from './engine-supervisor.js'
 import { editMenuTemplate } from './edit-menu.js'
-import { createIpcHandlers } from './ipc.js'
+import { createIpcHandlers, validBounds, validBrowserOp, validBrowserTarget } from './ipc.js'
 import { allowPermission, externalUrl, isAppUrl } from './security.js'
 import { checkForUpdate, installKind, startInstall } from './update.js'
 
@@ -58,7 +61,52 @@ const spawnEnv: NodeJS.ProcessEnv = app.isPackaged
   ? { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
   : process.env
 
-const supervisor = new EngineSupervisor({ enginePath, nodeBin, spawnEnv })
+/** Whether two paths name one folder; the engine may report a resolved form of the dir it was given. */
+function sameDir(a: string, b: string): boolean {
+  try {
+    return realpathSync(a) === realpathSync(b)
+  } catch {
+    return resolve(a) === resolve(b)
+  }
+}
+
+/** One host client per served project dir, remembering the root its pages are keyed by. */
+const hostClients = new Map<string, { root: string; client: BrowserHostClient }>()
+let browserManager: BrowserManager | undefined
+
+const supervisor = new EngineSupervisor({
+  enginePath,
+  nodeBin,
+  spawnEnv,
+  // The engine asks the app to host its embedded browsers over a socket. A
+  // restarted engine reports ready again, so the old client for that dir goes first.
+  onReady: (conn: EngineConnection) => {
+    for (const [dir, entry] of hostClients) {
+      if (entry.root === conn.projectRoot) {
+        entry.client.stop()
+        hostClients.delete(dir)
+      }
+    }
+    const client = new BrowserHostClient({
+      url: `ws://127.0.0.1:${conn.port}/browser-host?token=${encodeURIComponent(conn.token)}`,
+      run: (call) => {
+        if (browserManager === undefined) throw new Error(BROWSER_APP_CLOSED)
+        return browserManager.run(conn.projectRoot, call)
+      },
+    })
+    hostClients.set(conn.projectRoot, { root: conn.projectRoot, client })
+    client.start()
+  },
+  onExit: (dir) => {
+    for (const [key, entry] of hostClients) {
+      if (key === dir || entry.root === dir || sameDir(entry.root, dir)) {
+        entry.client.stop()
+        hostClients.delete(key)
+        browserManager?.closeRoot(entry.root)
+      }
+    }
+  },
+})
 
 function runEngineCli(args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -174,6 +222,21 @@ const handlers = createIpcHandlers({
   probeAgent,
 })
 
+/** Answers a page's JavaScript dialog for the operator with a native message box. */
+async function askBrowserDialog(win: BrowserWindow, d: DialogInfo): Promise<{ accept: boolean; promptText?: string }> {
+  const confirming = d.type !== 'alert'
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question',
+    message: d.message === '' ? `The page at ${d.url} has a message` : d.message,
+    detail: `Page: ${d.url}`,
+    buttons: confirming ? ['OK', 'Cancel'] : ['OK'],
+    defaultId: 0,
+    cancelId: confirming ? 1 : 0,
+  })
+  const accept = response === 0
+  return d.type === 'prompt' && accept ? { accept, promptText: d.defaultPrompt } : { accept }
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -208,6 +271,22 @@ function createWindow(): void {
   // leave: any other scheme would launch whatever the desktop registered for it.
   // The renderer-drawn maximize button swaps its icon with the window state.
   const win = mainWindow
+  // The embedded browsers draw as native views over this window. The window is
+  // the only thing state is pushed to; dialogs are native boxes because the
+  // renderer's DOM cannot draw over a native view.
+  browserManager = new BrowserManager(
+    win,
+    (root, id, state) => {
+      if (!win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send('browser-state', { root, id, state })
+    },
+    (_root, _id, d) => askBrowserDialog(win, d),
+  )
+  win.on('closed', () => {
+    // Native views outlive their window, so every page goes now. The host clients
+    // stay (macOS can open a new window); until then their calls answer BROWSER_APP_CLOSED.
+    browserManager?.closeAll()
+    browserManager = undefined
+  })
   win.on('maximize', () => win.webContents.send('window-maximized', true))
   win.on('unmaximize', () => win.webContents.send('window-maximized', false))
 
@@ -284,6 +363,45 @@ handle('pick-engagement-photo', () => handlers.pickEngagementPhoto())
 handle('read-engagement-photo', (req: Req<'readEngagementPhoto'>) => handlers.readEngagementPhoto(req))
 handle('write-engagement-photo', (req: Req<'writeEngagementPhoto'>) => handlers.writeEngagementPhoto(req))
 listen('clear-engagement-photo', (req: { root: string }) => handlers.clearEngagementPhoto(req))
+
+// Embedded browser: the renderer reports where a pane sits and drives the address
+// bar; everything else reaches the pages through the engine. Every request must name
+// a served engagement and a well-formed browser id.
+function servedRoots(): string[] {
+  const dirs = supervisor.served()
+  return [...dirs, ...dirs.map((d) => supervisor.current(d)?.projectRoot).filter((r): r is string => r !== undefined)]
+}
+
+/** The root pages are keyed by (the engine's project root) for any root the renderer may name. */
+function canonicalRoot(root: string): string | undefined {
+  for (const dir of supervisor.served()) {
+    const conn = supervisor.current(dir)
+    if (conn !== undefined && (sameDir(root, dir) || sameDir(root, conn.projectRoot))) return conn.projectRoot
+  }
+  return undefined
+}
+
+listen('browser-place', (req: unknown) => {
+  if (!validBrowserTarget(servedRoots(), req)) return
+  const bounds = (req as { bounds?: unknown }).bounds ?? null
+  if (!validBounds(bounds)) return
+  const root = canonicalRoot(req.root)
+  if (root === undefined) return
+  browserManager?.place(root, req.id, bounds)
+})
+listen('browser-occluded', (req: unknown) => {
+  const occluded = (req as { occluded?: unknown } | null)?.occluded
+  if (typeof occluded === 'boolean') browserManager?.setOccluded(occluded)
+})
+handle('browser-operator', async (req: unknown) => {
+  if (!validBrowserTarget(servedRoots(), req)) throw new Error('browser-operator: unknown engagement or browser')
+  const op = (req as { op?: unknown }).op
+  if (!validBrowserOp(op)) throw new Error('browser-operator: bad operation')
+  if (browserManager === undefined) throw new Error('browser-operator: no window')
+  const root = canonicalRoot(req.root)
+  if (root === undefined) throw new Error('browser-operator: unknown engagement or browser')
+  await browserManager.operator(root, req.id, op)
+})
 
 // The terminal's clipboard. Electron 44 took the clipboard module out of the
 // renderer (preload included), so the main process serves it, to the app's own

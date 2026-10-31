@@ -1,5 +1,6 @@
 import type { ProjectToolset, ToolCaller } from './toolset.js'
 import { TOOL_SCHEMAS } from './schema.js'
+import type { McpImageResult } from '../browser/tools.js'
 
 export interface RpcRequest {
   jsonrpc: '2.0'
@@ -16,6 +17,10 @@ export interface RpcResponse {
 }
 
 const PROTOCOL_VERSION = '2024-11-05'
+
+function isImageResult(value: unknown): value is McpImageResult {
+  return typeof value === 'object' && value !== null && '__mcpImage' in value
+}
 
 /**
  * Answer one JSON-RPC request. `allowed`, when given, is the caller's tool
@@ -56,6 +61,13 @@ export async function dispatchRpc(
     }
     try {
       const result = await toolset.call(name, params.arguments ?? {}, caller)
+      if (isImageResult(result)) {
+        const { data, mimeType } = result.__mcpImage
+        return {
+          ...base,
+          result: { content: [{ type: 'text', text: JSON.stringify(result.result) }, { type: 'image', data, mimeType }] },
+        }
+      }
       return { ...base, result: { content: [{ type: 'text', text: JSON.stringify(result) }] } }
     } catch (error) {
       // MCP convention: a tool that fails returns isError content, not a protocol error.

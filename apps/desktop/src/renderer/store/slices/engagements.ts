@@ -1,9 +1,11 @@
 import type { ItemRef, PaneNode } from '../../lib/pane-tree.js'
 import { createClient } from '../../lib/connection.js'
 import { terminalsApi, type TerminalSpec } from '../../api/terminals.js'
+import { browsersApi } from '../../api/browsers.js'
 import { projectApi } from '../../api/project.js'
 import { basename, mirror, patchRecent, rememberRecent } from '../helpers.js'
 import {
+  loadBrowsers,
   loadEditorState,
   loadFiles,
   loadSession,
@@ -15,7 +17,7 @@ import {
   saveLayouts,
   saveSessions,
 } from '../persistence.js'
-import type { ActiveTab, AppState, FileTab, OpenEngagement, Session } from '../types.js'
+import type { ActiveTab, AppState, BrowserTab, FileTab, OpenEngagement, Session } from '../types.js'
 import type { SliceCtx } from './context.js'
 import { reconcileLayouts, syncActive } from './layouts.js'
 
@@ -83,6 +85,8 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       sessionState: {},
       subagents: {},
       files: [],
+      browsers: [],
+      browserActivity: {},
       activeTab: null,
       tabMeta: {},
       editorDrafts: {},
@@ -109,6 +113,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       if (pf.title !== undefined && pf.title !== '') f.title = pf.title
       return f
     })
+    const persistedBrowsers = loadBrowsers(root)
     const restoredMeta = loadTabMeta(root)
     // Unsaved buffers are the user's unwritten work — restore them with the
     // tabs. File-tab ids are stable across a restart (toPersistedFile keeps
@@ -120,6 +125,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
     if (
       persisted.length === 0 &&
       restoredFiles.length === 0 &&
+      persistedBrowsers.length === 0 &&
       Object.keys(restoredMeta).length === 0 &&
       Object.keys(restoredEditor.drafts).length === 0
     )
@@ -148,6 +154,17 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
         /* a session that fails to recreate is dropped rather than blocking the rest */
       }
     }
+    // Browser ids are stable, so the engine re-registers each under its old id and the saved
+    // layouts need no remap. They come back with no owner: the sessions that held them are new.
+    const restoredBrowsers: BrowserTab[] = []
+    for (const pb of persistedBrowsers) {
+      try {
+        const item = await browsersApi(engagement.client).create({ id: pb.id, url: pb.url, title: pb.title })
+        restoredBrowsers.push({ id: item.id, url: item.url, title: item.title, owner: null })
+      } catch {
+        /* a browser that fails to register is dropped rather than blocking the rest */
+      }
+    }
     const first = restoredSessions[0]
     const firstFile = restoredFiles[0]
     // Prefer a terminal as the opening tab; fall back to a file if that's all there is.
@@ -159,6 +176,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
     const items: ItemRef[] = [
       ...restoredSessions.map((s) => ({ kind: 'terminal', id: s.id })),
       ...restoredFiles.map((f) => ({ kind: 'file', id: f.id })),
+      ...restoredBrowsers.map((b) => ({ kind: 'browser', id: b.id })),
     ]
     const { layouts, activeLayoutId } = reconcileLayouts(
       savedLayouts === null
@@ -179,6 +197,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
               files: restoredFiles.map((f) =>
                 restoredEditor.drafts[f.id] === undefined ? f : { ...f, dirty: true },
               ),
+              browsers: restoredBrowsers,
               activeSessionId: first?.id ?? e.activeSessionId,
               activeTab,
               tabMeta: restoredMeta,
@@ -277,6 +296,8 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       sessionState: {},
       subagents: {},
       files: [],
+      browsers: [],
+      browserActivity: {},
       activeTab: null,
       tabMeta: {},
       editorDrafts: {},
@@ -346,6 +367,8 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
             sessionState: {},
             subagents: {},
             files: [],
+            browsers: [],
+            browserActivity: {},
             activeTab: null,
             tabMeta: {},
             editorDrafts: {},

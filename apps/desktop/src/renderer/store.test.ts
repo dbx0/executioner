@@ -25,6 +25,8 @@ function seed(): void {
     sessionState: {},
     subagents: {},
     files: [],
+    browsers: [],
+    browserActivity: {},
     activeTab: { kind: 'terminal', id: 's1' },
     tabMeta: {},
     editorDrafts: {},
