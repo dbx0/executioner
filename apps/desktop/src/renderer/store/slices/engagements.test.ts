@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { leaf, leaves, splitLeaf } from '../../lib/pane-tree.js'
-import { loadSession, loadSessions, saveFiles, saveLayouts, saveRecents, saveSession, saveSessions } from '../persistence.js'
+import { loadBrowsers, loadSession, loadSessions, saveBrowsers, saveFiles, saveLayouts, saveRecents, saveSession, saveSessions } from '../persistence.js'
 import type { AppState } from '../types.js'
 
 const ROOT = '/tmp/acme'
@@ -46,8 +46,10 @@ const engine = {
     if (reply === 'unreachable') throw new Error('ECONNREFUSED')
     return { data: { root: ROOT, ...reply() } }
   }),
-  post: vi.fn(async (url: string) => (url === '/terminals' ? { data: { id: `t${String(++created)}` } } : { data: {} })),
-  patch: vi.fn(async () => ({ data: {} })),
+  post: vi.fn(async (url: string, _body?: unknown): Promise<{ data: unknown }> =>
+    url === '/terminals' ? { data: { id: `t${String(++created)}` } } : { data: {} },
+  ),
+  patch: vi.fn(async (_url: string, _body?: unknown): Promise<{ data: unknown }> => ({ data: {} })),
   delete: vi.fn(async () => ({ data: {} })),
 }
 
@@ -238,6 +240,44 @@ describe('opening an engagement by hand', () => {
     await useApp.getState().openRecent(ROOT)
 
     expect(engine.post).toHaveBeenCalledWith('/terminals', { agent: 'claude', resume: 'conv-1' })
+  })
+
+  it('gives a browser back to its agent under the new terminal id and reloads its last page', async () => {
+    saveSessions(ROOT, [{ id: 'old', label: 'claude 1', agent: 'claude', resume: 'conv-1' }])
+    saveBrowsers(ROOT, [{ id: 'b1', owner: 'old', url: 'https://x.test/login', title: 'Login' }])
+    const operator = vi.fn(async () => undefined)
+    Object.assign(window.executioner as object, { browser: { operator } })
+    engine.post.mockImplementation(async (url: string, body?: unknown) =>
+      url === '/terminals'
+        ? { data: { id: `t${String(++created)}` } }
+        : url === '/browsers'
+          ? { data: { ...(body as object), owner: null } }
+          : { data: {} },
+    )
+    engine.patch.mockImplementationOnce(async (_url: string, body?: unknown) => ({
+      data: { id: 'b1', url: 'https://x.test/login', title: 'Login', ...(body as object) },
+    }))
+
+    const useApp = await freshStore()
+    await useApp.getState().openRecent(ROOT)
+
+    expect(engine.patch).toHaveBeenCalledWith('/browsers/b1', { owner: 't1' })
+    expect(useApp.getState().browsers).toEqual([{ id: 'b1', url: 'https://x.test/login', title: 'Login', owner: 't1' }])
+    expect(operator).toHaveBeenCalledWith({ root: ROOT, id: 'b1', op: { navigate: 'https://x.test/login' } })
+    engine.post.mockImplementation(async (url: string) => (url === '/terminals' ? { data: { id: `t${String(++created)}` } } : { data: {} }))
+  })
+
+  it('keeps the page a browser moves to, so a restart reopens it there', async () => {
+    saveBrowsers(ROOT, [{ id: 'b1', owner: null, url: '', title: '' }])
+    engine.post.mockImplementation(async (url: string, body?: unknown) => (url === '/browsers' ? { data: { ...(body as object), owner: null } } : { data: {} }))
+    const useApp = await freshStore()
+    await useApp.getState().openRecent(ROOT)
+    useApp.getState().trackBrowserPage('b1', 'about:blank', '')
+    expect(loadBrowsers(ROOT)).toEqual([{ id: 'b1', url: '', title: '' }])
+    useApp.getState().trackBrowserPage('b1', 'https://y.test/', 'Y')
+    expect(useApp.getState().browsers[0]).toMatchObject({ url: 'https://y.test/', title: 'Y' })
+    expect(loadBrowsers(ROOT)).toEqual([{ id: 'b1', url: 'https://y.test/', title: 'Y' }])
+    engine.post.mockImplementation(async (url: string) => (url === '/terminals' ? { data: { id: `t${String(++created)}` } } : { data: {} }))
   })
 
   it('brings back the file tabs that were open in it last time', async () => {

@@ -31,13 +31,18 @@ export function playNotificationChime(): void {
   }
 }
 
-/** Show an OS notification (best-effort; requests permission once). */
-export function notifyUser(title: string, body?: string): void {
+/** Show an OS notification (best-effort; requests permission once). `onClick` runs when it is clicked. */
+export function notifyUser(title: string, body?: string, onClick?: () => void): void {
   try {
     if (typeof Notification === 'undefined') return
     const show = (): void => {
-      if (body !== undefined && body !== '') new Notification(title, { body })
-      else new Notification(title)
+      const n = body !== undefined && body !== '' ? new Notification(title, { body }) : new Notification(title)
+      if (onClick !== undefined) {
+        n.onclick = () => {
+          window.focus()
+          onClick()
+        }
+      }
     }
     if (Notification.permission === 'granted') show()
     else if (Notification.permission !== 'denied')

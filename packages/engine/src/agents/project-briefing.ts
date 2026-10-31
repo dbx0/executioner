@@ -53,6 +53,14 @@ const TOOL_BRIEFS: Record<ToolName, string> = {
   browser_wait: 'wait for a selector or a navigation',
   browser_screenshot: 'save a screenshot as evidence and see it',
   browser_log: 'console messages and dialogs, including ones the operator triggered',
+  browser_network: 'list the requests the page made, with ids for response bodies',
+  browser_response_body: 'read the response body of a request from the network list',
+  browser_rewrite_rules: 'replace the rules that rewrite this browser’s requests and responses',
+  browser_upload: 'set files on a file input by its snapshot ref',
+  browser_mouse: 'move, click, press or scroll the mouse at viewport coordinates',
+  browser_drag: 'drag from one element or point to another',
+  browser_emulate: 'override the user agent, geolocation, locale or timezone',
+  browser_ask_operator: 'ask the operator for a CAPTCHA, an MFA code or anything only they can do',
 }
 
 /** Targets listed inline before the briefing switches to "call list_targets". */

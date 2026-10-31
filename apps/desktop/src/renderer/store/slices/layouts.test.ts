@@ -29,6 +29,7 @@ function seed(): void {
     files: [],
     browsers: [],
     browserActivity: {},
+    browserAsks: {},
     activeTab: null,
     tabMeta: {},
     editorDrafts: {},

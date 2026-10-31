@@ -32,6 +32,7 @@ export function TerminalsView(): JSX.Element {
   const files = useApp((s) => s.files)
   const browsers = useApp((s) => s.browsers)
   const browserActivity = useApp((s) => s.browserActivity)
+  const browserAsks = useApp((s) => s.browserAsks)
   const activeRoot = useApp((s) => s.activeRoot)
   const layouts = useApp((s) => s.layouts)
   const activeLayoutId = useApp((s) => s.activeLayoutId)
@@ -124,8 +125,11 @@ export function TerminalsView(): JSX.Element {
     const panes = leaves(layout.root)
     const item = (panes.find((p) => p.id === layout.focusedLeafId)?.item ?? panes.find((p) => p.item !== null)?.item) ?? null
     const tab: ActiveTab | null = item === null ? null : { kind: item.kind === 'file' ? 'file' : item.kind === 'browser' ? 'browser' : 'terminal', id: item.id }
-    return { layout, tab, split: panes.length >= 2 }
+    // Any pane's ask marks the tab, so a browser split beside its agent's terminal still shows it.
+    const asking = panes.some((p) => p.item?.kind === 'browser' && browserAsks[p.item.id] !== undefined)
+    return { layout, tab, split: panes.length >= 2, asking }
   })
+  const askDot = <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-amber-500" role="img" aria-label="Needs you" />
   const isPinned = (layoutId: string): boolean => tabMeta[layoutId]?.pinned === true
   const bulkQuestion = (layoutId: string, which: BulkClose): string | undefined =>
     bulkCloseConfirmation(bulkCloseTargets(layouts, tabMeta, layoutId, which), sessions, sessionState) ?? undefined
@@ -143,7 +147,7 @@ export function TerminalsView(): JSX.Element {
       {/* Tab strip: terminals then files. */}
       <div className="flex h-9 shrink-0 items-center border-b border-border pl-1 pr-2">
         <div className="scrollbar-none flex min-w-0 items-stretch overflow-x-auto">
-          {strip.map(({ layout, tab: itemTab, split: isSplit }) => {
+          {strip.map(({ layout, tab: itemTab, split: isSplit, asking }) => {
             const meta = tabMeta[layout.id]
             // The empty-only placeholder has no item; its handlers are never reached (bare menu).
             const tab: ActiveTab = itemTab ?? { kind: 'terminal', id: layout.id }
@@ -208,7 +212,7 @@ export function TerminalsView(): JSX.Element {
                   key={`l-${layout.id}`}
                   {...common}
                   title={s.title ?? s.label}
-                  statusDot={<AgentStatusDot state={sessionState[s.id] ?? 'idle'} />}
+                  statusDot={asking ? askDot : <AgentStatusDot state={sessionState[s.id] ?? 'idle'} />}
                 />
               )
             }
@@ -222,7 +226,9 @@ export function TerminalsView(): JSX.Element {
                   title={b.title === '' ? 'New tab' : b.title}
                   icon={<Globe className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />}
                   statusDot={
-                    browserActivity[b.id] === true ? (
+                    asking ? (
+                      askDot
+                    ) : browserActivity[b.id] === true ? (
                       <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-foreground" role="img" aria-label="Agent active" />
                     ) : undefined
                   }
@@ -243,6 +249,7 @@ export function TerminalsView(): JSX.Element {
                     strokeWidth={1.75}
                   />
                 }
+                statusDot={asking ? askDot : undefined}
                 filePath={f.path}
                 preview={f.preview === true}
                 dirty={f.dirty === true}

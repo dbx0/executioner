@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 /**
  * What floats over the app and so must hide the native browser views, which always draw above
  * the renderer: dialogs and menus by role, Radix popper content (dropdowns, selects, tooltips),
- * sonner toasts, the cmdk palette, every `fixed inset-0` backdrop (modals, the tab and pane menu
+ * sonner toasts (except the attention toaster's), the cmdk palette, every `fixed inset-0` backdrop (modals, the tab and pane menu
  * scrims, the icon picker) and the app's own fixed menus (`z-[71]`).
  */
 const OVERLAYS = [
@@ -24,6 +24,9 @@ export function hasOverlay(root: ParentNode): boolean {
     // Anything inside a workspace pane (the pane picker, Monaco's suggest and find widgets that
     // stay mounted after use) cannot float over another pane; the real layers mount outside panes.
     if (el.closest('[data-pane-leaf]') !== null) continue
+    // The attention toaster sits over the titlebar and tab strip, which no browser view reaches,
+    // and its toasts ask the operator to work in a browser: hiding that browser would defeat them.
+    if (el.closest('.attention-toaster') !== null) continue
     // Overlays kept in the DOM but hidden by attribute do not cover anything.
     if (el.closest('[hidden], [aria-hidden="true"]') !== null) continue
     return true

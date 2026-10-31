@@ -27,6 +27,7 @@ function seed(): void {
     files: [],
     browsers: [],
     browserActivity: {},
+    browserAsks: {},
     activeTab: { kind: 'terminal', id: 's1' },
     tabMeta: {},
     editorDrafts: {},

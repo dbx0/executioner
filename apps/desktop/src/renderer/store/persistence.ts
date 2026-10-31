@@ -151,7 +151,12 @@ function browsersKey(root: string): string {
 
 export function saveBrowsers(root: string, browsers: BrowserTab[]): void {
   try {
-    const persisted: PersistedBrowser[] = browsers.map((b) => ({ id: b.id, url: b.url, title: b.title }))
+    const persisted: PersistedBrowser[] = browsers.map((b) => ({
+      id: b.id,
+      url: b.url,
+      title: b.title,
+      ...(b.owner === null ? {} : { owner: b.owner }),
+    }))
     localStorage.setItem(browsersKey(root), JSON.stringify(persisted))
   } catch {
     /* storage unavailable */
@@ -170,7 +175,8 @@ export function loadBrowsers(root: string): PersistedBrowser[] {
         b !== null &&
         typeof (b as PersistedBrowser).id === 'string' &&
         typeof (b as PersistedBrowser).url === 'string' &&
-        typeof (b as PersistedBrowser).title === 'string',
+        typeof (b as PersistedBrowser).title === 'string' &&
+        ((b as PersistedBrowser).owner === undefined || typeof (b as PersistedBrowser).owner === 'string'),
     )
   } catch {
     return []

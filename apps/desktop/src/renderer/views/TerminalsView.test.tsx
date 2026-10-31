@@ -61,6 +61,7 @@ function seed(): void {
     files: [],
     browsers: [],
     browserActivity: {},
+    browserAsks: {},
     activeTab: { kind: 'terminal', id: 't1' },
     tabMeta: {},
     editorDrafts: {},
@@ -565,8 +566,45 @@ describe('TerminalsView browser tabs', () => {
       sessions,
       browsers,
       browserActivity: {},
+      browserAsks: {},
       layouts: layouts as never,
     })
+  })
+
+  it('a tab with an open ask shows the ask dot', () => {
+    render(<TerminalsView />)
+    expect(within(stripEl()).queryByLabelText('Needs you')).toBeNull()
+    act(() => useApp.setState({ browserAsks: { b1: 'Log in' }, browserActivity: { b1: true } }))
+    expect(within(stripEl()).getByLabelText('Needs you')).toBeTruthy()
+    // The ask takes precedence over the activity dot.
+    expect(within(stripEl()).queryByLabelText('Agent active')).toBeNull()
+  })
+
+  it("a split tab that holds the asking browser beside its agent's terminal shows the ask dot", () => {
+    // An agent-opened browser sits beside the agent's terminal, and the tab stands for the terminal.
+    const layouts = [
+      {
+        id: 'terminal:t2',
+        root: {
+          type: 'split',
+          dir: 'row',
+          ratio: 0.5,
+          a: { type: 'leaf', id: 'p2', item: { kind: 'terminal', id: 't2' } },
+          b: { type: 'leaf', id: 'pb', item: { kind: 'browser', id: 'b1' } },
+        },
+        focusedLeafId: 'p2',
+      },
+      { id: 'terminal:t1', root: { type: 'leaf', id: 'p1', item: { kind: 'terminal', id: 't1' } }, focusedLeafId: 'p1' },
+    ]
+    useApp.setState({ open: [{ ...state().open[0]!, layouts: layouts as never }], layouts: layouts as never, activeLayoutId: 'terminal:t1' })
+    render(<TerminalsView />)
+    expect(within(stripEl()).queryByLabelText('Needs you')).toBeNull()
+    act(() => useApp.setState({ browserAsks: { b1: 'Log in' } }))
+    const dots = within(stripEl()).getAllByLabelText('Needs you')
+    expect(dots).toHaveLength(1)
+    expect(dots[0]!.parentElement!.textContent).toContain('Claude 1')
+    act(() => useApp.setState({ browserAsks: {} }))
+    expect(within(stripEl()).queryByLabelText('Needs you')).toBeNull()
   })
 
   it('a browser tab shows the page title and a background activity dot', () => {

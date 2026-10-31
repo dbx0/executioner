@@ -65,6 +65,8 @@ export interface ToolsetDeps {
 export interface ToolCaller {
   profile?: AgentProfile
   sessionId?: string
+  /** Aborts when the caller's request goes away, so a long wait can stop. */
+  signal?: AbortSignal
 }
 
 /**
@@ -173,6 +175,14 @@ export const TOOL_ACCESS = {
   browser_wait: 'dangerous',
   browser_screenshot: 'dangerous',
   browser_log: 'dangerous',
+  browser_network: 'dangerous',
+  browser_response_body: 'dangerous',
+  browser_rewrite_rules: 'dangerous',
+  browser_upload: 'dangerous',
+  browser_mouse: 'dangerous',
+  browser_drag: 'dangerous',
+  browser_emulate: 'dangerous',
+  browser_ask_operator: 'dangerous',
 } as const satisfies Record<string, ToolAccess>
 
 export type ToolName = keyof typeof TOOL_ACCESS
@@ -491,6 +501,14 @@ export class ProjectToolset {
       case 'browser_wait':
       case 'browser_screenshot':
       case 'browser_log':
+      case 'browser_network':
+      case 'browser_response_body':
+      case 'browser_rewrite_rules':
+      case 'browser_upload':
+      case 'browser_mouse':
+      case 'browser_drag':
+      case 'browser_emulate':
+      case 'browser_ask_operator':
         return this.browser(name, args, caller)
 
       default:

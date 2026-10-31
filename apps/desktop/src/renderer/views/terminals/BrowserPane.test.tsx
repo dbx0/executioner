@@ -13,6 +13,12 @@ const api = {
   operator: vi.fn((_req: unknown) => Promise.resolve()),
   onState: vi.fn((_l: (e: { root: string; id: string; state: unknown }) => void) => () => undefined),
 }
+/** Put an ask where the store keeps it: on the active engagement, mirrored to the top level. */
+const setAsk = (message: string | null): void => {
+  const browserAsks = message === null ? {} : { b1: message }
+  const e = { root: '/r', sessions: useApp.getState().sessions, browsers: [], browserActivity: {}, browserAsks } as never
+  act(() => useApp.setState({ open: [e], activeRoot: '/r', browserAsks }))
+}
 const emit = (state: Record<string, unknown>): void => {
   const listener = api.onState.mock.calls.at(-1)![0]
   act(() => listener({ root: '/engine/root', id: 'b1', state: { url: 'https://a.test/', title: 'A', loading: false, canGoBack: false, canGoForward: false, crashed: false, ...state } }))
@@ -34,6 +40,9 @@ beforeEach(() => {
   useApp.setState({
     sessions: [{ id: 's1', label: 'Claude 1', agent: 'claude' }] as never,
     browserActivity: {},
+    browserAsks: {},
+    open: [],
+    activeRoot: null,
   })
 })
 afterEach(() => vi.restoreAllMocks())
@@ -93,6 +102,65 @@ describe('BrowserPane', () => {
     expect(screen.queryByText('Claude 1 is using this page')).toBeNull()
     act(() => useApp.setState({ browserActivity: { b1: true } }))
     expect(screen.getByText('Claude 1 is using this page')).toBeTruthy()
+  })
+
+  it('the pane shows the ask banner and Done answers it', () => {
+    const answer = vi.fn(async () => undefined)
+    useApp.setState({ answerBrowserAsk: answer })
+    render(<BrowserPane root="/r" browser={browser} active visible />)
+    expect(screen.queryByText('Solve the captcha')).toBeNull()
+    setAsk('Solve the captcha')
+    expect(screen.getByText('Solve the captcha')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(answer).toHaveBeenCalledWith('b1', undefined)
+  })
+
+  it('the ask banner pushes the page down: the reported bounds start below it, and go back after', () => {
+    const BANNER = 30
+    // Layout as the flex column does it: the banner takes its height off the top of the page area.
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const shift = this.matches('[data-browser-page]') && document.querySelector('[data-browser-ask]') !== null ? BANNER : 0
+      return { x: 10, y: 40 + shift, width: 600, height: 300 - shift, left: 10, top: 40 + shift, right: 610, bottom: 340, toJSON: () => ({}) }
+    })
+    render(<BrowserPane root="/r" browser={browser} active visible />)
+    expect(api.place).toHaveBeenLastCalledWith({ root: '/r', id: 'b1', bounds: { x: 10, y: 40, width: 600, height: 300 } })
+    setAsk('Solve the captcha')
+    const banner = document.querySelector('[data-browser-ask]')!
+    const page = document.querySelector('[data-browser-page]')!
+    // In the DOM the banner comes before the page area, not over it.
+    expect(banner.nextElementSibling).toBe(page)
+    expect(api.place).toHaveBeenLastCalledWith({ root: '/r', id: 'b1', bounds: { x: 10, y: 70, width: 600, height: 270 } })
+    setAsk(null)
+    expect(api.place).toHaveBeenLastCalledWith({ root: '/r', id: 'b1', bounds: { x: 10, y: 40, width: 600, height: 300 } })
+  })
+
+  it('Done sends the typed reply, and Enter in the reply does too', () => {
+    const answer = vi.fn(async () => undefined)
+    useApp.setState({ answerBrowserAsk: answer })
+    render(<BrowserPane root="/r" browser={browser} active visible />)
+    setAsk('MFA code')
+    const reply = screen.getByLabelText('Reply to the agent')
+    fireEvent.change(reply, { target: { value: ' 123456 ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(answer).toHaveBeenLastCalledWith('b1', '123456')
+    fireEvent.change(reply, { target: { value: '654321' } })
+    fireEvent.keyDown(reply, { key: 'Enter' })
+    expect(answer).toHaveBeenLastCalledWith('b1', '654321')
+  })
+
+  it('the address bar and operator actions leave the ask in place', () => {
+    const answer = vi.fn(async () => undefined)
+    useApp.setState({ answerBrowserAsk: answer })
+    render(<BrowserPane root="/r" browser={browser} active visible />)
+    setAsk('Look')
+    const address = screen.getByLabelText('Address')
+    fireEvent.click(address)
+    fireEvent.change(address, { target: { value: 'x.test' } })
+    fireEvent.keyDown(address, { key: 'Enter' })
+    fireEvent.click(screen.getByRole('button', { name: 'Reload page' }))
+    expect(screen.getByText('Look')).toBeTruthy()
+    expect(useApp.getState().browserAsks).toEqual({ b1: 'Look' })
+    expect(answer).not.toHaveBeenCalled()
   })
 
   it('shows the live title and a loading bar', () => {

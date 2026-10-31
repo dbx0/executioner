@@ -8,6 +8,10 @@ interface CreateBody {
   title?: string
 }
 
+interface AnswerBody {
+  reply?: unknown
+}
+
 interface PatchBody {
   owner?: string | null
   url?: string
@@ -42,6 +46,16 @@ export function browserRoutes(registry: BrowserRegistry, hub: BrowserHostHub): H
     })
     if (body.owner !== undefined) registry.setOwner(id, body.owner)
     return c.json(registry.get(id))
+  })
+
+  /** The operator is done with what the agent asked for; unblocks its browser_ask_operator call. */
+  app.post('/browsers/:id/answer', async (c) => {
+    const id = c.req.param('id')
+    if (registry.get(id) === undefined) return c.json({ error: 'unknown browser' }, 404)
+    const body = (await c.req.json().catch(() => ({}))) as AnswerBody
+    const reply = typeof body.reply === 'string' && body.reply !== '' ? body.reply : undefined
+    if (!registry.answer(id, reply)) return c.json({ error: 'nothing pending' }, 409)
+    return c.body(null, 204)
   })
 
   app.delete('/browsers/:id', (c) => {

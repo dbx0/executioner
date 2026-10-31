@@ -94,6 +94,7 @@ export function mirror(open: OpenEngagement[], activeRoot: string | null): Pick<
   | 'files'
   | 'browsers'
   | 'browserActivity'
+  | 'browserAsks'
   | 'activeTab'
   | 'tabMeta'
   | 'editorDrafts'
@@ -117,6 +118,7 @@ export function mirror(open: OpenEngagement[], activeRoot: string | null): Pick<
       files: [],
       browsers: [],
       browserActivity: {},
+      browserAsks: {},
       activeTab: null,
       tabMeta: {},
       editorDrafts: {},
@@ -139,6 +141,7 @@ export function mirror(open: OpenEngagement[], activeRoot: string | null): Pick<
     files: a.files,
     browsers: a.browsers,
     browserActivity: a.browserActivity,
+    browserAsks: a.browserAsks,
     activeTab: a.activeTab,
     tabMeta: a.tabMeta,
     editorDrafts: a.editorDrafts,

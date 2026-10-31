@@ -22,6 +22,7 @@ function seedEngagement(): void {
     files: [{ id: 'f1', path: 'a.txt', name: 'a.txt' }],
     browsers: [],
     browserActivity: {},
+    browserAsks: {},
     activeTab: { kind: 'file', id: 'f1' },
     tabMeta: {},
     editorDrafts: {},

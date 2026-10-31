@@ -4,12 +4,17 @@ import { useApp } from '../create.js'
 import { loadBrowsers } from '../persistence.js'
 import type { OpenEngagement } from '../types.js'
 
+const toastNotify = vi.hoisted(() => vi.fn())
+const toastAttention = vi.hoisted(() => vi.fn())
+const notifyUser = vi.hoisted(() => vi.fn())
+vi.mock('../../lib/toast.js', () => ({ notify: Object.assign(toastNotify, { attention: toastAttention }) }))
+vi.mock('../../lib/notify.js', () => ({ notifyUser }))
 vi.mock('../../lib/monaco-setup.js', () => ({
   monaco: { editor: { getModel: () => null }, Uri: { parse: (v: string) => v } },
 }))
 
 let nextBrowser = 0
-let engineList: { id: string; owner: string | null; url: string; title: string }[] = []
+let engineList: { id: string; owner: string | null; url: string; title: string; ask?: { message: string; askedAt: number } }[] = []
 interface Posted {
   id: string
   owner: string | null
@@ -42,6 +47,7 @@ function engagement(root: string, overrides: Partial<OpenEngagement> = {}): Open
     files: [],
     browsers: [],
     browserActivity: {},
+    browserAsks: {},
     activeTab: null,
     tabMeta: {},
     editorDrafts: {},
@@ -70,6 +76,7 @@ function seed(overrides: Partial<OpenEngagement> = {}): void {
     files: [],
     browsers: e.browsers,
     browserActivity: {},
+    browserAsks: {},
     activeTab: e.activeTab,
     tabMeta: {},
     layouts: e.layouts,
@@ -207,5 +214,119 @@ describe('browsers in the store', () => {
     await pending
     expect(state().browsers).toEqual([])
     expect(useApp.getState().open.find((e) => e.root === '/r')?.browsers.map((b) => b.id)).toEqual(['b1'])
+  })
+
+  it('an ask event records the message and notifies without switching tabs', () => {
+    seed({ sessions: [session('t1')] })
+    state().handleBrowserEvent('opened', opened('b1', 't1'))
+    state().setActiveTab({ kind: 'terminal', id: 't1' })
+    const layoutBefore = state().activeLayoutId
+    toastAttention.mockClear()
+    state().handleBrowserEvent('ask', { ...opened('b1', 't1'), message: 'Solve the captcha' })
+    expect(state().browserAsks).toEqual({ b1: 'Solve the captcha' })
+    expect(state().open[0]?.browserAsks).toEqual({ b1: 'Solve the captcha' })
+    expect(toastAttention).toHaveBeenCalledWith({
+      who: 't1',
+      text: 'is waiting on you in the browser',
+      description: 'Solve the captcha',
+      action: { label: 'Show', onClick: expect.any(Function) },
+    })
+    expect(state().activeTab).toEqual({ kind: 'terminal', id: 't1' })
+    expect(state().activeLayoutId).toBe(layoutBefore)
+    expect(state().activeRoot).toBe('/r')
+    state().handleBrowserEvent('answered', opened('b1', 't1'))
+    expect(state().browserAsks).toEqual({})
+  })
+
+  it("the toast's Show action takes the operator to the asking browser's pane", () => {
+    seed({ sessions: [session('t1')] })
+    state().handleBrowserEvent('opened', opened('b1', 't1'))
+    state().setActiveTab({ kind: 'terminal', id: 't1' })
+    useApp.setState({ activeView: 'scope' })
+    toastAttention.mockClear()
+    state().handleBrowserEvent('ask', { ...opened('b1', 't1'), message: 'Log in' })
+    const { action } = toastAttention.mock.calls[0]![0] as { action: { onClick: () => void } }
+    action.onClick()
+    expect(state().activeView).toBe('terminals')
+    expect(state().activeTab).toEqual({ kind: 'browser', id: 'b1' })
+    const layout = active()!
+    expect(leaves(layout.root).find((p) => p.id === layout.focusedLeafId)?.item).toEqual({ kind: 'browser', id: 'b1' })
+  })
+
+  it('an ask in a background engagement marks that engagement only, names it, and Show switches to it', () => {
+    const other = engagement('/other', { name: 'Acme', sessions: [session('t9')] })
+    useApp.setState({ open: [...state().open, other] })
+    state().handleBrowserEvent('opened', opened('b9', 't9'), '/other')
+    toastAttention.mockClear()
+    state().handleBrowserEvent('ask', { ...opened('b9', 't9'), message: 'Pass the captcha' }, '/other')
+    expect(state().activeRoot).toBe('/r')
+    expect(state().browserAsks).toEqual({})
+    expect(state().open.find((e) => e.root === '/other')?.browserAsks).toEqual({ b9: 'Pass the captcha' })
+    expect(toastAttention).toHaveBeenCalledWith(expect.objectContaining({ who: 't9', text: 'is waiting on you in the browser in Acme', description: 'Pass the captcha' }))
+    const { action } = toastAttention.mock.calls[0]![0] as { action: { onClick: () => void } }
+    action.onClick()
+    expect(state().activeRoot).toBe('/other')
+    expect(state().browserAsks).toEqual({ b9: 'Pass the captcha' })
+    expect(state().activeTab).toEqual({ kind: 'browser', id: 'b9' })
+    state().handleBrowserEvent('answered', opened('b9', 't9'), '/other')
+    expect(state().open.find((e) => e.root === '/other')?.browserAsks).toEqual({})
+  })
+
+  it('an ask raises a system notification only while the window is not focused, and clicking it shows the browser', () => {
+    state().handleBrowserEvent('opened', opened('b1'))
+    const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+    notifyUser.mockClear()
+    state().handleBrowserEvent('ask', { ...opened('b1'), message: 'one' })
+    expect(notifyUser).not.toHaveBeenCalled()
+    focus.mockReturnValue(false)
+    state().handleBrowserEvent('ask', { ...opened('b1'), message: 'two' })
+    expect(notifyUser).toHaveBeenCalledWith('An agent needs you in the browser', 'two', expect.any(Function))
+    useApp.setState({ activeView: 'scope' })
+    ;(notifyUser.mock.calls[0]![2] as () => void)()
+    expect(state().activeView).toBe('terminals')
+    expect(state().activeTab).toEqual({ kind: 'browser', id: 'b1' })
+    focus.mockRestore()
+  })
+
+  it('closing a browser drops its ask', () => {
+    state().handleBrowserEvent('opened', opened('b1'))
+    state().handleBrowserEvent('ask', { ...opened('b1'), message: 'help' })
+    state().handleBrowserEvent('closed', opened('b1'))
+    expect(state().browserAsks).toEqual({})
+  })
+
+  it('syncBrowsers restores a pending ask without a new notification, and drops one no longer pending', async () => {
+    engineList = [{ ...opened('b1'), ask: { message: 'Enter the SMS code', askedAt: 1 } }]
+    toastAttention.mockClear()
+    await state().syncBrowsers()
+    expect(state().browserAsks).toEqual({ b1: 'Enter the SMS code' })
+    expect(toastAttention).not.toHaveBeenCalled()
+    engineList = [opened('b1')]
+    await state().syncBrowsers()
+    expect(state().browserAsks).toEqual({})
+  })
+
+  it('an answered event clears the ask', () => {
+    state().handleBrowserEvent('opened', opened('b1'))
+    state().handleBrowserEvent('ask', { ...opened('b1'), message: 'help' })
+    state().handleBrowserEvent('answered', opened('b1'))
+    expect(state().browserAsks).toEqual({})
+    expect(state().open[0]?.browserAsks).toEqual({})
+  })
+
+  it('answerBrowserAsk posts the reply then clears the ask', async () => {
+    state().handleBrowserEvent('opened', opened('b1'))
+    state().handleBrowserEvent('ask', { ...opened('b1'), message: 'MFA code' })
+    await state().answerBrowserAsk('b1', '123456')
+    expect(post).toHaveBeenCalledWith('/browsers/b1/answer', { reply: '123456' })
+    expect(state().browserAsks).toEqual({})
+  })
+
+  it('answerBrowserAsk with no reply sends an empty body', async () => {
+    state().handleBrowserEvent('opened', opened('b1'))
+    state().handleBrowserEvent('ask', { ...opened('b1'), message: 'captcha' })
+    await state().answerBrowserAsk('b1')
+    expect(post).toHaveBeenCalledWith('/browsers/b1/answer', {})
+    expect(state().browserAsks).toEqual({})
   })
 })

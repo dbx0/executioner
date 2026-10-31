@@ -33,6 +33,13 @@ describe('browser occlusion', () => {
     expect(hasOverlay(document.body)).toBe(true)
   })
 
+  it("ignores the attention toaster's toasts, which never reach a browser view, but not other toasts", () => {
+    document.body.innerHTML = '<ol data-sonner-toaster class="attention-toaster"><li data-sonner-toast></li></ol>'
+    expect(hasOverlay(document.body)).toBe(false)
+    document.body.innerHTML = '<ol data-sonner-toaster><li data-sonner-toast></li></ol>'
+    expect(hasOverlay(document.body)).toBe(true)
+  })
+
   it('ignores dialogs and listboxes inside a pane', () => {
     document.body.innerHTML = '<div data-pane-leaf="p"><div role="dialog"></div><div role="listbox"></div></div>'
     expect(hasOverlay(document.body)).toBe(false)

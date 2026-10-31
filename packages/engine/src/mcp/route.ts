@@ -21,8 +21,12 @@ export function mcpRoute(toolset: ProjectToolset, token: string, agentTokens?: A
     const grant = agentGrantOf(c)
     const caller =
       grant === undefined
-        ? {}
-        : { profile: grant.profile, ...(grant.sessionId === undefined ? {} : { sessionId: grant.sessionId }) }
+        ? { signal: c.req.raw.signal }
+        : {
+            profile: grant.profile,
+            signal: c.req.raw.signal,
+            ...(grant.sessionId === undefined ? {} : { sessionId: grant.sessionId }),
+          }
     return c.json(await dispatchRpc(toolset, body, grant?.tools, caller))
   })
   return app

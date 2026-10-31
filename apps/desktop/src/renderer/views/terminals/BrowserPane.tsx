@@ -59,6 +59,47 @@ export function BrowserHandoffItems({ id, close }: { id: string; close: () => vo
 }
 
 /**
+ * What the agent asked the operator for. Only Done answers it: the agent's
+ * browser_ask_operator call stays blocked until then, and gets the reply.
+ */
+function AskBanner({ id, message }: { id: string; message: string }): JSX.Element {
+  const answerBrowserAsk = useApp((s) => s.answerBrowserAsk)
+  const [reply, setReply] = useState('')
+  const done = (): void => {
+    const text = reply.trim()
+    void answerBrowserAsk(id, text === '' ? undefined : text)
+  }
+  return (
+    <div
+      role="status"
+      data-browser-ask
+      className="flex shrink-0 items-center gap-2 border-b border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs text-amber-700 dark:text-amber-300"
+    >
+      <span className="min-w-0 flex-1 truncate" title={message}>
+        {message}
+      </span>
+      <input
+        aria-label="Reply to the agent"
+        placeholder="Reply (optional), for example a code"
+        spellCheck={false}
+        value={reply}
+        onChange={(e) => setReply(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            done()
+          }
+        }}
+        className="h-6 w-56 min-w-0 shrink rounded-md border border-border bg-surface-2 px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-border-strong"
+      />
+      <Button variant="outline" size="sm" className="h-6 shrink-0 px-2 text-xs" onClick={done}>
+        Done
+      </Button>
+    </div>
+  )
+}
+
+/**
  * One embedded browser: a renderer-side bar (back, forward, reload, address) over a page
  * area. The page itself is a native view owned by main; this pane only reports where its
  * area sits (null when the pane is not on screen) and shows the page's state.
@@ -86,6 +127,7 @@ export function BrowserPane({
   const [draft, setDraft] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pageRef = useRef<HTMLDivElement>(null)
+  const ask = useApp((s) => s.browserAsks[id])
   const acting = useApp((s) => s.browserActivity[id] === true)
   const ownerLabel = useApp((s) => {
     const owner = s.sessions.find((x) => x.id === browser.owner)
@@ -106,6 +148,10 @@ export function BrowserPane({
   useEffect(() => () => window.executioner.browser.place({ root, id, bounds: null }), [root, id])
 
   const crashed = state.crashed
+  // The ask banner takes its height from the page area, so the native view starts below it and
+  // nothing on the page is covered. The area's ResizeObserver reports that; placing again when
+  // the banner comes or goes means the bounds never depend on that callback alone.
+  const asking = ask !== undefined
   useEffect(() => {
     const el = pageRef.current
     const api = window.executioner.browser
@@ -133,7 +179,7 @@ export function BrowserPane({
       ro.disconnect()
       window.removeEventListener('resize', send)
     }
-  }, [root, id, visible, crashed])
+  }, [root, id, visible, crashed, asking])
 
   const operate = (op: 'back' | 'forward' | 'reload' | 'stop' | { navigate: string }): void => {
     setError(null)
@@ -200,6 +246,7 @@ export function BrowserPane({
         )}
         {state.loading && <div className="absolute inset-x-0 bottom-0 h-px animate-pulse bg-muted-foreground" data-testid="browser-loading" />}
       </div>
+      {ask !== undefined && <AskBanner key={ask} id={id} message={ask} />}
       <div ref={pageRef} data-browser-page className={cn('relative min-h-0 flex-1')}>
         {crashed && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">

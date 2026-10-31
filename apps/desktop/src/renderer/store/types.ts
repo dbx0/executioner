@@ -177,6 +177,8 @@ export interface OpenEngagement {
   browsers: BrowserTab[]
   /** Which browsers an agent is acting in right now, keyed by browser id. */
   browserActivity: Record<string, boolean>
+  /** Browsers an agent has asked the operator to take over, keyed by browser id, with its message. */
+  browserAsks: Record<string, string>
   /** The unified workspace selection: a terminal tab or a file tab (or none). */
   activeTab: ActiveTab | null
   /** Per-tab pin/color state, keyed by `${kind}:${id}`. */
@@ -218,6 +220,8 @@ export interface PersistedBrowser {
   id: string
   url: string
   title: string
+  /** The terminal that drove it, so a restore can hand it back to that agent's new terminal. */
+  owner?: string
 }
 
 /** The user's preferred execution backend kind, chosen during onboarding. */
@@ -290,6 +294,7 @@ export interface AppState {
   files: FileTab[]
   browsers: BrowserTab[]
   browserActivity: Record<string, boolean>
+  browserAsks: Record<string, string>
   activeTab: ActiveTab | null
   tabMeta: Record<string, TabMeta>
   /** Unsaved buffer per file-tab id. Outlives the editor component. */
@@ -414,11 +419,18 @@ export interface AppState {
   closeBrowser: (id: string) => void
   /** Hand a browser to a session's agent, or take it back with null. */
   setBrowserOwner: (id: string, owner: string | null) => Promise<void>
-  /** Apply a browser event the engine published to the active engagement. */
+  /** Apply a browser event an engagement's engine published; without `root`, the active one's. */
   handleBrowserEvent: (
-    event: 'opened' | 'owner' | 'closed' | 'activity',
-    item: BrowserTab & { active?: boolean },
+    event: 'opened' | 'owner' | 'closed' | 'activity' | 'ask' | 'answered',
+    item: BrowserTab & { active?: boolean; message?: string },
+    root?: string,
   ) => void
+  /** Take the operator to a browser's tab: its engagement, the workspace, and the pane that holds it. */
+  showBrowser: (root: string, id: string) => void
+  /** The operator is done with what the agent asked: unblock its wait, with an optional reply, and drop the signal. */
+  answerBrowserAsk: (id: string, reply?: string) => Promise<void>
+  /** Follow the page a browser shows, so a restart reopens it there. */
+  trackBrowserPage: (id: string, url: string, title: string) => void
   /** Reconcile the active engagement's browsers with the engine's. */
   syncBrowsers: () => Promise<void>
   /** Select any tab in the workspace strip (terminal or file). */

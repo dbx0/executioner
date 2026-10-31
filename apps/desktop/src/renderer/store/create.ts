@@ -132,6 +132,7 @@ export const useApp = create<AppState>((set, get) => {
     files: [],
     browsers: [],
     browserActivity: {},
+    browserAsks: {},
     activeTab: null,
     tabMeta: {},
     editorAutoSave: loadEditorAutoSave(),

@@ -1,5 +1,7 @@
-import { WebContentsView, type BrowserWindow, type Session } from 'electron'
+import { WebContentsView, type BrowserWindow, type Session, type WebContents } from 'electron'
 import { CdpDriver, type Cdp, type Dyn, type OperatorDialog } from './cdp-driver'
+import { cleanUserAgent, type EmulationState } from './emulation'
+import type { Rule } from './rewrite'
 
 export interface Bounds {
   x: number
@@ -24,13 +26,23 @@ const PARKED_X = -20000
 /** Partitions whose permission handler is already set; it is per session, so once is enough. */
 const guarded = new Set<string>()
 
+/** Pages whose agent set a geolocation override; only they may read a position. */
+const geolocating = new WeakSet<WebContents>()
+
+function permitted(contents: WebContents | null, permission: string): boolean {
+  if (permission === 'geolocation') return contents !== null && geolocating.has(contents)
+  return permission === 'clipboard-sanitized-write'
+}
+
 function guardSession(partition: string, ses: Session): void {
   if (guarded.has(partition)) return
   guarded.add(partition)
-  ses.setPermissionRequestHandler((_contents, permission, callback) => {
-    callback(permission === 'clipboard-sanitized-write')
+  // Electron's default names the app and Electron; pages should see plain Chrome.
+  ses.setUserAgent(cleanUserAgent(ses.getUserAgent()))
+  ses.setPermissionRequestHandler((contents, permission, callback) => {
+    callback(permitted(contents, permission))
   })
-  ses.setPermissionCheckHandler((_contents, permission) => permission === 'clipboard-sanitized-write')
+  ses.setPermissionCheckHandler((contents, permission) => permitted(contents, permission))
 }
 
 /**
@@ -51,12 +63,19 @@ export class BrowserPage {
     partition: string,
     private readonly push: (state: BrowserState) => void,
     askOperator: (d: OperatorDialog) => Promise<{ accept: boolean; promptText?: string }>,
+    /** Emulation a replaced page had, and where to report changes so the next replacement keeps it. */
+    emulation?: { initial: EmulationState; changed: (state: EmulationState) => void },
+    /** Rewrite rules a replaced page had, kept the same way. */
+    rules?: { initial: Rule[]; changed: (rules: Rule[]) => void },
   ) {
     this.view = new WebContentsView({
       webPreferences: { partition, sandbox: true, contextIsolation: true, nodeIntegration: false },
     })
     const wc = this.view.webContents
     guardSession(partition, wc.session)
+    // The view took the session's user agent when it was made, which may predate the cleanup above.
+    const defaultUserAgent = cleanUserAgent(wc.session.getUserAgent())
+    wc.setUserAgent(defaultUserAgent)
     try {
       wc.debugger.attach('1.3')
     } catch (err) {
@@ -70,10 +89,11 @@ export class BrowserPage {
       return { action: 'deny' }
     })
     const cdp: Cdp = {
-      send: (method, params) => wc.debugger.sendCommand(method, params) as Promise<Dyn>,
+      send: (method, params, sessionId) => wc.debugger.sendCommand(method, params, sessionId || undefined) as Promise<Dyn>,
       on: (event, cb) => {
-        const listener = (_e: unknown, method: string, params: Dyn): void => {
-          if (method === event) cb(params)
+        const listener = (_e: unknown, method: string, params: Dyn, sessionId: string): void => {
+          // Electron reports root-session events with an empty session id.
+          if (method === event) cb(params, sessionId || undefined)
         }
         wc.debugger.on('message', listener)
         return () => {
@@ -81,7 +101,21 @@ export class BrowserPage {
         }
       },
     }
-    this.driver = new CdpDriver(cdp, { askOperator })
+    const track = (state: EmulationState): void => {
+      if (state.geolocation !== undefined) geolocating.add(wc)
+      else geolocating.delete(wc)
+    }
+    this.driver = new CdpDriver(cdp, {
+      askOperator,
+      defaultUserAgent,
+      emulation: emulation?.initial,
+      onEmulation: (state) => {
+        track(state)
+        emulation?.changed(state)
+      },
+      rules: rules?.initial,
+      onRules: (next) => rules?.changed(next),
+    })
 
     const emit = (): void => this.emit()
     wc.on('did-start-loading', emit)

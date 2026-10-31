@@ -41,6 +41,13 @@ export function EngagementRail(): JSX.Element {
               <TooltipContent side="right">{e.name}</TooltipContent>
             </Tooltip>
             {active && <span className="absolute -right-2.5 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-foreground" />}
+            {Object.keys(e.browserAsks).length > 0 && (
+              <span
+                data-engagement-ask
+                title="An agent needs you in the browser"
+                className="pointer-events-none absolute -bottom-0.5 -left-0.5 size-2.5 animate-pulse rounded-full border border-surface-1 bg-amber-500"
+              />
+            )}
             <button
               type="button"
               onClick={() => closeEngagement(e.root)}

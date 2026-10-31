@@ -153,9 +153,11 @@ describe('browser persistence', () => {
   it('browsers persist and restore with their ids', () => {
     saveBrowsers(ROOT, [{ id: 'b1', owner: 't1', url: 'https://x.test', title: 'X' }])
     expect(JSON.parse(localStorage.getItem(`exe.browsers:${ROOT}`) ?? 'null')).toEqual([
-      { id: 'b1', url: 'https://x.test', title: 'X' },
+      { id: 'b1', url: 'https://x.test', title: 'X', owner: 't1' },
     ])
-    expect(loadBrowsers(ROOT)).toEqual([{ id: 'b1', url: 'https://x.test', title: 'X' }])
+    expect(loadBrowsers(ROOT)).toEqual([{ id: 'b1', url: 'https://x.test', title: 'X', owner: 't1' }])
+    saveBrowsers(ROOT, [{ id: 'b2', owner: null, url: '', title: '' }])
+    expect(loadBrowsers(ROOT)).toEqual([{ id: 'b2', url: '', title: '' }])
   })
 
   it('a browser pane survives reconcile under its stable id', () => {

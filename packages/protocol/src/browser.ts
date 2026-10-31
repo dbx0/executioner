@@ -14,6 +14,13 @@ export const BROWSER_ACTIONS = [
   'wait',
   'screenshot',
   'log',
+  'network',
+  'response_body',
+  'rewrite',
+  'upload',
+  'mouse',
+  'drag',
+  'emulate',
   'close',
 ] as const
 

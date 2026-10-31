@@ -87,6 +87,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       files: [],
       browsers: [],
       browserActivity: {},
+      browserAsks: {},
       activeTab: null,
       tabMeta: {},
       editorDrafts: {},
@@ -155,12 +156,20 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       }
     }
     // Browser ids are stable, so the engine re-registers each under its old id and the saved
-    // layouts need no remap. They come back with no owner: the sessions that held them are new.
+    // layouts need no remap. The terminal that drove one comes back under a new id, so the
+    // browser goes to that id: a resumed agent keeps driving its own browser instead of opening
+    // another. Each reloads the page it last showed.
     const restoredBrowsers: BrowserTab[] = []
     for (const pb of persistedBrowsers) {
       try {
-        const item = await browsersApi(engagement.client).create({ id: pb.id, url: pb.url, title: pb.title })
-        restoredBrowsers.push({ id: item.id, url: item.url, title: item.title, owner: null })
+        const bApi = browsersApi(engagement.client)
+        const created = await bApi.create({ id: pb.id, url: pb.url, title: pb.title })
+        const owner = pb.owner === undefined ? undefined : newIdOf.get(pb.owner)
+        const item = owner === undefined ? created : await bApi.update(created.id, { owner })
+        restoredBrowsers.push({ id: item.id, url: item.url, title: item.title, owner: item.owner })
+        if (item.url !== '') {
+          window.executioner?.browser?.operator({ root, id: item.id, op: { navigate: item.url } }).catch(() => undefined)
+        }
       } catch {
         /* a browser that fails to register is dropped rather than blocking the rest */
       }
@@ -298,6 +307,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       files: [],
       browsers: [],
       browserActivity: {},
+      browserAsks: {},
       activeTab: null,
       tabMeta: {},
       editorDrafts: {},
@@ -369,6 +379,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
             files: [],
             browsers: [],
             browserActivity: {},
+            browserAsks: {},
             activeTab: null,
             tabMeta: {},
             editorDrafts: {},
