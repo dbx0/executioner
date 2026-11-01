@@ -45,7 +45,7 @@ export function SubagentNodeRow({ node }: { node: SubagentNode }): JSX.Element {
 /** A nested level of sub-agent rows, indented with a lineage guide-line. */
 export function SubagentChildren({ nodes }: { nodes: SubagentNode[] }): JSX.Element {
   return (
-    <div className="ml-[1.15rem] flex flex-col gap-0.5 border-l border-border pl-1.5">
+    <div className="ml-4 flex flex-col gap-0.5 border-l border-border pl-1.5">
       {nodes.map((node) => (
         <SubagentNodeRow key={node.id} node={node} />
       ))}

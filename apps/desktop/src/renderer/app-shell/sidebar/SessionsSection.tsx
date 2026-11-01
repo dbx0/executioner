@@ -65,23 +65,12 @@ function AgentRow({ session }: { session: Session }): JSX.Element {
     <div>
       <div
         className={cn(
-          'group flex h-8 w-full items-center gap-0.5 rounded-md pr-2 text-[13px] transition-colors',
+          'group flex h-8 w-full items-center gap-1 rounded-md px-2 text-[13px] transition-colors',
           isActive
             ? 'selected-surface text-sidebar-accent-foreground'
             : 'text-muted-foreground hover:bg-surface-2',
         )}
       >
-        <button
-          type="button"
-          aria-label={collapsed ? 'Expand sub-agents' : 'Collapse sub-agents'}
-          onClick={() => setCollapsed((c) => !c)}
-          className={cn(
-            'grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:text-sidebar-foreground',
-            !hasSubs && 'invisible',
-          )}
-        >
-          <ChevronRight className={cn('size-3.5 transition-transform', !collapsed && 'rotate-90')} strokeWidth={2} />
-        </button>
         <button
           type="button"
           onClick={() => {
@@ -94,6 +83,16 @@ function AgentRow({ session }: { session: Session }): JSX.Element {
           <span className="truncate">{session.title ?? session.label}</span>
           <AgentStatusDot state={working ? 'working' : 'idle'} className="ml-auto" />
         </button>
+        {hasSubs && (
+          <button
+            type="button"
+            aria-label={collapsed ? 'Expand sub-agents' : 'Collapse sub-agents'}
+            onClick={() => setCollapsed((c) => !c)}
+            className="-mr-1 grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:text-sidebar-foreground"
+          >
+            <ChevronRight className={cn('size-3.5 transition-transform', !collapsed && 'rotate-90')} strokeWidth={2} />
+          </button>
+        )}
       </div>
       {hasSubs && !collapsed && <SubagentChildren nodes={tree} />}
     </div>
