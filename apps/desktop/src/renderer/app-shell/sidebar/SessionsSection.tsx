@@ -112,31 +112,25 @@ export function SessionsSection(): JSX.Element {
   const shells = sessions.filter((x) => x.agent === 'shell')
   const setActiveView = useApp((s) => s.setActiveView)
   // The workspace is empty only when nothing at all is open (no sessions, no
-  // files). Then the "+" lands on the empty workspace with its Terminal / Agent
-  // launchers; otherwise it opens the spawn menu to add another session.
+  // files). Then the "+" also lands on the empty workspace with its launchers,
+  // while still opening the spawn menu like it does everywhere else.
   const workspaceEmpty = sessions.length === 0 && files.length === 0
 
   return (
     <>
       <div className="flex items-center justify-between">
         <SectionLabel>Sessions</SectionLabel>
-        {workspaceEmpty ? (
+        <SpawnMenu>
           <Button
             variant="ghost"
             size="icon-xs"
             className="mt-1 text-muted-foreground"
             aria-label="New session"
-            onClick={() => setActiveView('terminals')}
+            onClick={workspaceEmpty ? () => setActiveView('terminals') : undefined}
           >
             <Plus className="size-4" strokeWidth={1.75} />
           </Button>
-        ) : (
-          <SpawnMenu>
-            <Button variant="ghost" size="icon-xs" className="mt-1 text-muted-foreground" aria-label="New session">
-              <Plus className="size-4" strokeWidth={1.75} />
-            </Button>
-          </SpawnMenu>
-        )}
+        </SpawnMenu>
       </div>
       {sessions.length === 0 ? (
         <p className="px-1 py-1 text-xs text-muted-foreground">No sessions running.</p>
