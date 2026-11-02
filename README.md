@@ -47,6 +47,19 @@ One click starts a whole team. Recon & Strike enumerates, scans, exploits and wr
   </picture>
 </p>
 
+### A browser your agents can drive
+
+Agents get a real browser inside the engagement. It opens next to the agent's terminal, so you can watch every click and take the page back whenever you want. Each engagement's browser is isolated, with its own cookies and storage.
+
+The agent can read the network traffic with the headers that were actually sent, rewrite requests, work inside iframes, emulate a location, language or user agent, upload files, and save screenshots as evidence. When it hits a CAPTCHA or an MFA code, it asks you in a bar above the page and waits until you're done.
+
+<p align="center">
+  <picture>
+    <source srcset="docs/assets/features/browser.gif" type="image/gif" />
+    <img src="docs/assets/features/browser.jpg" alt="An agent signing in through the embedded browser, asking the operator for an MFA code, then confirming an IDOR on the account API" width="100%" />
+  </picture>
+</p>
+
 ### Describe a workflow and let the assistant draft it
 
 Tell the assistant what you want in plain words: *"when a new subdomain shows up, probe it, screenshot it and have Claude look for login pages."* It proposes a graph, and once you've reviewed it, one click puts it on the canvas.
@@ -139,7 +152,7 @@ An engagement is a folder. Scope, targets, findings, workflows, notes and eviden
 
 Executioner drives the agent CLIs you already have installed and logged in. Tools run locally, on a remote box over SSH, or inside a Docker container such as Kali or Parrot. API keys for integrations like Shodan and Censys are stored locally and referenced by name in workflows.
 
-The network traffic comes from two places you control: your tools talking to your targets, and each agent CLI talking to its own model provider under your account.
+The network traffic comes from two places you control: your tools and the embedded browser talking to your targets, and each agent CLI talking to its own model provider under your account.
 
 ## Bring your own agent
 
