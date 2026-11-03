@@ -15,6 +15,7 @@
     "typecheck": "tsc -b && tsc -p tsconfig.test.json && tsc --noEmit -p apps/desktop/tsconfig.json",
     "host": "pnpm --filter @exe/team-server start",
     "host:mac": "pnpm --filter @exe/team-server build && pnpm --filter @exe/team-server exec node dist/cli.js serve --open",
+    "host:app": "pnpm --filter @exe/team-server pack:mac",
     "postinstall": "node scripts/fix-node-pty.mjs"
   },
   "devDependencies": {
