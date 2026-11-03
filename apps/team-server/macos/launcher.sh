@@ -213,7 +213,18 @@ URL="$(portable_ui_url "${BIND}" "${TOKEN}")"
 open_ui "${URL}"
 notify "Executioner Host is ready."
 
-# Stay alive so Quit from Dock stops the host.
+REOPEN_FLAG="${SUPPORT}/reopen.flag"
+rm -f "${REOPEN_FLAG}"
+
+# Stay alive so Quit from Dock stops the host. Stub signals reopen via flag file.
 trap 'kill "${HOST_PID}" 2>/dev/null || true; wait "${HOST_PID}" 2>/dev/null || true; exit 0' TERM INT HUP
-wait "${HOST_PID}"
-exit $?
+while kill -0 "${HOST_PID}" 2>/dev/null; do
+  if [[ -f "${REOPEN_FLAG}" ]]; then
+    rm -f "${REOPEN_FLAG}"
+    open_ui "$(portable_ui_url "${BIND}" "${TOKEN}")"
+    notify "Opened the portable UI."
+  fi
+  sleep 0.25
+done
+wait "${HOST_PID}" 2>/dev/null || true
+exit 0

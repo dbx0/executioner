@@ -56,8 +56,9 @@ cp "${MACOS_DIR}/Info.plist" "${OUT_APP}/Contents/Info.plist"
 install -m 0755 "${MACOS_DIR}/launcher.sh" "${OUT_APP}/Contents/Resources/launcher.sh"
 # Launch Services requires a Mach-O CFBundleExecutable; the stub execs launcher.sh.
 clang -Os -arch arm64 -arch x86_64 \
+  -framework Cocoa \
   -o "${OUT_APP}/Contents/MacOS/launcher" \
-  "${MACOS_DIR}/launcher-stub.c"
+  "${MACOS_DIR}/launcher-stub.m"
 chmod 0755 "${OUT_APP}/Contents/MacOS/launcher"
 mv "${STAGE_REPO}" "${OUT_APP}/Contents/Resources/executioner"
 
