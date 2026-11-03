@@ -97,7 +97,6 @@ type BrowserStateEvent = {
   }
 }
 
-/** Install `window.executioner` talking to `/host/*` including host-owned browser windows. */
 export function installHostBridge(config: HostBridgeConfig): void {
   const openProject = async (req: OpenProjectRequest): Promise<EngineConnection> => {
     const body = await hostJson<{
@@ -241,9 +240,7 @@ export function installHostBridge(config: HostBridgeConfig): void {
         es.onmessage = (ev: MessageEvent<string>): void => {
           try {
             listener(JSON.parse(ev.data) as BrowserStateEvent)
-          } catch {
-            /* ignore malformed frames */
-          }
+          } catch {}
         }
         return () => es.close()
       },

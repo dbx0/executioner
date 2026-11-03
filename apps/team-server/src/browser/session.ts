@@ -2,7 +2,6 @@ import type { Cdp } from './cdp.js'
 import type { Bounds, BrowserState, OperatorOp } from './types.js'
 import { EMPTY_STATE } from './types.js'
 
-/** An address-bar navigation may only reach the web. */
 export function operatorUrl(raw: string): string {
   const url = new URL(raw)
   if (url.protocol !== 'http:' && url.protocol !== 'https:' && raw !== 'about:blank') {
@@ -103,9 +102,7 @@ export class HostBrowserSession {
           height: Math.max(1, Math.round(bounds.height)),
         },
       })
-    } catch {
-      /* window may already be gone */
-    }
+    } catch {}
   }
 
   async setOccluded(occluded: boolean): Promise<void> {
@@ -115,9 +112,7 @@ export class HostBrowserSession {
         windowId: this.windowId,
         bounds: { windowState: occluded ? 'minimized' : 'normal' },
       })
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   }
 
   async operator(op: OperatorOp): Promise<void> {

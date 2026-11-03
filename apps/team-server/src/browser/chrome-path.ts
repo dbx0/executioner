@@ -7,10 +7,6 @@ const MAC_CANDIDATES = [
   '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
 ]
 
-/**
- * Resolve a Chromium-based binary for host-owned windows.
- * Honors EXE_CHROME_PATH, then macOS app bundles.
- */
 export function resolveChromePath(
   platform: NodeJS.Platform,
   env: NodeJS.ProcessEnv = process.env,

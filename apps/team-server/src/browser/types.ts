@@ -1,4 +1,3 @@
-/** Pane bounds from the portable UI; null parks the host window. */
 export interface Bounds {
   x: number
   y: number

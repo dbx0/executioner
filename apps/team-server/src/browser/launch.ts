@@ -57,7 +57,6 @@ async function waitForDebugger(port: number, timeoutMs: number): Promise<{ wsUrl
   )
 }
 
-/** Launch one Chromium process with a browser-level CDP websocket. */
 export const launchChrome: ChromeLauncher = async ({ platform, env = process.env }) => {
   const binary = resolveChromePath(platform, env)
   if (binary === null) {
@@ -86,9 +85,7 @@ export const launchChrome: ChromeLauncher = async ({ platform, env = process.env
     if (child.pid !== undefined && !child.killed) {
       try {
         child.kill('SIGTERM')
-      } catch {
-        /* already gone */
-      }
+      } catch {}
     }
     await new Promise<void>((resolve) => {
       if (child.exitCode !== null || child.signalCode !== null) {
@@ -98,9 +95,7 @@ export const launchChrome: ChromeLauncher = async ({ platform, env = process.env
       const t = setTimeout(() => {
         try {
           child.kill('SIGKILL')
-        } catch {
-          /* ignore */
-        }
+        } catch {}
         resolve()
       }, 2000)
       child.once('exit', () => {

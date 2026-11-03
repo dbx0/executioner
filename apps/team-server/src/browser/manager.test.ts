@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Cdp, Dyn } from './cdp.js'
+import type { Cdp, CdpJson } from './cdp.js'
 import { HostBrowserManager } from './manager.js'
 import { BROWSER_DARWIN_REQUIRED } from './types.js'
 
@@ -11,7 +11,7 @@ function fakeCdp(initialUrl = 'about:blank'): {
     currentIndex: 0,
     entries: [{ id: 1, url: initialUrl, title: '' }],
   }
-  const listeners = new Map<string, Set<(params: Dyn, sessionId?: string) => void>>()
+  const listeners = new Map<string, Set<(params: CdpJson, sessionId?: string) => void>>()
   let nextTarget = 1
   let lastNavigated = initialUrl
   const windowIds = new Map<string, number>()

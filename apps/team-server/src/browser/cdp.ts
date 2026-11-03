@@ -1,10 +1,9 @@
-/** CDP payloads are untyped JSON. */
-export type Dyn = ReturnType<typeof JSON.parse>
+export type CdpJson = unknown
 
 /** Minimal CDP send/on surface (browser or flattened target session). */
 export interface Cdp {
-  send(method: string, params?: Record<string, unknown>, sessionId?: string): Promise<Dyn>
-  on(event: string, cb: (params: Dyn, sessionId?: string) => void): () => void
+  send(method: string, params?: Record<string, unknown>, sessionId?: string): Promise<CdpJson>
+  on(event: string, cb: (params: CdpJson, sessionId?: string) => void): () => void
   close(): void
 }
 
@@ -30,14 +29,14 @@ export async function connectCdp(webSocketUrl: string): Promise<Cdp> {
   })
 
   let nextId = 1
-  const pending = new Map<number, { resolve: (v: Dyn) => void; reject: (e: Error) => void }>()
-  const listeners = new Map<string, Set<(params: Dyn, sessionId?: string) => void>>()
+  const pending = new Map<number, { resolve: (v: CdpJson) => void; reject: (e: Error) => void }>()
+  const listeners = new Map<string, Set<(params: CdpJson, sessionId?: string) => void>>()
 
   ws.addEventListener('message', (ev) => {
     const raw = typeof ev.data === 'string' ? ev.data : Buffer.from(ev.data as ArrayBuffer).toString('utf8')
-    let msg: Dyn
+    let msg: CdpJson
     try {
-      msg = JSON.parse(raw) as Dyn
+      msg = JSON.parse(raw) as CdpJson
     } catch {
       return
     }
@@ -50,13 +49,13 @@ export async function connectCdp(webSocketUrl: string): Promise<Cdp> {
         const err = msg.error as { message?: string }
         slot.reject(new Error(err.message ?? 'CDP error'))
       } else {
-        slot.resolve((msg as { result?: Dyn }).result ?? null)
+        slot.resolve((msg as { result?: CdpJson }).result ?? null)
       }
       return
     }
     if (msg !== null && typeof msg === 'object' && 'method' in msg && typeof (msg as { method: unknown }).method === 'string') {
       const method = (msg as { method: string }).method
-      const params = ((msg as { params?: Dyn }).params ?? {}) as Dyn
+      const params = ((msg as { params?: CdpJson }).params ?? {}) as CdpJson
       const sessionId =
         'sessionId' in msg && typeof (msg as { sessionId: unknown }).sessionId === 'string'
           ? (msg as { sessionId: string }).sessionId
@@ -76,7 +75,7 @@ export async function connectCdp(webSocketUrl: string): Promise<Cdp> {
   return {
     send(method, params, sessionId) {
       const id = nextId++
-      return new Promise<Dyn>((resolve, reject) => {
+      return new Promise<CdpJson>((resolve, reject) => {
         if (ws.readyState !== WebSocket.OPEN) {
           reject(new Error('CDP websocket not open'))
           return
