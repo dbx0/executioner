@@ -10,7 +10,7 @@ interface Provider {
   name: string
   domain: string
   description: string
-  keys: { key: string; label: string; placeholder: string }[]
+  keys: { key: string; label: string; placeholder: string; optional?: boolean }[]
 }
 
 /** The API-key providers the integration nodes support. */
@@ -24,10 +24,15 @@ const PROVIDERS: Provider[] = [
   {
     name: 'Censys',
     domain: 'censys.io',
-    description: 'Host view — get credentials at search.censys.io/account/api',
+    description: 'Host view. Create a personal access token at platform.censys.io',
     keys: [
-      { key: 'CENSYS_API_ID', label: 'API ID', placeholder: 'UUID, e.g. 1a2b3c4d-5e6f-7890-abcd-ef1234567890' },
-      { key: 'CENSYS_API_SECRET', label: 'API secret', placeholder: 'your Censys API secret' },
+      { key: 'CENSYS_API_TOKEN', label: 'Personal access token', placeholder: 'censys_…' },
+      {
+        key: 'CENSYS_ORG_ID',
+        label: 'Organization ID',
+        placeholder: 'Optional. Paid plans only, leave empty on Free',
+        optional: true,
+      },
     ],
   },
 ]
@@ -78,7 +83,7 @@ export function SecretsSection({ client }: { client: AxiosInstance }): JSX.Eleme
     <>
       <div className="flex flex-col">
         {PROVIDERS.map((p) => {
-          const configured = p.keys.every((k) => setKeys.has(k.key))
+          const configured = p.keys.every((k) => k.optional === true || setKeys.has(k.key))
           return (
             <div key={p.name} className="flex items-center gap-3 border-b border-border py-3">
               <Favicon domain={p.domain} />
@@ -165,6 +170,7 @@ function SetSecretModal({
             <label key={k.key} className="flex flex-col gap-1 text-[13px]">
               <span className="flex items-center gap-2">
                 {k.label}
+                {k.optional === true && <span className="text-[11px] text-muted-foreground">optional</span>}
                 <span className="font-mono text-[11px] text-muted-foreground">{k.key}</span>
                 {setKeys.has(k.key) && <span className="text-[11px] text-status-success">set</span>}
               </span>

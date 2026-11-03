@@ -95,22 +95,50 @@ describe('shodan node', () => {
 })
 
 describe('censys node', () => {
-  it('records facts using CENSYS_API_ID/SECRET secrets', async () => {
+  it('records facts using the CENSYS_API_TOKEN secret', async () => {
     const fetchMock = vi.fn(async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
-      new Response(JSON.stringify({ result: { services: [{ port: 443, transport_protocol: 'TCP', service_name: 'HTTP' }] } }), { status: 200 }),
+      new Response(
+        JSON.stringify({
+          result: {
+            resource: {
+              services: [
+                { port: 443, transport_protocol: 'tcp', protocol: 'HTTP' },
+                { port: 443, transport_protocol: 'quic', protocol: 'UNKNOWN' },
+              ],
+            },
+          },
+        }),
+        { status: 200 },
+      ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    project.secrets.set('CENSYS_API_ID', 'id')
-    project.secrets.set('CENSYS_API_SECRET', 'sec')
+    project.secrets.set('CENSYS_API_TOKEN', 'censys_tok')
     const target = project.targets.upsert({ kind: 'ip', value: '8.8.8.8', source: 'manual' })
     const graph = graphSchema.parse({ nodes: [{ id: 'c', type: 'censys', data: {} }], edges: [] })
     const exec = newExecutor()
     const result = await exec.run({ graph, workflowId: null, targetId: target.id, testMode: false })
     expect(result.status).toBe('succeeded')
-    const init = must(fetchMock.mock.calls[0]?.[1])
-    expect((init.headers as Record<string, string>).authorization).toContain('Basic ')
-    expect(project.facts.forTarget(target.id, 'port')).toHaveLength(1)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://api.platform.censys.io/v3/global/asset/host/8.8.8.8')
+    const headers = must(fetchMock.mock.calls[0]?.[1]).headers as Record<string, string>
+    expect(headers.authorization).toBe('Bearer censys_tok')
+    expect(headers['x-organization-id']).toBeUndefined()
+    expect(project.facts.forTarget(target.id, 'port')).toHaveLength(2)
     expect(project.facts.forTarget(target.id, 'technology')).toHaveLength(1)
+  })
+
+  it('sends the organization ID when CENSYS_ORG_ID is set', async () => {
+    const fetchMock = vi.fn(async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
+      new Response(JSON.stringify({ result: { resource: { services: [] } } }), { status: 200 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    project.secrets.set('CENSYS_API_TOKEN', 'censys_tok')
+    project.secrets.set('CENSYS_ORG_ID', 'org-123')
+    const target = project.targets.upsert({ kind: 'ip', value: '8.8.8.8', source: 'manual' })
+    const graph = graphSchema.parse({ nodes: [{ id: 'c', type: 'censys', data: {} }], edges: [] })
+    const result = await newExecutor().run({ graph, workflowId: null, targetId: target.id, testMode: false })
+    expect(result.status).toBe('succeeded')
+    const headers = must(fetchMock.mock.calls[0]?.[1]).headers as Record<string, string>
+    expect(headers['x-organization-id']).toBe('org-123')
   })
 
   it('fails cleanly when creds are missing', async () => {

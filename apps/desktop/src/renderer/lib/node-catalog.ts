@@ -289,12 +289,12 @@ export const CONTROL_ENTRIES: CatalogEntry[] = [
     label: 'Censys',
     kind: 'censys',
     category: 'recon',
-    description: 'Censys host view. Records port/technology facts. Needs the CENSYS_API_ID/CENSYS_API_SECRET secrets.',
+    description: 'Censys Platform host view. Records port/technology facts. Needs the CENSYS_API_TOKEN secret.',
     accepts: ['ip', 'domain', 'subdomain'],
     params: [
       { name: 'target', type: 'string', description: 'IP to query. Defaults to the run target.' },
-      { name: 'api_id', type: 'string', default: '{{ secrets.CENSYS_API_ID }}', description: 'API ID. Defaults to the CENSYS_API_ID secret.' },
-      { name: 'api_secret', type: 'string', default: '{{ secrets.CENSYS_API_SECRET }}', description: 'API secret. Defaults to the CENSYS_API_SECRET secret.' },
+      { name: 'api_token', type: 'string', default: '{{ secrets.CENSYS_API_TOKEN }}', description: 'Personal access token. Defaults to the CENSYS_API_TOKEN secret.' },
+      { name: 'org_id', type: 'string', default: '{{ secrets.CENSYS_ORG_ID }}', description: 'Organization ID for paid plans. Defaults to the CENSYS_ORG_ID secret; leave empty on Free.' },
     ],
   },
   {

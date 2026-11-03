@@ -274,11 +274,11 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     label: 'Censys',
     kind: 'censys',
     category: 'recon',
-    description: 'Censys host view. Needs the CENSYS_API_ID/CENSYS_API_SECRET secrets.',
+    description: 'Censys Platform host view. Needs the CENSYS_API_TOKEN secret (CENSYS_ORG_ID optional, for paid plans).',
     params: [
       param({ name: 'target', type: 'string', description: 'IP to query. Defaults to the run target.' }),
-      param({ name: 'api_id', type: 'string', default: '{{ secrets.CENSYS_API_ID }}' }),
-      param({ name: 'api_secret', type: 'string', default: '{{ secrets.CENSYS_API_SECRET }}' }),
+      param({ name: 'api_token', type: 'string', default: '{{ secrets.CENSYS_API_TOKEN }}' }),
+      param({ name: 'org_id', type: 'string', default: '{{ secrets.CENSYS_ORG_ID }}' }),
     ],
   },
   {

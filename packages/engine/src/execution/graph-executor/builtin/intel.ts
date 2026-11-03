@@ -126,7 +126,10 @@ export async function runShodan(
   }
 }
 
-/** censys: host view via the Censys API (basic auth); records `port`/`technology` facts. */
+/**
+ * censys: host view via the Censys Platform API (personal access token, plus an
+ * organization ID on paid plans); records `port`/`technology` facts.
+ */
 export async function runCensys(
   deps: BuiltinNodeDeps,
   node: { id: string; data: Record<string, unknown> },
@@ -140,15 +143,15 @@ export async function runCensys(
   deps.bus.publish({ type: 'status', executionId, nodeId: node.id, data: 'running' })
   const ctx = scopeFor(deps.project, target, executionId, nodeOutputs, vars, secrets, loop)
   const value = resolveNodeTarget(node, target, ctx)
-  const apiId = resolveSecretParam(node.data.api_id, ctx, secrets, 'CENSYS_API_ID')
-  const apiSecret = resolveSecretParam(node.data.api_secret, ctx, secrets, 'CENSYS_API_SECRET')
-  if (apiId === '' || apiSecret === '') {
+  const token = resolveSecretParam(node.data.api_token, ctx, secrets, 'CENSYS_API_TOKEN')
+  const orgId = resolveSecretParam(node.data.org_id, ctx, secrets, 'CENSYS_ORG_ID')
+  if (token === '') {
     finishBuiltin(
       deps,
       executionId,
       node.id,
       'failed',
-      'Censys credentials not configured (set the CENSYS_API_ID and CENSYS_API_SECRET secrets)',
+      'Censys token not configured (set the CENSYS_API_TOKEN secret to a Censys Platform personal access token)',
       [],
       null,
     )
@@ -159,35 +162,36 @@ export async function runCensys(
     return
   }
   const timeoutMs = Number(node.data.timeout ?? 30000)
-  const url = `https://search.censys.io/api/v2/hosts/${encodeURIComponent(value)}`
-  const authHeader = `Basic ${Buffer.from(`${apiId}:${apiSecret}`).toString('base64')}`
+  const url = `https://api.platform.censys.io/v3/global/asset/host/${encodeURIComponent(value)}`
+  const headers: Record<string, string> = { authorization: `Bearer ${token}`, accept: 'application/json' }
+  // Free accounts have no organization; paid plans need it to use their entitlements.
+  if (orgId !== '') headers['x-organization-id'] = orgId
   try {
-    const res = await fetch(url, {
-      headers: { authorization: authHeader, accept: 'application/json' },
-      signal: AbortSignal.timeout(timeoutMs),
-    })
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) })
     const text = await res.text()
     const stdoutPath = writeBuiltinEvidence(deps.project, executionId, node.id, text)
     if (!res.ok) {
       finishBuiltin(deps, executionId, node.id, 'failed', `censys HTTP ${res.status}: ${text.slice(0, 200)}`, [], stdoutPath)
       return
     }
-    const body = JSON.parse(text) as { result?: { services?: Array<Record<string, unknown>> } }
-    const services = body.result?.services ?? []
+    const body = JSON.parse(text) as { result?: { resource?: { services?: Array<Record<string, unknown>> } } }
+    const services = body.result?.resource?.services ?? []
     const rows: Array<Record<string, unknown>> = []
     if (target !== undefined) {
       for (const svc of services) {
-        const portRow: Record<string, unknown> = { port: svc.port, transport: svc.transport_protocol ?? 'TCP' }
-        if (svc.service_name !== undefined) portRow.service = svc.service_name
+        // Censys labels services it could not identify as UNKNOWN; that is not a technology.
+        const protocol = typeof svc.protocol === 'string' && svc.protocol !== 'UNKNOWN' ? svc.protocol : ''
+        const portRow: Record<string, unknown> = { port: svc.port, transport: svc.transport_protocol ?? 'tcp' }
+        if (protocol !== '') portRow.service = protocol
         deps.project.facts.record({ targetId: target.id, kind: 'port', executionId, nodeId: node.id, data: portRow })
         rows.push(portRow)
-        if (typeof svc.service_name === 'string' && svc.service_name !== '') {
+        if (protocol !== '') {
           deps.project.facts.record({
             targetId: target.id,
             kind: 'technology',
             executionId,
             nodeId: node.id,
-            data: { name: svc.service_name, source: 'censys' },
+            data: { name: protocol, source: 'censys' },
           })
         }
       }
