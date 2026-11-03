@@ -1,4 +1,5 @@
-import { WebContentsView, type BrowserWindow, type Session, type WebContents } from 'electron'
+import { Menu, WebContentsView, type BrowserWindow, type Session, type WebContents } from 'electron'
+import { editMenuTemplate } from '../edit-menu'
 import { CdpDriver, type Cdp, type Dyn, type OperatorDialog } from './cdp-driver'
 import { cleanUserAgent, type EmulationState } from './emulation'
 import type { Rule } from './rewrite'
@@ -57,6 +58,9 @@ export class BrowserPage {
   private occluded = false
   private crashedFlag = false
   private destroyed = false
+  /** Whether the view was on screen at the last applyBounds, so a repaint can fire on each show. */
+  private shown = false
+  private repaintTimer: ReturnType<typeof setTimeout> | undefined
 
   constructor(
     private readonly win: BrowserWindow,
@@ -132,6 +136,15 @@ export class BrowserPage {
     wc.on('render-process-gone', () => {
       this.crashedFlag = true
       this.emit()
+    })
+    // The page is a native view with its own web contents, so the main window's
+    // right-click handler never sees it; wire the same text menu here so Copy,
+    // Paste and Select all work inside the page. Popping it over the window
+    // leaves the view with a stale frame on Linux, so redraw once it closes.
+    wc.on('context-menu', (_e, params) => {
+      const template = editMenuTemplate(params)
+      if (template === null || this.destroyed) return
+      Menu.buildFromTemplate(template).popup({ window: this.win, callback: () => this.repaint() })
     })
     // Last, so nothing above can throw with the view already on screen.
     win.contentView.addChildView(this.view)
@@ -229,6 +242,7 @@ export class BrowserPage {
   destroy(): void {
     if (this.destroyed) return
     this.destroyed = true
+    clearTimeout(this.repaintTimer)
     const wc = this.view.webContents
     try {
       if (wc.debugger.isAttached()) wc.debugger.detach()
@@ -239,10 +253,39 @@ export class BrowserPage {
     if (!wc.isDestroyed()) wc.close()
   }
 
+  /** Whether the view should be drawing real content right now (on screen, not hidden). */
+  private get onScreen(): boolean {
+    return !this.occluded && this.bounds !== null && this.bounds.width > 0 && this.bounds.height > 0
+  }
+
   private applyBounds(): void {
     if (this.destroyed) return
     this.view.setVisible(!this.occluded)
     this.view.setBounds(this.bounds ?? { x: PARKED_X, y: 0, ...this.size })
+    // Each time the view goes from hidden to on screen (first placement, a tab
+    // switch, an overlay closing) Linux can leave it showing a blank frame until
+    // something changes. Force a redraw so the page shows without a manual resize.
+    const onScreen = this.onScreen
+    if (onScreen && !this.shown) this.repaint()
+    this.shown = onScreen
+  }
+
+  /**
+   * Make the native view draw its current frame. On Linux the embedded view can
+   * hold a stale (often blank) frame after the window regains focus, after a
+   * native menu closes, or right after it is first placed, until it changes. A
+   * quick hide/show — the same motion the occlusion path already relies on — is
+   * what reliably makes the compositor repaint. Windows and macOS paint the view
+   * correctly on their own, so the nudge (and its one-frame flicker) stays off.
+   */
+  repaint(): void {
+    if (process.platform !== 'linux') return
+    if (this.destroyed || !this.onScreen) return
+    clearTimeout(this.repaintTimer)
+    this.view.setVisible(false)
+    this.repaintTimer = setTimeout(() => {
+      if (!this.destroyed && !this.occluded) this.view.setVisible(true)
+    }, 0)
   }
 
   private emit(): void {

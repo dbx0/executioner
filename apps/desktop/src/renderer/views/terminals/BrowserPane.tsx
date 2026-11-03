@@ -240,7 +240,10 @@ export function BrowserPane({
           </span>
         )}
         {acting && ownerLabel !== null && (
-          <span className="shrink-0 rounded-full bg-surface-3 px-2 py-0.5 text-[11px] text-foreground">
+          <span
+            className="min-w-0 max-w-[180px] shrink truncate rounded-full bg-surface-3 px-2 py-0.5 text-[11px] text-foreground"
+            title={`${ownerLabel} is using this page`}
+          >
             {ownerLabel} is using this page
           </span>
         )}

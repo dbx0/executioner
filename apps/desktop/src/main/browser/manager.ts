@@ -65,6 +65,11 @@ export class BrowserManager {
     for (const page of this.pages.values()) page.setOccluded(occluded)
   }
 
+  /** Redraw every on-screen view: used when the window refocuses or a native menu closes. */
+  repaintAll(): void {
+    for (const page of this.pages.values()) page.repaint()
+  }
+
   /**
    * Address bar actions. Driven on the view directly rather than through the
    * driver, which treats every call as the agent's and would open its dialog window.

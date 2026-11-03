@@ -67,15 +67,29 @@ export function FileExplorer(): JSX.Element {
 
   const reload = useCallback(() => {
     if (client === null) return
-    setDirs({})
-    setExpanded(new Set())
-    setSelected(null)
     setError(null)
     setLoading(true)
-    filesApi(client)
-      .list('')
-      .then((listing) => {
-        if (mounted.current) setDirs({ '': listing.entries })
+    const api = filesApi(client)
+    // Refresh in place: re-list the root plus every directory that is currently
+    // expanded, so open folders and the selection survive the refresh instead
+    // of collapsing back to the root. A directory that has gone away since it
+    // was expanded simply drops out of the rebuilt cache.
+    const paths = ['', ...expanded]
+    Promise.all(
+      paths.map((path) =>
+        api.list(path).then(
+          (listing) => ({ path, entries: listing.entries }),
+          () => null,
+        ),
+      ),
+    )
+      .then((results) => {
+        if (!mounted.current) return
+        const next: Record<string, FileEntry[]> = {}
+        for (const result of results) {
+          if (result !== null) next[result.path] = result.entries
+        }
+        setDirs(next)
       })
       .catch((e: unknown) => {
         if (mounted.current) setError(friendlyError(e, 'Couldn’t load files.'))
@@ -83,7 +97,7 @@ export function FileExplorer(): JSX.Element {
       .finally(() => {
         if (mounted.current) setLoading(false)
       })
-  }, [client])
+  }, [client, expanded])
 
   const toggleDir = useCallback(
     (path: string) => {

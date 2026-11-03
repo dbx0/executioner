@@ -307,6 +307,11 @@ function createWindow(splash?: Splash): void {
   })
   win.on('maximize', () => win.webContents.send('window-maximized', true))
   win.on('unmaximize', () => win.webContents.send('window-maximized', false))
+  // Regaining focus or being restored leaves the native browser views showing a
+  // stale frame on Linux until they change; nudge them to redraw.
+  win.on('focus', () => browserManager?.repaintAll())
+  win.on('show', () => browserManager?.repaintAll())
+  win.on('restore', () => browserManager?.repaintAll())
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     const external = externalUrl(url)
@@ -332,7 +337,9 @@ function createWindow(splash?: Splash): void {
   // get Cut, Copy, Paste and Select all; everywhere else stays menu-less.
   mainWindow.webContents.on('context-menu', (_event, params) => {
     const template = editMenuTemplate(params)
-    if (template !== null) Menu.buildFromTemplate(template).popup({ window: win })
+    // The menu pops over the window as a native surface; on Linux that leaves
+    // any embedded browser view blank until it redraws, so repaint on close.
+    if (template !== null) Menu.buildFromTemplate(template).popup({ window: win, callback: () => browserManager?.repaintAll() })
   })
 
   // The window appears once it has painted and the renderer says the last
