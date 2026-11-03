@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import http from 'node:http'
 import { parseHandshake, type Handshake } from '@exe/protocol'
 
 export interface EngineConnection {
@@ -17,6 +18,24 @@ type SpawnFn = (command: string, args: string[], options: object) => ChildProces
  */
 export const ENGINE_V8_FLAGS = ['--enable-experimental-regexp-engine']
 type FetchFn = (input: string) => Promise<{ ok: boolean }>
+
+/**
+ * Health probe via node:http. Avoids undici `fetch`, which can raise an
+ * uncaught `ECONNRESET` while the engine socket is still coming up (Node 22+).
+ */
+export function httpHealthFetch(url: string): Promise<{ ok: boolean }> {
+  return new Promise((resolve) => {
+    const req = http.get(url, { timeout: 500 }, (res) => {
+      res.resume()
+      resolve({ ok: res.statusCode === 200 })
+    })
+    req.on('error', () => resolve({ ok: false }))
+    req.on('timeout', () => {
+      req.destroy()
+      resolve({ ok: false })
+    })
+  })
+}
 
 export interface SupervisorOptions {
   enginePath: string
@@ -73,7 +92,7 @@ export class EngineSupervisor {
     this.nodeBin = options.nodeBin ?? process.execPath
     this.spawnEnv = options.spawnEnv ?? process.env
     this.spawnFn = options.spawnFn ?? (spawn as unknown as SpawnFn)
-    this.fetchFn = options.fetchFn ?? ((url) => fetch(url).then((r) => ({ ok: r.ok })))
+    this.fetchFn = options.fetchFn ?? httpHealthFetch
     this.onReady = options.onReady
     this.onExit = options.onExit
   }
@@ -138,7 +157,9 @@ export class EngineSupervisor {
           const handshake = parseHandshake(line.trim())
           if (handshake !== undefined && !settled) {
             settled = true
-    void this.confirmReady(handshake, child, projectDir, resolve, reject)
+            void this.confirmReady(handshake, child, projectDir, resolve, reject).catch((err: unknown) => {
+              reject(err instanceof Error ? err : new Error(String(err)))
+            })
             return
           }
         }

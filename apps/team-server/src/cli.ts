@@ -60,8 +60,7 @@ async function main(): Promise<void> {
   console.log('engines stay up when the browser tab closes (Cobalt Strike–style).')
 
   const shutdown = () => {
-    host.stop()
-    process.exit(0)
+    void host.stop().finally(() => process.exit(0))
   }
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)

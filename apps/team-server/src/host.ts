@@ -33,7 +33,8 @@ export interface HostServeOptions {
 export interface HostServer {
   readonly bootstrapToken: string
   readonly url: string
-  stop(): void
+  /** Stops engines and closes the HTTP server. Await before rebinding the same port. */
+  stop(): Promise<void>
 }
 
 function digest(token: string): Buffer {
@@ -135,13 +136,18 @@ export async function startHost(options: HostServeOptions): Promise<HostServer> 
       const name = typeof body.name === 'string' && body.name !== '' ? body.name : 'Engagement'
       await runInit(nodeBin, enginePath, dir, name)
     }
-    const connection: EngineConnection = await supervisor.start(dir)
-    return c.json({
-      port: connection.port,
-      token: connection.token,
-      projectRoot: connection.projectRoot,
-      endpoint: { host: '127.0.0.1', port: connection.port },
-    })
+    try {
+      const connection: EngineConnection = await supervisor.start(dir)
+      return c.json({
+        port: connection.port,
+        token: connection.token,
+        projectRoot: connection.projectRoot,
+        endpoint: { host: '127.0.0.1', port: connection.port },
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
+    }
   })
 
   app.post('/host/engagements/close', async (c) => {
@@ -216,9 +222,13 @@ export async function startHost(options: HostServeOptions): Promise<HostServer> 
   return {
     bootstrapToken,
     url,
-    stop: () => {
-      supervisor.stopAll()
-      server.close()
-    },
+    stop: () =>
+      new Promise<void>((resolve, reject) => {
+        supervisor.stopAll()
+        server.close((err) => {
+          if (err !== undefined && err !== null) reject(err)
+          else resolve()
+        })
+      }),
   }
 }
