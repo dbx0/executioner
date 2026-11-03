@@ -6,10 +6,14 @@ function usage(): never {
   console.error(`usage:
   executioner-host serve [--bind 127.0.0.1:47821] [--token <bootstrap>] [--open]
 
-Start the team server (engine supervisor + portable UI).
+Start the Mac portable full client (engine supervisor + Host RPC + portable UI).
+On macOS this is the supported path for folder dialogs, connection hints, SSH
+enroll, backend test, and the host-owned Browser pane.
 Prints the bootstrap token once. Open the printed URL in a browser.
-Pass --open on macOS to launch the default browser at that URL.
-Native folder and photo dialogs require macOS (Darwin).`)
+Pass --open on macOS to launch the default browser at that URL
+(or run \`pnpm host:mac\` from the repo root).
+Native folder and photo dialogs and the host Browser pane require macOS (Darwin).
+The Electron app remains available for operators who want it.`)
   process.exit(2)
 }
 

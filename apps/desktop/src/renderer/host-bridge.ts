@@ -97,6 +97,7 @@ type BrowserStateEvent = {
   }
 }
 
+/** Install `window.executioner` against `/host/*` Host RPC. Covered methods throw host errors. */
 export function installHostBridge(config: HostBridgeConfig): void {
   const openProject = async (req: OpenProjectRequest): Promise<EngineConnection> => {
     const body = await hostJson<{
@@ -248,7 +249,8 @@ export function installHostBridge(config: HostBridgeConfig): void {
     checkForUpdate: async () => null,
     installUpdate: async () => undefined,
     setAppearance: () => undefined,
-    // Avoid macOS titlebar inset; window controls no-op in the browser.
+    // Portable UI has no native traffic lights. Report linux so the titlebar
+    // draws its own controls instead of reserving the macOS inset.
     platform: 'linux',
     windowControl: () => undefined,
     onMaximizedChange: () => () => undefined,

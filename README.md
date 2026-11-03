@@ -233,6 +233,19 @@ You need Node 24 and pnpm 12. `mise install` in the repo root pins both. On Linu
 ```bash
 pnpm install
 pnpm -r build
+```
+
+On macOS the supported full client is the portable host. Engines stay on the host and the UI opens in your browser:
+
+```bash
+pnpm host:mac
+```
+
+That runs `executioner-host serve --open`. Use the printed URL if the browser does not open. Folder dialogs, SSH enroll, backend test, and the Browser pane go through Host RPC on Darwin.
+
+To run the Electron shell instead:
+
+```bash
 pnpm --filter @exe/desktop dev
 ```
 

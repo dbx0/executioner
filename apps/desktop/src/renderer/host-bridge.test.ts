@@ -229,6 +229,98 @@ describe('installHostBridge', () => {
     expect(headers.get('Authorization')).toBe('Bearer boot')
   })
 
+  const RETIRED_PORTABLE_STUB = 'Not available in the portable browser UI'
+
+  function assertNoRetiredStub(value: unknown): void {
+    expect(JSON.stringify(value)).not.toContain(RETIRED_PORTABLE_STUB)
+  }
+
+  it('covered Host RPCs never return the retired portable stub string', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/host/dialogs/folder') return Response.json({ path: '/tmp/eng' })
+      if (url === '/host/connection-hints') {
+        return Response.json({
+          sshHosts: [],
+          sshKeys: [],
+          defaultUser: 'u',
+          dockerImages: [],
+        })
+      }
+      if (url === '/host/ssh/enroll') {
+        return Response.json({
+          ok: true,
+          identityFile: '/tmp/key',
+          steps: [{ name: 'Verify', ok: true }],
+        })
+      }
+      if (url === '/host/backends/test') {
+        return Response.json({ ok: true, steps: [{ name: 'Connect', ok: true }] })
+      }
+      if (url === '/host/browser/operator') return Response.json({ ok: true })
+      return Response.json({ ok: true })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    installHostBridge({ baseUrl: '', bootstrapToken: 'boot' })
+
+    const folder = await window.executioner.pickFolder()
+    const hints = await window.executioner.connectionHints()
+    const enroll = await window.executioner.enrollSsh({
+      host: 'h',
+      user: 'u',
+      password: 'p',
+    })
+    const backend = await window.executioner.testBackend({
+      profile: { name: 'here', kind: 'local' },
+    })
+    await window.executioner.browser.operator({
+      root: '/eng',
+      id: 'b1',
+      op: { navigate: 'https://example.com' },
+    })
+
+    assertNoRetiredStub(folder)
+    assertNoRetiredStub(hints)
+    assertNoRetiredStub(enroll)
+    assertNoRetiredStub(backend)
+    expect(folder).toBe('/tmp/eng')
+    expect(enroll.ok).toBe(true)
+    expect(backend.ok).toBe(true)
+    expect(fetchMock).toHaveBeenCalledWith('/host/dialogs/folder', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith('/host/connection-hints', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith('/host/ssh/enroll', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith('/host/backends/test', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith('/host/browser/operator', expect.any(Object))
+  })
+
+  it('covered Host RPCs throw the host error instead of the retired stub string', async () => {
+    const hostError = 'Native dialogs require macOS (Darwin)'
+    const fetchMock = vi.fn(async () =>
+      Response.json({ error: hostError }, { status: 501 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    installHostBridge({ baseUrl: '', bootstrapToken: 'boot' })
+
+    await expect(window.executioner.pickFolder()).rejects.toThrow(hostError)
+    await expect(window.executioner.connectionHints()).rejects.toThrow(hostError)
+    await expect(
+      window.executioner.enrollSsh({ host: 'h', user: 'u', password: 'p' }),
+    ).rejects.toThrow(hostError)
+    await expect(
+      window.executioner.testBackend({ profile: { name: 'here', kind: 'local' } }),
+    ).rejects.toThrow(hostError)
+    await expect(
+      window.executioner.browser.operator({
+        root: '/eng',
+        id: 'b1',
+        op: 'reload',
+      }),
+    ).rejects.toThrow(hostError)
+
+    for (const call of fetchMock.mock.calls) {
+      assertNoRetiredStub(call)
+    }
+  })
+
   it('engagement photo methods hit /host/engagement-photo/* with bearer', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith('/pick')) return Response.json({ dataUrl: 'data:image/png;base64,aaa' })
