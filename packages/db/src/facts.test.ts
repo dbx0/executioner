@@ -31,6 +31,14 @@ describe('FactRepository', () => {
     expect(ports[0]!.data.version).toBe('nginx 1.25')
   })
 
+  it('reads `transport` as the port protocol, so tcp and udp on one port stay distinct', () => {
+    facts.record({ targetId, kind: 'port', executionId: null, nodeId: 'censys', data: { port: 53, transport: 'tcp' } })
+    facts.record({ targetId, kind: 'port', executionId: null, nodeId: 'censys', data: { port: 53, transport: 'udp' } })
+    // nmap names the same field `protocol`; it still merges with the tcp row.
+    facts.record({ targetId, kind: 'port', executionId: null, nodeId: 'nmap', data: { port: 53, protocol: 'tcp' } })
+    expect(facts.forTarget(targetId).filter((f) => f.kind === 'port')).toHaveLength(2)
+  })
+
   it('keeps a single whois record per target, replaced with the latest', () => {
     facts.record({ targetId, kind: 'whois', executionId: null, nodeId: 'whois-1', data: { registrar: 'GoDaddy', expires: '2025-01-01' } })
     facts.record({ targetId, kind: 'whois', executionId: null, nodeId: 'whois-2', data: { registrar: 'GoDaddy', expires: '2026-01-01' } })

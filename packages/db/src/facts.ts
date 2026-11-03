@@ -30,6 +30,15 @@ const FACT_IDENTITY: Record<string, string[]> = {
   vulnerability: ['id', 'template', 'title', 'type', 'param', 'payload'],
 }
 
+/**
+ * An identity field's value. Port rows name the transport `protocol` (nmap style)
+ * or `transport` (Shodan, Censys); both mean the same thing, so 53/tcp and 53/udp
+ * stay distinct whichever name a source used.
+ */
+function identityValue(data: Record<string, unknown>, field: string): unknown {
+  return field === 'protocol' ? (data.protocol ?? data.transport) : data[field]
+}
+
 const toFact = (row: FactRow): TargetFact => ({
   ...row,
   kind: row.kind as TargetFactKind,
@@ -70,7 +79,10 @@ export class FactRepository {
 
     let match: FactRow | undefined
     if (identity !== undefined) {
-      const present = identity.filter((f) => input.data[f] !== undefined && input.data[f] !== '')
+      const present = identity.filter((f) => {
+        const v = identityValue(input.data, f)
+        return v !== undefined && v !== ''
+      })
       const rows = this.orm
         .select()
         .from(targetFacts)
@@ -82,7 +94,7 @@ export class FactRepository {
       } else if (present.length > 0) {
         match = rows.find((row) => {
           const d = decodeData(row.data)
-          return present.every((f) => String(d[f]) === String(input.data[f]))
+          return present.every((f) => String(identityValue(d, f)) === String(identityValue(input.data, f)))
         })
       }
     }
