@@ -5,8 +5,10 @@ import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { EngineSupervisor, type EngineConnection } from '@exe/engine-supervisor'
+import { globalLayout } from '@exe/protocol'
 import { checkAgents } from './agents.js'
 import { collectConnectionHints } from './connection-hints.js'
+import { backendTestArgs, runEngineJson, sshEnrollArgs } from './engine-cli.js'
 import {
   encodeImageToPngDataUrl,
   hasPhoto,
@@ -209,6 +211,60 @@ export async function startHost(options: HostServeOptions): Promise<HostServer> 
     const body = (await c.req.json().catch(() => ({}))) as { root?: unknown }
     if (isEngagementRoot(body.root)) removePhoto(body.root)
     return c.json({ ok: true })
+  })
+
+  app.post('/host/ssh/enroll', async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      host?: unknown
+      user?: unknown
+      password?: unknown
+      port?: unknown
+    } | null
+    if (body === null || typeof body !== 'object') {
+      return c.json({ error: 'host, user and password are required' }, 400)
+    }
+    const host = typeof body.host === 'string' ? body.host.trim() : ''
+    const user = typeof body.user === 'string' ? body.user.trim() : ''
+    const password = typeof body.password === 'string' ? body.password : ''
+    if (host === '' || user === '' || password === '') {
+      return c.json({ error: 'host, user and password are required' }, 400)
+    }
+    const port =
+      typeof body.port === 'number' && Number.isFinite(body.port) ? body.port : undefined
+    try {
+      const result = await runEngineJson({
+        nodeBin,
+        enginePath,
+        args: sshEnrollArgs(globalLayout.sshKeys()),
+        input: { host, user, password, ...(port !== undefined ? { port } : {}) },
+      })
+      return c.json(result)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
+    }
+  })
+
+  app.post('/host/backends/test', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as {
+      profile?: unknown
+      createWorkdir?: unknown
+    }
+    if (body.profile === undefined || body.profile === null || typeof body.profile !== 'object') {
+      return c.json({ error: 'profile required' }, 400)
+    }
+    try {
+      const result = await runEngineJson({
+        nodeBin,
+        enginePath,
+        args: backendTestArgs(body.createWorkdir === true),
+        input: body.profile,
+      })
+      return c.json(result)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
+    }
   })
 
   const publicRoot = portablePublicDir()

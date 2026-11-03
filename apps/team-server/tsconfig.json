@@ -2,5 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "rootDir": "./src", "outDir": "./dist" },
   "include": ["src/**/*.ts"],
-  "references": [{ "path": "../../packages/engine-supervisor" }]
+  "references": [
+    { "path": "../../packages/engine-supervisor" },
+    { "path": "../../packages/protocol" }
+  ]
 }

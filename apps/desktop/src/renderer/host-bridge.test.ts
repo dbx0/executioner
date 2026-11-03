@@ -146,6 +146,56 @@ describe('installHostBridge', () => {
     expect(headers.get('Authorization')).toBe('Bearer boot')
   })
 
+  it('enrollSsh POSTs /host/ssh/enroll with the bootstrap bearer', async () => {
+    const enroll = {
+      ok: true,
+      identityFile: '/home/u/.executioner/ssh/u@h.key',
+      steps: [{ name: 'Verify', ok: true }],
+    }
+    const fetchMock = vi.fn(async () => Response.json(enroll))
+    vi.stubGlobal('fetch', fetchMock)
+    installHostBridge({ baseUrl: '', bootstrapToken: 'boot' })
+
+    await expect(
+      window.executioner.enrollSsh({ host: 'h', user: 'u', password: 'p', port: 2222 }),
+    ).resolves.toEqual(enroll)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/host/ssh/enroll',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ host: 'h', user: 'u', password: 'p', port: 2222 }),
+      }),
+    )
+    const headers = new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers)
+    expect(headers.get('Authorization')).toBe('Bearer boot')
+  })
+
+  it('testBackend POSTs /host/backends/test with profile and createWorkdir', async () => {
+    const result = { ok: true, steps: [{ name: 'Connect', ok: true }] }
+    const fetchMock = vi.fn(async () => Response.json(result))
+    vi.stubGlobal('fetch', fetchMock)
+    installHostBridge({ baseUrl: '', bootstrapToken: 'boot' })
+
+    await expect(
+      window.executioner.testBackend({
+        profile: { name: 'here', kind: 'local' },
+        createWorkdir: true,
+      }),
+    ).resolves.toEqual(result)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/host/backends/test',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          profile: { name: 'here', kind: 'local' },
+          createWorkdir: true,
+        }),
+      }),
+    )
+    const headers = new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers)
+    expect(headers.get('Authorization')).toBe('Bearer boot')
+  })
+
   it('engagement photo methods hit /host/engagement-photo/* with bearer', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith('/pick')) return Response.json({ dataUrl: 'data:image/png;base64,aaa' })

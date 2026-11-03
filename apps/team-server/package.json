@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@exe/engine-supervisor": "workspace:*",
+    "@exe/protocol": "workspace:*",
     "@hono/node-server": "^2.1.5",
     "hono": "^4.13.13"
   }

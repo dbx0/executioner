@@ -84,7 +84,7 @@ export function resolveHostBridgeConfig(): HostBridgeConfig {
   }
 }
 
-/** Install `window.executioner` talking to `/host/*` (SSH/browser still stubbed). */
+/** Install `window.executioner` talking to `/host/*` (browser pane still stubbed). */
 export function installHostBridge(config: HostBridgeConfig): void {
   const openProject = async (req: OpenProjectRequest): Promise<EngineConnection> => {
     const body = await hostJson<{
@@ -116,12 +116,6 @@ export function installHostBridge(config: HostBridgeConfig): void {
     return body.path ?? undefined
   }
 
-  const unavailable = (feature: string): BackendTestResult => ({
-    ok: false,
-    steps: [{ name: feature, ok: false, detail: 'Not available in the portable browser UI' }],
-    error: 'Not available in the portable browser UI',
-  })
-
   window.executioner = {
     pickFolder,
     openProject,
@@ -133,19 +127,24 @@ export function installHostBridge(config: HostBridgeConfig): void {
       )
       return body.agents
     },
-    testBackend: async (_req: { profile: BackendProfileInput; createWorkdir?: boolean }) =>
-      unavailable('testBackend'),
-    enrollSsh: async (_req: {
+    testBackend: async (req: { profile: BackendProfileInput; createWorkdir?: boolean }) =>
+      hostJson<BackendTestResult>(config, '/host/backends/test', {
+        method: 'POST',
+        body: JSON.stringify({
+          profile: req.profile,
+          ...(req.createWorkdir === true ? { createWorkdir: true } : {}),
+        }),
+      }),
+    enrollSsh: async (req: {
       host: string
       user: string
       password: string
       port?: number
-    }): Promise<SshEnrollResult> => ({
-      ok: false,
-      identityFile: null,
-      steps: [{ name: 'enrollSsh', ok: false, detail: 'Not available in the portable browser UI' }],
-      error: 'Not available in the portable browser UI',
-    }),
+    }): Promise<SshEnrollResult> =>
+      hostJson<SshEnrollResult>(config, '/host/ssh/enroll', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      }),
     connectionHints: async () =>
       hostJson<{
         sshHosts: { alias: string; hostname: string; user?: string; port?: number; identityFile?: string }[]
