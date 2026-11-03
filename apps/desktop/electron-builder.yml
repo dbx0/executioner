@@ -51,6 +51,9 @@ beforePack: scripts/before-pack.cjs
 extraResources:
   - from: resources/logo.png
     to: logo.png
+  # The startup splash art (src/main/splash.ts).
+  - from: resources/splash.jpg
+    to: splash.jpg
   # The app's own license and the notices for the MIT code it adapts. Those
   # licenses require the notices to travel with every copy, installers included.
   - from: ../../LICENSE

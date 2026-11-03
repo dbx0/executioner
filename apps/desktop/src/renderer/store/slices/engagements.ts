@@ -34,8 +34,9 @@ function remapTerminals(node: PaneNode, newIdOf: Map<string, string>): PaneNode 
   return { ...node, item: { kind: 'terminal', id: newIdOf.get(node.item.id) ?? '' } }
 }
 
-/** Guards against re-running the one-time startup restore (e.g. React StrictMode double-mount). */
-let restored = false
+/** The one-time startup restore. A second call (React StrictMode double-mount)
+ *  gets the same run, so whoever waits on it waits for the real thing. */
+let restoring: Promise<void> | undefined
 
 /** Opening, creating, switching and restoring engagements. */
 export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSession' | 'openEngagement' | 'openNewEngagement' | 'closeNewEngagement' | 'pickEngagementFolder' | 'createEngagement' | 'openEngagementFolder' | 'updateEngagementMeta' | 'beginScopeRun' | 'openRecent' | 'switchEngagement' | 'closeEngagement'> {
@@ -326,6 +327,61 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
     await refreshEngagementMeta(connection.projectRoot)
   }
 
+  /** Reopen the engagements that were open last time, with their tabs.
+   *  `onProgress` hears the fraction done: each engine up, then each
+   *  engagement's tabs and metadata back. */
+  const restore = async (onProgress?: (fraction: number) => void): Promise<void> => {
+    if (get().open.length > 0) return
+    const { roots, activeRoot } = loadSession()
+    if (roots.length === 0) return
+    // One step per engine start and one per engagement's tabs + metadata.
+    const steps = roots.length * 2
+    let done = 0
+    const step = <T,>(work: Promise<T>): Promise<T> =>
+      work.finally(() => {
+        done++
+        onProgress?.(Math.min(1, done / steps))
+      })
+    set({ busy: true })
+    try {
+      const built = await Promise.allSettled(roots.map((root) => step(buildEngagement(root))))
+      const engagements: OpenEngagement[] = []
+      const failures: string[] = []
+      built.forEach((r, i) => {
+        if (r.status === 'rejected') failures.push(`${basename(roots[i]!)}: ${(r.reason as Error).message}`)
+        else if (!engagements.some((x) => x.root === r.value.root)) engagements.push(r.value)
+      })
+      if (engagements.length === 0) {
+        // Every engine failed to start. That is usually transient, so leave the
+        // remembered roots alone — erasing them here cost the user their whole
+        // session for good, and the next launch would come up empty even once
+        // the engine was healthy again. Say what went wrong instead.
+        set({ error: failures[0] ?? 'could not reopen the last engagements' })
+        return
+      }
+      const nextActive = engagements.some((e) => e.root === activeRoot) && activeRoot !== null ? activeRoot : engagements[0]!.root
+      const recents = engagements.reduce((acc, e) => rememberRecent(acc, { root: e.root, name: e.name }), get().recents)
+      set({ open: engagements, activeRoot: nextActive, activeView: 'terminals', recents, ...mirror(engagements, nextActive) })
+      if (failures.length > 0) set({ error: failures[0]! })
+      // A root whose engine failed stays in the remembered set: it is still one
+      // of the user's open engagements, and dropping it here would make one bad
+      // start permanent. Successful ones are stored under the root the engine
+      // reports, which is the canonical path.
+      const kept = built.map((r, i) => (r.status === 'rejected' ? roots[i]! : r.value.root))
+      saveSessionRoots([...new Set(kept)], nextActive)
+      // Connections are live now: bring back each engagement's open agent tabs,
+      // resuming claude conversations so the chat comes back (not blank), and
+      // pull each engagement's real name + icon from its config.json — without
+      // this a restored engagement keeps the folder basename and loses the
+      // emoji the user chose, for the whole session.
+      await Promise.all(
+        engagements.map((e) => step(Promise.all([restoreEngagementSessions(e.root), refreshEngagementMeta(e.root)]))),
+      )
+    } finally {
+      set({ busy: false })
+    }
+  }
+
   return {
     openEngagement: async (create) => {
       set({ error: null })
@@ -471,52 +527,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       }
     },
 
-    restoreSession: async () => {
-      if (restored) return
-      restored = true
-      if (get().open.length > 0) return
-      const { roots, activeRoot } = loadSession()
-      if (roots.length === 0) return
-      set({ busy: true })
-      try {
-        const built = await Promise.allSettled(roots.map(buildEngagement))
-        const engagements: OpenEngagement[] = []
-        const failures: string[] = []
-        built.forEach((r, i) => {
-          if (r.status === 'rejected') failures.push(`${basename(roots[i]!)}: ${(r.reason as Error).message}`)
-          else if (!engagements.some((x) => x.root === r.value.root)) engagements.push(r.value)
-        })
-        if (engagements.length === 0) {
-          // Every engine failed to start. That is usually transient, so leave the
-          // remembered roots alone — erasing them here cost the user their whole
-          // session for good, and the next launch would come up empty even once
-          // the engine was healthy again. Say what went wrong instead.
-          set({ error: failures[0] ?? 'could not reopen the last engagements' })
-          return
-        }
-        const nextActive = engagements.some((e) => e.root === activeRoot) && activeRoot !== null ? activeRoot : engagements[0]!.root
-        const recents = engagements.reduce((acc, e) => rememberRecent(acc, { root: e.root, name: e.name }), get().recents)
-        set({ open: engagements, activeRoot: nextActive, activeView: 'terminals', recents, ...mirror(engagements, nextActive) })
-        if (failures.length > 0) set({ error: failures[0]! })
-        // A root whose engine failed stays in the remembered set: it is still one
-        // of the user's open engagements, and dropping it here would make one bad
-        // start permanent. Successful ones are stored under the root the engine
-        // reports, which is the canonical path.
-        const kept = built.map((r, i) => (r.status === 'rejected' ? roots[i]! : r.value.root))
-        saveSessionRoots([...new Set(kept)], nextActive)
-        // Connections are live now: bring back each engagement's open agent tabs,
-        // resuming claude conversations so the chat comes back (not blank), and
-        // pull each engagement's real name + icon from its config.json — without
-        // this a restored engagement keeps the folder basename and loses the
-        // emoji the user chose, for the whole session.
-        await Promise.all([
-          ...engagements.map((e) => restoreEngagementSessions(e.root)),
-          ...engagements.map((e) => refreshEngagementMeta(e.root)),
-        ])
-      } finally {
-        set({ busy: false })
-      }
-    },
+    restoreSession: (onProgress) => (restoring ??= restore(onProgress)),
 
     switchEngagement: (root) => {
       set({ activeRoot: root, ...mirror(get().open, root) })

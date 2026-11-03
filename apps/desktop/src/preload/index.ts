@@ -79,6 +79,12 @@ contextBridge.exposeInMainWorld('executioner', {
     return () => ipcRenderer.removeListener('update-progress', handler)
   },
   installUpdate: (): Promise<void> => ipcRenderer.invoke('install-update') as Promise<void>,
+  // Startup splash: how far the session restore has got, and when the app is
+  // ready to show.
+  startup: {
+    progress: (fraction: number): void => ipcRenderer.send('startup-progress', fraction),
+    ready: (): void => ipcRenderer.send('startup-ready'),
+  },
   setAppearance: (mode: 'light' | 'dark'): void => ipcRenderer.send('set-appearance', mode),
   // Clipboard for the terminal. xterm maps Ctrl+V to the ^V control code and
   // preventDefaults it, so the browser paste event never fires and there is no

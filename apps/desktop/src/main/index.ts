@@ -28,6 +28,7 @@ import { editMenuTemplate } from './edit-menu.js'
 import { createIpcHandlers, validBounds, validBrowserOp, validBrowserTarget } from './ipc.js'
 import { allowPermission, externalUrl, isAppUrl } from './security.js'
 import { resolveShellEnv } from './shell-path.js'
+import { showSplash, type Splash } from './splash.js'
 import { checkForUpdate, downloadUpdate, installKind, startInstall } from './update.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -43,6 +44,9 @@ const appUrl = process.env.ELECTRON_RENDERER_URL ?? pathToFileURL(rendererFile).
 const logoPath = app.isPackaged
   ? join(process.resourcesPath, 'logo.png')
   : join(here, '..', '..', 'resources', 'logo.png')
+const splashPath = app.isPackaged
+  ? join(process.resourcesPath, 'splash.jpg')
+  : join(here, '..', '..', 'resources', 'splash.jpg')
 
 // Packaged: the engine ships inside the app bundle as a production dependency at
 // node_modules/@exe/engine (app.getAppPath() -> …/Resources/app.asar; Electron
@@ -245,10 +249,16 @@ async function askBrowserDialog(win: BrowserWindow, d: DialogInfo): Promise<{ ac
   return d.type === 'prompt' && accept ? { accept, promptText: d.defaultPrompt } : { accept }
 }
 
-function createWindow(): void {
+/** Where the renderer's startup reports go while the splash is up; gone once the app shows. */
+let startupProgress: { progress(fraction: number): void; ready(): void } | undefined
+
+function createWindow(splash?: Splash): void {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
+    // Hidden until its first paint, so the splash (or nothing) shows meanwhile
+    // instead of a blank frame.
+    show: false,
     // Frameless window with a renderer-drawn 36px titlebar (see Titlebar.tsx).
     // macOS 'hiddenInset' keeps the native traffic lights over our custom bar;
     // Windows 'hidden' removes the OS title bar so it doesn't double up.
@@ -324,6 +334,44 @@ function createWindow(): void {
     const template = editMenuTemplate(params)
     if (template !== null) Menu.buildFromTemplate(template).popup({ window: win })
   })
+
+  // The window appears once it has painted and the renderer says the last
+  // session's engagements are back (or there were none). Until then the splash
+  // stays up and its bar follows the page load, then the restore.
+  let revealed = false
+  let painted = false
+  let restored = false
+  const reveal = (): void => {
+    if (revealed) return
+    revealed = true
+    startupProgress = undefined
+    const show = (): void => {
+      if (!win.isDestroyed()) win.show()
+    }
+    if (splash === undefined) show()
+    else void splash.finish(show)
+  }
+  const revealWhenReady = (): void => {
+    if (painted && restored) reveal()
+  }
+  win.webContents.once('did-start-loading', () => splash?.progress(0.25))
+  win.webContents.once('dom-ready', () => splash?.progress(0.35))
+  win.once('ready-to-show', () => {
+    painted = true
+    splash?.progress(0.45)
+    revealWhenReady()
+    // Engines that hang must not keep the app hidden for good.
+    setTimeout(reveal, 30_000)
+  })
+  startupProgress = {
+    progress: (fraction) => splash?.progress(0.45 + 0.5 * fraction),
+    ready: () => {
+      restored = true
+      revealWhenReady()
+    },
+  }
+  // A page that never paints must not leave the app invisible.
+  setTimeout(reveal, 45_000)
 
   if (process.env.ELECTRON_RENDERER_URL !== undefined) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
@@ -510,6 +558,11 @@ app.on('will-quit', () => {
   if (downloadedUpdate !== undefined && !installingUpdate) rmSync(downloadedUpdate.dir, { recursive: true, force: true })
 })
 
+listen('startup-progress', (fraction: unknown) => {
+  if (typeof fraction === 'number' && Number.isFinite(fraction)) startupProgress?.progress(Math.max(0, Math.min(1, fraction)))
+})
+listen('startup-ready', () => startupProgress?.ready())
+
 // Keep the native window appearance (macOS traffic lights + any native chrome)
 // in step with the in-app theme's base, so a light theme doesn't leave dark,
 // backgroundless-looking traffic lights.
@@ -530,7 +583,9 @@ app.whenReady().then(() => {
   } catch {
     /* no logo available */
   }
-  createWindow()
+  const splash = showSplash(splashPath)
+  splash.progress(0.15)
+  createWindow(splash)
 })
 
 app.on('window-all-closed', () => {

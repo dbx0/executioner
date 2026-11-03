@@ -63,6 +63,11 @@ declare global {
       onUpdateProgress(listener: (p: { received: number; total: number | null }) => void): () => void
       /** Quit and install the downloaded release, then reopen. */
       installUpdate(): Promise<void>
+      /** Drive the startup splash: restore progress (0 to 1), then ready to show the app. */
+      startup: {
+        progress(fraction: number): void
+        ready(): void
+      }
       /** Match the native window appearance (macOS traffic lights) to the theme base. */
       setAppearance(mode: 'light' | 'dark'): void
       /** process.platform of the main process; macOS keeps native traffic lights,

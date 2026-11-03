@@ -355,7 +355,9 @@ export interface AppState {
   openTools: (targetId: string) => void
   setPendingToolTargetId: (id: string | null) => void
 
-  restoreSession: () => Promise<void>
+  /** Reopen last session's engagements; `onProgress` hears the fraction done.
+   *  Runs once: later calls get the same promise. */
+  restoreSession: (onProgress?: (fraction: number) => void) => Promise<void>
   openEngagement: (create: boolean) => Promise<void>
   /**
    * Open the "New engagement" modal (from Landing, the rail, palette, sidebar)

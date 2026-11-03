@@ -107,6 +107,22 @@ describe('engagement name + icon', () => {
     expect(useApp.getState().open[0]?.icon).toBe('🧬')
   })
 
+  it('reports restore progress for the startup splash and runs only once', async () => {
+    saveSession([{ root: ROOT }] as never, ROOT)
+    reply = () => ({ name: 'Acme Corp', icon: '🧬' })
+
+    const useApp = await freshStore()
+    const onProgress = vi.fn()
+    const first = useApp.getState().restoreSession(onProgress)
+    // A StrictMode double-mount must wait on the same restore, or the splash
+    // would hear "ready" before the engagements are back.
+    expect(useApp.getState().restoreSession()).toBe(first)
+    await first
+
+    expect(onProgress.mock.calls.map(([f]) => f as number)).toEqual([0.5, 1])
+    expect(useApp.getState().open[0]?.name).toBe('Acme Corp')
+  })
+
   it('falls back to the remembered icon when the engine cannot be reached', async () => {
     // A restore that cannot read config.json should still show what it knew,
     // rather than dropping back to initials over a folder basename.

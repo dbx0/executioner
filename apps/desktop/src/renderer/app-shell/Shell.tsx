@@ -193,10 +193,18 @@ function useAgentEvents(): void {
   }, [connection, handleAgentEvent])
 }
 
-/** On launch, re-open the engagements that were open last time so the user lands back in their session. */
+/** On launch, re-open the engagements that were open last time so the user
+ *  lands back in their session. The startup splash follows the restore and the
+ *  app window appears once it is done. */
 function useRestoreSession(): void {
   useEffect(() => {
-    void useApp.getState().restoreSession()
+    // Absent in tests and older preloads.
+    const startup = (window.executioner as Partial<Window['executioner']> | undefined)?.startup
+    void useApp
+      .getState()
+      .restoreSession((fraction) => startup?.progress(fraction))
+      .catch(() => {})
+      .finally(() => startup?.ready())
   }, [])
 }
 
