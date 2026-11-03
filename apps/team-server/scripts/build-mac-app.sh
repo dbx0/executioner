@@ -37,6 +37,8 @@ rsync -a \
   --exclude '**/*.test.js' \
   --exclude '**/*.test.d.ts' \
   --exclude '**/*.test.js.map' \
+  --exclude 'dist/Executioner Host.app' \
+  --exclude 'dist/*.app' \
   "${HOST_DEPLOY}/" "${STAGE_REPO}/apps/team-server/"
 
 rsync -a \
@@ -48,6 +50,10 @@ rsync -a \
   --exclude '**/*.test.d.ts' \
   --exclude '**/*.test.js.map' \
   "${ENGINE_DEPLOY}/" "${STAGE_REPO}/packages/engine/"
+
+# pnpm deploy can drop +x on node-pty's spawn-helper; without it every
+# terminal/agent session fails with posix_spawnp → HTTP 500.
+find "${STAGE_REPO}" \( -name 'spawn-helper' -o -name 'winpty-agent.exe' \) -type f -exec chmod +x {} \;
 
 rm -rf "${OUT_APP}"
 mkdir -p "${OUT_APP}/Contents/MacOS" "${OUT_APP}/Contents/Resources"
