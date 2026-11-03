@@ -1,6 +1,8 @@
 import { spawn, execFile } from 'node:child_process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { realpathSync } from 'node:fs'
+import { realpathSync, rmSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import {
   app,
@@ -26,7 +28,7 @@ import { editMenuTemplate } from './edit-menu.js'
 import { createIpcHandlers, validBounds, validBrowserOp, validBrowserTarget } from './ipc.js'
 import { allowPermission, externalUrl, isAppUrl } from './security.js'
 import { resolveShellEnv } from './shell-path.js'
-import { checkForUpdate, installKind, startInstall } from './update.js'
+import { checkForUpdate, downloadUpdate, installKind, startInstall } from './update.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -457,10 +459,55 @@ handle('check-for-update', async () => {
     return null
   }
 })
+// The finished download, ready for a restart to install. Discarded on a quit
+// that does not install it, so a stale download never lingers in temp.
+let downloadedUpdate: { tag: string; dir: string } | undefined
+let downloadingUpdate: Promise<void> | undefined
+let installingUpdate = false
+
+handle('download-update', () => {
+  if (updateKind === null || pendingUpdateTag === undefined) throw new Error('no update to download')
+  if (downloadedUpdate?.tag === pendingUpdateTag) return
+  if (downloadingUpdate !== undefined) return downloadingUpdate
+  const kind = updateKind
+  const tag = pendingUpdateTag
+  downloadingUpdate = (async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'executioner-update-'))
+    try {
+      await downloadUpdate({
+        kind,
+        tag,
+        arch: process.arch,
+        dir,
+        onProgress: (p) => {
+          const win = mainWindow
+          if (win !== undefined && !win.isDestroyed()) win.webContents.send('update-progress', p)
+        },
+      })
+      downloadedUpdate = { tag, dir }
+    } catch (err) {
+      await rm(dir, { recursive: true, force: true })
+      throw err
+    }
+  })().finally(() => {
+    downloadingUpdate = undefined
+  })
+  return downloadingUpdate
+})
 handle('install-update', () => {
-  if (updateKind === null || pendingUpdateTag === undefined) throw new Error('no update to install')
-  startInstall({ kind: updateKind, tag: pendingUpdateTag, execPath: process.execPath, pid: process.pid })
+  if (updateKind === null || downloadedUpdate === undefined) throw new Error('no downloaded update to install')
+  startInstall({
+    kind: updateKind,
+    tag: downloadedUpdate.tag,
+    dir: downloadedUpdate.dir,
+    execPath: process.execPath,
+    pid: process.pid,
+  })
+  installingUpdate = true
   app.quit()
+})
+app.on('will-quit', () => {
+  if (downloadedUpdate !== undefined && !installingUpdate) rmSync(downloadedUpdate.dir, { recursive: true, force: true })
 })
 
 // Keep the native window appearance (macOS traffic lights + any native chrome)

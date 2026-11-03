@@ -57,7 +57,11 @@ declare global {
       }
       /** A newer release than the running one, or null when up to date or offline. */
       checkForUpdate(): Promise<UpdateInfo | null>
-      /** Quit and install the release found by checkForUpdate, then reopen. */
+      /** Download and verify the release found by checkForUpdate; resolves when it is ready. */
+      downloadUpdate(): Promise<void>
+      /** Subscribe to downloadUpdate's progress; returns the unsubscribe. */
+      onUpdateProgress(listener: (p: { received: number; total: number | null }) => void): () => void
+      /** Quit and install the downloaded release, then reopen. */
       installUpdate(): Promise<void>
       /** Match the native window appearance (macOS traffic lights) to the theme base. */
       setAppearance(mode: 'light' | 'dark'): void

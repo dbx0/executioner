@@ -9,6 +9,8 @@
 # Environment:
 #   $env:EXECUTIONER_VERSION = 'v0.0.2'   install that tag instead of the latest
 #   $env:EXECUTIONER_UNINSTALL = '1'      remove Executioner instead
+#   $env:EXECUTIONER_DOWNLOAD_DIR = '...' take the setup and SHA256SUMS.txt from
+#                                         there instead of downloading them
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -49,11 +51,18 @@ $tmp = Join-Path ([IO.Path]::GetTempPath()) ("executioner-" + [Guid]::NewGuid())
 New-Item -ItemType Directory -Path $tmp | Out-Null
 
 try {
-  Write-Step "Downloading $App $tag ($asset)"
   $setup = Join-Path $tmp $asset
   $sums = Join-Path $tmp 'SHA256SUMS.txt'
-  Invoke-WebRequest -UseBasicParsing -Uri "$base/$asset" -OutFile $setup
-  Invoke-WebRequest -UseBasicParsing -Uri "$base/SHA256SUMS.txt" -OutFile $sums
+  $localDir = $env:EXECUTIONER_DOWNLOAD_DIR
+  if ($localDir -and (Test-Path (Join-Path $localDir $asset)) -and (Test-Path (Join-Path $localDir 'SHA256SUMS.txt'))) {
+    Write-Step "Using $App $tag from $localDir"
+    Copy-Item (Join-Path $localDir $asset) $setup
+    Copy-Item (Join-Path $localDir 'SHA256SUMS.txt') $sums
+  } else {
+    Write-Step "Downloading $App $tag ($asset)"
+    Invoke-WebRequest -UseBasicParsing -Uri "$base/$asset" -OutFile $setup
+    Invoke-WebRequest -UseBasicParsing -Uri "$base/SHA256SUMS.txt" -OutFile $sums
+  }
 
   $line = Get-Content $sums | Where-Object { ($_ -split '\s+')[1] -in @($asset, "*$asset") } | Select-Object -First 1
   if (-not $line) { throw "$asset is not listed in SHA256SUMS.txt." }

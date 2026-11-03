@@ -10,6 +10,8 @@
 #
 # Environment:
 #   EXECUTIONER_VERSION=v0.0.2   install that tag instead of the latest release
+#   EXECUTIONER_DOWNLOAD_DIR=... take the asset and SHA256SUMS.txt from there
+#                                instead of downloading them (the in-app update)
 #
 # Uninstall: curl -fsSL .../install.sh | bash -s -- --uninstall
 set -euo pipefail
@@ -91,9 +93,15 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 base="https://github.com/${REPO}/releases/download/${tag}"
-info "Downloading ${APP} ${tag} (${asset})"
-curl -fL --progress-bar -o "${tmp}/${asset}" "${base}/${asset}" || fail "download failed: ${base}/${asset}"
-curl -fsSL -o "${tmp}/SHA256SUMS.txt" "${base}/SHA256SUMS.txt" || fail "could not download SHA256SUMS.txt"
+local_dir="${EXECUTIONER_DOWNLOAD_DIR:-}"
+if [ -n "$local_dir" ] && [ -f "${local_dir}/${asset}" ] && [ -f "${local_dir}/SHA256SUMS.txt" ]; then
+  info "Using ${APP} ${tag} from ${local_dir}"
+  cp "${local_dir}/${asset}" "${local_dir}/SHA256SUMS.txt" "$tmp/"
+else
+  info "Downloading ${APP} ${tag} (${asset})"
+  curl -fL --progress-bar -o "${tmp}/${asset}" "${base}/${asset}" || fail "download failed: ${base}/${asset}"
+  curl -fsSL -o "${tmp}/SHA256SUMS.txt" "${base}/SHA256SUMS.txt" || fail "could not download SHA256SUMS.txt"
+fi
 
 expected="$(awk -v f="$asset" '$2 == f || $2 == "*"f { print $1 }' "${tmp}/SHA256SUMS.txt")"
 [ -n "$expected" ] || fail "${asset} is not listed in SHA256SUMS.txt"

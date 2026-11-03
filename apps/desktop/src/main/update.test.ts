@@ -1,5 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
-import { checkForUpdate, installKind, isNewer, relaunchTarget, tagFromReleaseUrl } from './update.js'
+import { createHash } from 'node:crypto'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  checkForUpdate,
+  downloadUpdate,
+  expectedChecksum,
+  installKind,
+  isNewer,
+  relaunchTarget,
+  releaseAsset,
+  tagFromReleaseUrl,
+} from './update.js'
 
 describe('tagFromReleaseUrl', () => {
   it('reads the tag off the /releases/latest redirect', () => {
@@ -74,5 +87,64 @@ describe('checkForUpdate', () => {
       fetch: landOn('https://github.com/dbx0/executioner/releases/tag/v0.0.3'),
     })
     expect(info).toBeNull()
+  })
+})
+
+describe('releaseAsset', () => {
+  it('names the asset the install script for this platform takes', () => {
+    expect(releaseAsset('linux', '0.0.7', 'x64')).toBe('Executioner-0.0.7-linux-x86_64.AppImage')
+    expect(releaseAsset('mac', '0.0.7', 'arm64')).toBe('Executioner-0.0.7-mac-arm64.zip')
+    expect(releaseAsset('mac', '0.0.7', 'x64')).toBe('Executioner-0.0.7-mac-x64.zip')
+    expect(releaseAsset('windows', '0.0.7', 'x64')).toBe('Executioner-0.0.7-win-x64-setup.exe')
+  })
+})
+
+describe('expectedChecksum', () => {
+  it('finds the asset in text or binary mode lines', () => {
+    const sums = 'AAA  Executioner-0.0.7-mac-arm64.zip\r\nbbb *Executioner-0.0.7-linux-x86_64.AppImage\n'
+    expect(expectedChecksum(sums, 'Executioner-0.0.7-mac-arm64.zip')).toBe('aaa')
+    expect(expectedChecksum(sums, 'Executioner-0.0.7-linux-x86_64.AppImage')).toBe('bbb')
+    expect(expectedChecksum(sums, 'Executioner-0.0.7-win-x64-setup.exe')).toBeNull()
+  })
+})
+
+describe('downloadUpdate', () => {
+  const asset = 'Executioner-0.0.7-linux-x86_64.AppImage'
+  const body = Buffer.alloc(300 * 1024, 7)
+  const digest = createHash('sha256').update(body).digest('hex')
+
+  function serve(sums: string) {
+    return vi.fn((url: string) => {
+      if (url.endsWith('/install.sh')) return Promise.resolve(new Response('#!/bin/bash\n'))
+      if (url.endsWith('/SHA256SUMS.txt')) return Promise.resolve(new Response(sums))
+      if (url.endsWith(`/${asset}`)) {
+        return Promise.resolve(new Response(body, { headers: { 'content-length': String(body.length) } }))
+      }
+      return Promise.resolve(new Response('missing', { status: 404 }))
+    }) as unknown as typeof fetch
+  }
+
+  it('saves the script, sums and verified asset, reporting progress', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'exe-update-test-'))
+    try {
+      const onProgress = vi.fn()
+      await downloadUpdate({ kind: 'linux', tag: 'v0.0.7', arch: 'x64', dir, fetch: serve(`${digest}  ${asset}\n`), onProgress })
+      expect((await readFile(join(dir, asset))).equals(body)).toBe(true)
+      expect(await readFile(join(dir, 'install.sh'), 'utf8')).toBe('#!/bin/bash\n')
+      expect(onProgress).toHaveBeenLastCalledWith({ received: body.length, total: body.length })
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses an asset whose checksum does not match', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'exe-update-test-'))
+    try {
+      await expect(
+        downloadUpdate({ kind: 'linux', tag: 'v0.0.7', arch: 'x64', dir, fetch: serve(`${'0'.repeat(64)}  ${asset}\n`) }),
+      ).rejects.toThrow('checksum mismatch')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

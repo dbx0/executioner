@@ -69,8 +69,15 @@ contextBridge.exposeInMainWorld('executioner', {
       return () => ipcRenderer.removeListener('browser-state', handler)
     },
   },
-  // Startup update notice: the newer release, if any, and the in-place install.
+  // Startup update notice: the newer release, if any, its download with
+  // progress, and the restart that installs it.
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
+  downloadUpdate: (): Promise<void> => ipcRenderer.invoke('download-update') as Promise<void>,
+  onUpdateProgress: (listener: (p: { received: number; total: number | null }) => void): (() => void) => {
+    const handler = (_event: unknown, p: Parameters<typeof listener>[0]): void => listener(p)
+    ipcRenderer.on('update-progress', handler)
+    return () => ipcRenderer.removeListener('update-progress', handler)
+  },
   installUpdate: (): Promise<void> => ipcRenderer.invoke('install-update') as Promise<void>,
   setAppearance: (mode: 'light' | 'dark'): void => ipcRenderer.send('set-appearance', mode),
   // Clipboard for the terminal. xterm maps Ctrl+V to the ^V control code and
