@@ -27,10 +27,23 @@ git clone https://github.com/<you>/executioner.git
 cd executioner
 pnpm install
 pnpm -r build
+```
+
+**Mac portable (supported full client, no Electron).** Engines stay on the host. The UI runs in your browser against Host RPC:
+
+```bash
+pnpm host:mac
+```
+
+That builds `@exe/team-server` and runs `executioner-host serve --open`. Open the printed `portable UI` URL if the browser does not launch. Stop with **Ctrl+C**. Closing the browser tab leaves engines running. Double-click Host.app docs (build, Dock quit, logs): [`apps/team-server/macos/README.md`](apps/team-server/macos/README.md).
+
+**Electron app.** Still available when you want the packaged shell:
+
+```bash
 pnpm --filter @exe/desktop dev
 ```
 
-`pnpm -r build` compiles the packages the desktop app loads, including the engine. The dev server reloads renderer changes live. Changes to `apps/desktop/src/main` or to any package under `packages/` need a rebuild and an app restart.
+`pnpm -r build` compiles the packages both clients load, including the engine. The Electron dev server reloads renderer changes live. Changes to `apps/desktop/src/main` or to any package under `packages/` need a rebuild and an app restart.
 
 ### Keep your real data out of development
 
@@ -44,7 +57,8 @@ EXECUTIONER_HOME="$(mktemp -d)" pnpm --filter @exe/desktop dev
 
 | Path | What lives there |
 |---|---|
-| `apps/desktop` | Electron app: `src/main` (main process), `src/preload`, `src/renderer` (React UI) |
+| `apps/desktop` | Electron app and shared React UI (`src/main`, `src/preload`, `src/renderer`); portable builds use the same renderer via Host RPC |
+| `apps/team-server` | Mac portable host (`executioner-host` / `pnpm host:mac`): engines, Host RPC, portable UI |
 | `packages/engine` | Local HTTP/WebSocket engine: workflow execution, scheduler, MCP tools, agents |
 | `packages/graph` | Workflow graph schema, validation and the IF condition language |
 | `packages/nodes` | Tool node manifests (`manifests/*.toml`) and the registry that loads them |

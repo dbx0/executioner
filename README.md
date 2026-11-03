@@ -233,6 +233,21 @@ You need Node 24 and pnpm 12. `mise install` in the repo root pins both. On Linu
 ```bash
 pnpm install
 pnpm -r build
+```
+
+On macOS the supported full client is the portable host (no Electron). Engines stay on the host and the UI opens in your browser:
+
+```bash
+pnpm host:mac
+```
+
+That runs `executioner-host serve --open`. Use the printed URL if the browser does not open. Stop with **Ctrl+C** in that terminal. Closing the browser tab does not stop the host.
+
+For a double-click Dock app instead, see [`apps/team-server/macos/README.md`](apps/team-server/macos/README.md) (`pnpm host:app`, then open the `.app`; quit from the Dock to shut down).
+
+To run the Electron shell instead:
+
+```bash
 pnpm --filter @exe/desktop dev
 ```
 

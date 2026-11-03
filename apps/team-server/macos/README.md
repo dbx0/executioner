@@ -2,9 +2,26 @@
 
 Double-clickable bundle that starts `executioner-host` (engines + portable UI), opens the default browser at the token URL, and keeps the host running without a Terminal window. The MacOS entrypoint is a small Cocoa Mach-O stub (`launcher-stub.m`) that stays in the Dock, runs `Resources/launcher.sh`, and on reopen opens the UI again (Launch Services rejects a shell script as the bundle executable).
 
-## Build
+Closing the browser tab does **not** stop the host. Engines stay up until you quit the app (Cobalt Strike–style).
 
-From the monorepo root:
+## Quick start (no Electron)
+
+From the monorepo root, after `pnpm install` and `pnpm -r build`:
+
+```bash
+pnpm host:mac
+```
+
+That builds `@exe/team-server` and runs `executioner-host serve --open`. The UI opens in your default browser. Stop with **Ctrl+C** in that terminal (SIGINT stops the host and its engines).
+
+Optional flags via the CLI:
+
+```bash
+pnpm --filter @exe/team-server exec node dist/cli.js serve --open
+pnpm --filter @exe/team-server exec node dist/cli.js serve --bind 127.0.0.1:47821 --open
+```
+
+## Build the `.app`
 
 ```bash
 pnpm host:app
@@ -24,7 +41,7 @@ Output: `apps/team-server/dist/Executioner Host.app`.
 EXECUTIONER_NODE_BIN="$(command -v node)" pnpm host:app
 ```
 
-## Run
+## Run the `.app`
 
 ```bash
 open "apps/team-server/dist/Executioner Host.app"
@@ -34,10 +51,24 @@ Expect:
 
 1. Host listens on `127.0.0.1:47821` (or the next free port if busy).
 2. Browser opens `http://127.0.0.1:<port>/?token=…`.
-3. A second double-click reopens that URL if the host is already healthy.
+3. A second double-click (or Dock click) reopens that URL if the host is already healthy.
 
-Logs: `~/Library/Logs/Executioner Host.log`.  
-Bootstrap token (stable across relaunches): `~/Library/Application Support/Executioner Host/bootstrap.token`.
+## Stop the `.app`
+
+- **Quit Executioner Host from the Dock** (right-click → Quit, or Cmd+Q while it is frontmost). That stops the host process and every engine it started.
+- Closing the browser tab alone leaves the host running. Open the app again to get the UI back.
+- From a terminal, if the Dock icon is gone but something is still listening:
+
+```bash
+# default bind; adjust the port if the log shows another
+lsof -nP -iTCP:47821 -sTCP:LISTEN
+kill "$(lsof -nP -iTCP:47821 -sTCP:LISTEN -t)"
+```
+
+## Logs and token
+
+- Logs: `~/Library/Logs/Executioner Host.log`
+- Bootstrap token (stable across relaunches): `~/Library/Application Support/Executioner Host/bootstrap.token`
 
 ## First-run Gatekeeper
 
