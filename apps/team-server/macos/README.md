@@ -1,6 +1,6 @@
 # Executioner Host (macOS `.app`)
 
-Double-clickable bundle that starts `executioner-host` (engines + portable UI), opens the default browser at the token URL, and keeps the host running without a Terminal window. The MacOS entrypoint is a small Mach-O stub that runs `Resources/launcher.sh` (Launch Services rejects a shell script as the bundle executable).
+Double-clickable bundle that starts `executioner-host` (engines + portable UI), opens the default browser at the token URL, and keeps the host running without a Terminal window. The MacOS entrypoint is a small Cocoa Mach-O stub (`launcher-stub.m`) that stays in the Dock, runs `Resources/launcher.sh`, and on reopen opens the UI again (Launch Services rejects a shell script as the bundle executable).
 
 ## Build
 
