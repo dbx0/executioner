@@ -84,7 +84,20 @@ export function resolveHostBridgeConfig(): HostBridgeConfig {
   }
 }
 
-/** Install `window.executioner` talking to `/host/*` (browser pane still stubbed). */
+type BrowserStateEvent = {
+  root: string
+  id: string
+  state: {
+    url: string
+    title: string
+    loading: boolean
+    canGoBack: boolean
+    canGoForward: boolean
+    crashed: boolean
+  }
+}
+
+/** Install `window.executioner` talking to `/host/*` including host-owned browser windows. */
 export function installHostBridge(config: HostBridgeConfig): void {
   const openProject = async (req: OpenProjectRequest): Promise<EngineConnection> => {
     const body = await hostJson<{
@@ -193,10 +206,47 @@ export function installHostBridge(config: HostBridgeConfig): void {
       }
     },
     browser: {
-      place: () => undefined,
-      setOccluded: () => undefined,
-      operator: async () => undefined,
-      onState: () => () => undefined,
+      place: (req: {
+        root: string
+        id: string
+        bounds: { x: number; y: number; width: number; height: number } | null
+      }): void => {
+        void hostJson(config, '/host/browser/place', {
+          method: 'POST',
+          body: JSON.stringify(req),
+        }).catch(() => undefined)
+      },
+      setOccluded: (occluded: boolean): void => {
+        void hostJson(config, '/host/browser/occluded', {
+          method: 'POST',
+          body: JSON.stringify({ occluded }),
+        }).catch(() => undefined)
+      },
+      operator: async (req: {
+        root: string
+        id: string
+        op: 'back' | 'forward' | 'reload' | 'stop' | { navigate: string }
+      }): Promise<void> => {
+        await hostJson(config, '/host/browser/operator', {
+          method: 'POST',
+          body: JSON.stringify(req),
+        })
+      },
+      onState: (listener: (e: BrowserStateEvent) => void): (() => void) => {
+        const url = joinUrl(
+          config.baseUrl,
+          `/host/browser/events?token=${encodeURIComponent(config.bootstrapToken)}`,
+        )
+        const es = new EventSource(url)
+        es.onmessage = (ev: MessageEvent<string>): void => {
+          try {
+            listener(JSON.parse(ev.data) as BrowserStateEvent)
+          } catch {
+            /* ignore malformed frames */
+          }
+        }
+        return () => es.close()
+      },
     },
     checkForUpdate: async () => null,
     installUpdate: async () => undefined,

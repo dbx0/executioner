@@ -102,11 +102,44 @@ describe('installHostBridge', () => {
   })
 
   it('stubs Electron-only chrome so Landing can mount', async () => {
-    installHostBridge({ baseUrl: '', bootstrapToken: '' })
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
+    installHostBridge({ baseUrl: '', bootstrapToken: 'boot' })
     expect(window.executioner.platform).toBe('linux')
     expect(await window.executioner.checkForUpdate()).toBeNull()
     window.executioner.windowControl('close')
     window.executioner.browser.place({ root: '/', id: 'b', bounds: null })
+    await vi.waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/host/browser/place',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    )
+  })
+
+  it('browser.operator POSTs /host/browser/operator with the bootstrap bearer', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
+    installHostBridge({ baseUrl: '', bootstrapToken: 'boot' })
+
+    await window.executioner.browser.operator({
+      root: '/eng',
+      id: 'b1',
+      op: { navigate: 'https://example.com' },
+    })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/host/browser/operator',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          root: '/eng',
+          id: 'b1',
+          op: { navigate: 'https://example.com' },
+        }),
+      }),
+    )
+    const headers = new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers)
+    expect(headers.get('Authorization')).toBe('Bearer boot')
   })
 
   it('pickFolder POSTs /host/dialogs/folder with the bootstrap bearer', async () => {

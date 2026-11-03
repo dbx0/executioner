@@ -256,6 +256,11 @@ export function BrowserPane({
             </Button>
           </div>
         )}
+        {!crashed && window.executioner.platform === 'linux' && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4 text-center text-xs text-muted-foreground">
+            Opened in host browser window
+          </div>
+        )}
       </div>
     </div>
   )

@@ -4,9 +4,17 @@ import { join } from 'node:path'
 import { serve } from '@hono/node-server'
 import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
 import { EngineSupervisor, type EngineConnection } from '@exe/engine-supervisor'
 import { globalLayout } from '@exe/protocol'
 import { checkAgents } from './agents.js'
+import {
+  BROWSER_DARWIN_REQUIRED,
+  HostBrowserManager,
+  type Bounds,
+  type BrowserStateEvent,
+  type OperatorOp,
+} from './browser/index.js'
 import { collectConnectionHints } from './connection-hints.js'
 import { backendTestArgs, runEngineJson, sshEnrollArgs } from './engine-cli.js'
 import {
@@ -30,6 +38,8 @@ export interface HostServeOptions {
   /** Injectable osascript runner for cancelled-dialog harnesses and unit tests. */
   runOsascript?: OsascriptRunner
   platform?: NodeJS.Platform
+  /** Injectable host browser manager (tests / fake CDP). */
+  browsers?: HostBrowserManager
 }
 
 export interface HostServer {
@@ -77,6 +87,36 @@ function dialogFailure(err: unknown): { status: 501 | 500; body: { error: string
   return { status: 500, body: { error: message } }
 }
 
+function browserFailure(err: unknown): { status: 501 | 500; body: { error: string } } {
+  const message = err instanceof Error ? err.message : String(err)
+  if (message === BROWSER_DARWIN_REQUIRED) return { status: 501, body: { error: BROWSER_DARWIN_REQUIRED } }
+  return { status: 500, body: { error: message } }
+}
+
+function parseOperatorOp(raw: unknown): OperatorOp | null {
+  if (raw === 'back' || raw === 'forward' || raw === 'reload' || raw === 'stop') return raw
+  if (raw !== null && typeof raw === 'object' && 'navigate' in raw) {
+    const navigate = (raw as { navigate: unknown }).navigate
+    if (typeof navigate === 'string' && navigate !== '') return { navigate }
+  }
+  return null
+}
+
+function parseBounds(raw: unknown): Bounds | null | undefined {
+  if (raw === null) return null
+  if (raw === undefined || typeof raw !== 'object') return undefined
+  const b = raw as Record<string, unknown>
+  if (
+    typeof b.x === 'number' &&
+    typeof b.y === 'number' &&
+    typeof b.width === 'number' &&
+    typeof b.height === 'number'
+  ) {
+    return { x: b.x, y: b.y, width: b.width, height: b.height }
+  }
+  return undefined
+}
+
 /**
  * Team server: Host RPC + portable static UI. Owns EngineSupervisor.
  * Localhost v1 returns the engine master token (same grade as today's
@@ -86,8 +126,9 @@ export async function startHost(options: HostServeOptions): Promise<HostServer> 
   const enginePath = options.enginePath ?? resolveEnginePath()
   const nodeBin = options.nodeBin ?? process.env.npm_node_execpath ?? 'node'
   const bootstrapToken = options.bootstrapToken ?? randomBytes(32).toString('base64url')
+  const platform = options.platform ?? process.platform
   const dialogOpts = {
-    platform: options.platform ?? process.platform,
+    platform,
     ...(options.runOsascript !== undefined ? { runOsascript: options.runOsascript } : {}),
   }
 
@@ -96,14 +137,20 @@ export async function startHost(options: HostServeOptions): Promise<HostServer> 
     nodeBin,
     spawnEnv: process.env,
   })
+  const browsers =
+    options.browsers ??
+    new HostBrowserManager({
+      platform,
+      env: process.env,
+    })
 
   const app = new Hono()
 
   app.get('/health', (c) => c.json({ ok: true, role: 'executioner-host' }))
 
   app.use('/host/*', async (c, next) => {
-    const token = bearer(c.req.header('authorization'))
-    if (token === undefined || !tokensEqual(token, bootstrapToken)) {
+    const token = bearer(c.req.header('authorization')) ?? c.req.query('token')
+    if (token === undefined || token === '' || !tokensEqual(token, bootstrapToken)) {
       return c.json({ error: 'unauthorized' }, 401)
     }
     await next()
@@ -158,8 +205,101 @@ export async function startHost(options: HostServeOptions): Promise<HostServer> 
     if (typeof dir !== 'string' || dir === '') {
       return c.json({ error: 'dir required' }, 400)
     }
+    browsers.closeRoot(dir)
     supervisor.stop(dir)
     return c.json({ ok: true })
+  })
+
+  app.post('/host/browser/place', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as {
+      root?: unknown
+      id?: unknown
+      bounds?: unknown
+    }
+    if (typeof body.root !== 'string' || body.root === '' || typeof body.id !== 'string' || body.id === '') {
+      return c.json({ error: 'root and id required' }, 400)
+    }
+    const bounds = parseBounds(body.bounds)
+    if (bounds === undefined && body.bounds !== undefined) {
+      return c.json({ error: 'bounds must be null or { x, y, width, height }' }, 400)
+    }
+    try {
+      browsers.place(body.root, body.id, bounds ?? null)
+      return c.json({ ok: true })
+    } catch (err) {
+      const fail = browserFailure(err)
+      return c.json(fail.body, fail.status)
+    }
+  })
+
+  app.post('/host/browser/occluded', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { occluded?: unknown }
+    if (typeof body.occluded !== 'boolean') {
+      return c.json({ error: 'occluded boolean required' }, 400)
+    }
+    try {
+      browsers.setOccluded(body.occluded)
+      return c.json({ ok: true })
+    } catch (err) {
+      const fail = browserFailure(err)
+      return c.json(fail.body, fail.status)
+    }
+  })
+
+  app.post('/host/browser/operator', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as {
+      root?: unknown
+      id?: unknown
+      op?: unknown
+    }
+    if (typeof body.root !== 'string' || body.root === '' || typeof body.id !== 'string' || body.id === '') {
+      return c.json({ error: 'root and id required' }, 400)
+    }
+    const op = parseOperatorOp(body.op)
+    if (op === null) {
+      return c.json({ error: 'op required' }, 400)
+    }
+    try {
+      await browsers.operator(body.root, body.id, op)
+      return c.json({ ok: true })
+    } catch (err) {
+      const fail = browserFailure(err)
+      return c.json(fail.body, fail.status)
+    }
+  })
+
+  app.post('/host/browser/close', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { root?: unknown; id?: unknown }
+    if (typeof body.root !== 'string' || body.root === '' || typeof body.id !== 'string' || body.id === '') {
+      return c.json({ error: 'root and id required' }, 400)
+    }
+    try {
+      browsers.close(body.root, body.id)
+      return c.json({ ok: true })
+    } catch (err) {
+      const fail = browserFailure(err)
+      return c.json(fail.body, fail.status)
+    }
+  })
+
+  app.get('/host/browser/events', (c) => {
+    return streamSSE(c, async (stream) => {
+      let alive = true
+      const unsub = browsers.subscribe((e: BrowserStateEvent) => {
+        if (!alive) return
+        void stream.writeSSE({ data: JSON.stringify(e) })
+      })
+      stream.onAbort(() => {
+        alive = false
+        unsub()
+      })
+      while (alive) {
+        await stream.sleep(20_000)
+        if (!alive) break
+        await stream.writeSSE({ event: 'ping', data: '1' })
+      }
+      unsub()
+    })
   })
 
   app.post('/host/dialogs/folder', async (c) => {
@@ -280,10 +420,12 @@ export async function startHost(options: HostServeOptions): Promise<HostServer> 
     url,
     stop: () =>
       new Promise<void>((resolve, reject) => {
-        supervisor.stopAll()
-        server.close((err) => {
-          if (err !== undefined && err !== null) reject(err)
-          else resolve()
+        void browsers.closeAll().finally(() => {
+          supervisor.stopAll()
+          server.close((err) => {
+            if (err !== undefined && err !== null) reject(err)
+            else resolve()
+          })
         })
       }),
   }
