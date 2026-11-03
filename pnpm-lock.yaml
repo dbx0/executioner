@@ -42,6 +42,9 @@ importers:
       '@exe/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@exe/engine-supervisor':
+        specifier: workspace:*
+        version: link:../../packages/engine-supervisor
       '@exe/graph':
         specifier: workspace:*
         version: link:../../packages/graph
@@ -188,6 +191,18 @@ importers:
         specifier: ^8.3.4
         version: 8.3.4(@types/node@24.19.2)(jiti@1.21.7)
 
+  apps/team-server:
+    dependencies:
+      '@exe/engine-supervisor':
+        specifier: workspace:*
+        version: link:../../packages/engine-supervisor
+      '@hono/node-server':
+        specifier: ^2.1.5
+        version: 2.1.5(hono@4.13.13)
+      hono:
+        specifier: ^4.13.13
+        version: 4.13.13
+
   packages/db:
     dependencies:
       '@exe/protocol':
@@ -252,6 +267,18 @@ importers:
       '@types/ws':
         specifier: ^8.18.2
         version: 8.18.2
+
+  packages/engine-client:
+    dependencies:
+      axios:
+        specifier: ^1.20.0
+        version: 1.20.0(debug@4.4.3(supports-color@7.2.0))(supports-color@7.2.0)
+
+  packages/engine-supervisor:
+    dependencies:
+      '@exe/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/graph:
     dependencies:

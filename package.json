@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "test:watch": "vitest",
     "typecheck": "tsc -b && tsc -p tsconfig.test.json && tsc --noEmit -p apps/desktop/tsconfig.json",
+    "host": "pnpm --filter @exe/team-server start",
     "postinstall": "node scripts/fix-node-pty.mjs"
   },
   "devDependencies": {

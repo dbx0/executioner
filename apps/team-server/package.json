@@ -1,0 +1,20 @@
+{
+  "name": "@exe/team-server",
+  "version": "0.0.6",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "executioner-host": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "pnpm --filter @exe/desktop run build:web && tsc -b",
+    "dev": "pnpm build && node dist/cli.js serve",
+    "start": "node dist/cli.js serve"
+  },
+  "dependencies": {
+    "@exe/engine-supervisor": "workspace:*",
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.13"
+  }
+}

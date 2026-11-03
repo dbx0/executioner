@@ -5,6 +5,9 @@
     { "path": "./packages/nodes" },
     { "path": "./packages/db" },
     { "path": "./packages/project" },
-    { "path": "./packages/engine" }
+    { "path": "./packages/engine" },
+    { "path": "./packages/engine-supervisor" },
+    { "path": "./packages/engine-client" },
+    { "path": "./apps/team-server" }
   ]
 }

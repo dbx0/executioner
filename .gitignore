@@ -54,3 +54,4 @@ Thumbs.db
 
 # README media
 docs/.readme-media/
+.audit/

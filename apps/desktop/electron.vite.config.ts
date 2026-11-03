@@ -2,27 +2,9 @@ import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'electron-vite'
 import type { Plugin } from 'vite'
+import { RENDERER_CSP } from './renderer-csp.js'
 
-/**
- * The renderer's Content-Security-Policy. Scripts come only from the bundle, so
- * text that reaches the page (a finding, a file, an agent's markdown) can never
- * run as code; the network is the loopback engine and nothing else, apart from
- * the favicon service the secrets list shows logos from. Styles allow inline
- * because React style props and Monaco both set them.
- */
-export const RENDERER_CSP = [
-  "default-src 'self'",
-  "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://www.google.com https://*.gstatic.com",
-  "font-src 'self' data:",
-  "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*",
-  "worker-src 'self' blob:",
-  "object-src 'none'",
-  "frame-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-].join('; ')
+export { RENDERER_CSP }
 
 /**
  * Stamp the CSP into the built page only. The dev server injects inline

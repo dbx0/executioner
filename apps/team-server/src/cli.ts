@@ -1,0 +1,72 @@
+#!/usr/bin/env node
+import { startHost } from './host.js'
+
+function usage(): never {
+  console.error(`usage:
+  executioner-host serve [--bind 127.0.0.1:47821] [--token <bootstrap>]
+
+Start the team server (engine supervisor + portable UI).
+Prints the bootstrap token once. Open the printed URL in a browser.`)
+  process.exit(2)
+}
+
+function parseBind(raw: string | undefined): { host: string; port: number } {
+  const value = raw ?? '127.0.0.1:47821'
+  const idx = value.lastIndexOf(':')
+  if (idx <= 0) usage()
+  const host = value.slice(0, idx)
+  const port = Number(value.slice(idx + 1))
+  if (!Number.isInteger(port) || port <= 0) usage()
+  return { host, port }
+}
+
+async function main(): Promise<void> {
+  const argv = process.argv.slice(2)
+  const cmd = argv[0]
+  if (cmd !== 'serve') usage()
+
+  let bindRaw: string | undefined
+  let token: string | undefined
+  for (let i = 1; i < argv.length; i += 1) {
+    const arg = argv[i]
+    if (arg === '--bind') {
+      bindRaw = argv[++i]
+      continue
+    }
+    if (arg === '--token') {
+      token = argv[++i]
+      continue
+    }
+    usage()
+  }
+
+  if (token === undefined || token === '') {
+    const fromEnv = process.env.EXECUTIONER_HOST_TOKEN
+    if (fromEnv !== undefined && fromEnv !== '') token = fromEnv
+  }
+
+  const bind = parseBind(bindRaw)
+  const host = await startHost({
+    host: bind.host,
+    port: bind.port,
+    ...(token !== undefined && token !== '' ? { bootstrapToken: token } : {}),
+  })
+
+  const portableUi = `${host.url}/?token=${encodeURIComponent(host.bootstrapToken)}`
+  console.log(`executioner-host listening on ${host.url}`)
+  console.log(`bootstrap token: ${host.bootstrapToken}`)
+  console.log(`portable UI: ${portableUi}`)
+  console.log('engines stay up when the browser tab closes (Cobalt Strike–style).')
+
+  const shutdown = () => {
+    host.stop()
+    process.exit(0)
+  }
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
+}
+
+main().catch((err: unknown) => {
+  console.error(err instanceof Error ? err.message : err)
+  process.exit(1)
+})

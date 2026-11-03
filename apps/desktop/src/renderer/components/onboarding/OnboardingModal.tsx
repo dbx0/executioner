@@ -84,6 +84,7 @@ export function OnboardingModal(): JSX.Element | null {
 
   const [stepIdx, setStepIdx] = useState(0)
   const [availability, setAvailability] = useState<Record<string, boolean> | null>(null)
+  const [probeError, setProbeError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   // SSH/Docker collect their connection details on their own step, then finish on
@@ -112,17 +113,26 @@ export function OnboardingModal(): JSX.Element | null {
   }, [kind])
 
   // Probe installed agent CLIs when the agent step opens (works before any engine
-  // is running, via the main-process PATH check).
+  // is running, via the main-process / Host PATH check).
   useEffect(() => {
     if (!open) return
     let alive = true
     const probe = window.executioner?.checkAgents?.()
     if (probe === undefined) {
       setAvailability({})
+      setProbeError('Host bridge is not available in this window.')
     } else {
       void probe
-        .then((rows) => alive && setAvailability(Object.fromEntries(rows.map((r) => [r.id, r.installed]))))
-        .catch(() => alive && setAvailability({}))
+        .then((rows) => {
+          if (!alive) return
+          setProbeError(null)
+          setAvailability(Object.fromEntries(rows.map((r) => [r.id, r.installed])))
+        })
+        .catch((err: unknown) => {
+          if (!alive) return
+          setAvailability({})
+          setProbeError(err instanceof Error ? err.message : 'Host agent probe failed')
+        })
     }
     return () => {
       alive = false
@@ -209,6 +219,14 @@ export function OnboardingModal(): JSX.Element | null {
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek p-5">
           {stepId === 'agent' && (
+            <>
+            {probeError !== null && (
+              <div className="mb-3 rounded-md border border-destructive/40 bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-3 py-2 text-[12px] text-destructive">
+                Could not reach the host agent probe ({probeError}). Reopen the portable UI URL
+                printed by executioner-host (it includes <code className="font-mono">?token=</code>),
+                or paste the bootstrap token when prompted.
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
               {AGENTS.map((a) => {
                 const installed = availability?.[a.id] === true
@@ -246,6 +264,7 @@ export function OnboardingModal(): JSX.Element | null {
                 )
               })}
             </div>
+            </>
           )}
 
           {stepId === 'theme' && (

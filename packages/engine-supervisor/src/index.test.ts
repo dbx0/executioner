@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { EngineSupervisor } from './engine-supervisor.js'
+import { EngineSupervisor } from './index.js'
 
 // A fake child process that lets the test push stdout lines.
 class FakeChild extends EventEmitter {
