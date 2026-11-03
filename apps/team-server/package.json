@@ -10,7 +10,8 @@
   "scripts": {
     "build": "pnpm --filter @exe/desktop run build:web && tsc -b",
     "dev": "pnpm build && node dist/cli.js serve",
-    "start": "node dist/cli.js serve"
+    "start": "node dist/cli.js serve",
+    "test": "vitest run"
   },
   "dependencies": {
     "@exe/engine-supervisor": "workspace:*",

@@ -6,6 +6,16 @@ import { serveStatic } from '@hono/node-server/serve-static'
 import { Hono } from 'hono'
 import { EngineSupervisor, type EngineConnection } from '@exe/engine-supervisor'
 import { checkAgents } from './agents.js'
+import { collectConnectionHints } from './connection-hints.js'
+import {
+  encodeImageToPngDataUrl,
+  hasPhoto,
+  isEngagementRoot,
+  photoPath,
+  removePhoto,
+  writePhoto,
+} from './engagement-photo.js'
+import { DARWIN_REQUIRED, chooseFolder, chooseImage, type OsascriptRunner } from './mac-dialogs.js'
 import { portablePublicDir, resolveEnginePath } from './paths.js'
 
 export interface HostServeOptions {
@@ -15,6 +25,9 @@ export interface HostServeOptions {
   bootstrapToken?: string
   enginePath?: string
   nodeBin?: string
+  /** Injectable osascript runner for cancelled-dialog harnesses and unit tests. */
+  runOsascript?: OsascriptRunner
+  platform?: NodeJS.Platform
 }
 
 export interface HostServer {
@@ -55,6 +68,12 @@ function runInit(
   })
 }
 
+function dialogFailure(err: unknown): { status: 501 | 500; body: { error: string } } {
+  const message = err instanceof Error ? err.message : String(err)
+  if (message === DARWIN_REQUIRED) return { status: 501, body: { error: DARWIN_REQUIRED } }
+  return { status: 500, body: { error: message } }
+}
+
 /**
  * Team server: Host RPC + portable static UI. Owns EngineSupervisor.
  * Localhost v1 returns the engine master token (same grade as today's
@@ -64,6 +83,10 @@ export async function startHost(options: HostServeOptions): Promise<HostServer> 
   const enginePath = options.enginePath ?? resolveEnginePath()
   const nodeBin = options.nodeBin ?? process.env.npm_node_execpath ?? 'node'
   const bootstrapToken = options.bootstrapToken ?? randomBytes(32).toString('base64url')
+  const dialogOpts = {
+    platform: options.platform ?? process.platform,
+    ...(options.runOsascript !== undefined ? { runOsascript: options.runOsascript } : {}),
+  }
 
   const supervisor = new EngineSupervisor({
     enginePath,
@@ -128,6 +151,57 @@ export async function startHost(options: HostServeOptions): Promise<HostServer> 
       return c.json({ error: 'dir required' }, 400)
     }
     supervisor.stop(dir)
+    return c.json({ ok: true })
+  })
+
+  app.post('/host/dialogs/folder', async (c) => {
+    try {
+      const path = await chooseFolder(dialogOpts)
+      return c.json({ path })
+    } catch (err) {
+      const fail = dialogFailure(err)
+      return c.json(fail.body, fail.status)
+    }
+  })
+
+  app.get('/host/connection-hints', async (c) => {
+    const hints = await collectConnectionHints()
+    return c.json(hints)
+  })
+
+  app.post('/host/engagement-photo/pick', async (c) => {
+    try {
+      const source = await chooseImage(dialogOpts)
+      if (source === null) return c.json({ dataUrl: null })
+      const dataUrl = await encodeImageToPngDataUrl(source)
+      return c.json({ dataUrl })
+    } catch (err) {
+      const fail = dialogFailure(err)
+      return c.json(fail.body, fail.status)
+    }
+  })
+
+  app.post('/host/engagement-photo/read', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { root?: unknown }
+    if (!isEngagementRoot(body.root)) return c.json({ dataUrl: null })
+    if (!hasPhoto(body.root)) return c.json({ dataUrl: null })
+    const dataUrl = await encodeImageToPngDataUrl(photoPath(body.root))
+    return c.json({ dataUrl })
+  })
+
+  app.post('/host/engagement-photo/write', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { root?: unknown; dataUrl?: unknown }
+    if (!isEngagementRoot(body.root) || typeof body.dataUrl !== 'string') {
+      return c.json({ dataUrl: null })
+    }
+    if (!writePhoto(body.root, body.dataUrl)) return c.json({ dataUrl: null })
+    const dataUrl = await encodeImageToPngDataUrl(photoPath(body.root))
+    return c.json({ dataUrl })
+  })
+
+  app.post('/host/engagement-photo/clear', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { root?: unknown }
+    if (isEngagementRoot(body.root)) removePhoto(body.root)
     return c.json({ ok: true })
   })
 

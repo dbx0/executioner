@@ -84,7 +84,7 @@ export function resolveHostBridgeConfig(): HostBridgeConfig {
   }
 }
 
-/** Install `window.executioner` talking to `/host/*` (Electron-only ops stubbed). */
+/** Install `window.executioner` talking to `/host/*` (SSH/browser still stubbed). */
 export function installHostBridge(config: HostBridgeConfig): void {
   const openProject = async (req: OpenProjectRequest): Promise<EngineConnection> => {
     const body = await hostJson<{
@@ -110,10 +110,10 @@ export function installHostBridge(config: HostBridgeConfig): void {
   }
 
   const pickFolder = async (): Promise<string | undefined> => {
-    const entered = window.prompt('Engagement directory (absolute path on the host)')
-    if (entered === null) return undefined
-    const trimmed = entered.trim()
-    return trimmed === '' ? undefined : trimmed
+    const body = await hostJson<{ path: string | null }>(config, '/host/dialogs/folder', {
+      method: 'POST',
+    })
+    return body.path ?? undefined
   }
 
   const unavailable = (feature: string): BackendTestResult => ({
@@ -146,16 +146,39 @@ export function installHostBridge(config: HostBridgeConfig): void {
       steps: [{ name: 'enrollSsh', ok: false, detail: 'Not available in the portable browser UI' }],
       error: 'Not available in the portable browser UI',
     }),
-    connectionHints: async () => ({
-      sshHosts: [],
-      sshKeys: [],
-      defaultUser: '',
-      dockerImages: [],
-    }),
-    pickEngagementPhoto: async () => null,
-    readEngagementPhoto: async () => null,
-    writeEngagementPhoto: async () => null,
-    clearEngagementPhoto: () => undefined,
+    connectionHints: async () =>
+      hostJson<{
+        sshHosts: { alias: string; hostname: string; user?: string; port?: number; identityFile?: string }[]
+        sshKeys: string[]
+        defaultUser: string
+        dockerImages: string[]
+      }>(config, '/host/connection-hints'),
+    pickEngagementPhoto: async () => {
+      const body = await hostJson<{ dataUrl: string | null }>(config, '/host/engagement-photo/pick', {
+        method: 'POST',
+      })
+      return body.dataUrl
+    },
+    readEngagementPhoto: async (req: { root: string }) => {
+      const body = await hostJson<{ dataUrl: string | null }>(config, '/host/engagement-photo/read', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      })
+      return body.dataUrl
+    },
+    writeEngagementPhoto: async (req: { root: string; dataUrl: string }) => {
+      const body = await hostJson<{ dataUrl: string | null }>(config, '/host/engagement-photo/write', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      })
+      return body.dataUrl
+    },
+    clearEngagementPhoto: (req: { root: string }) => {
+      void hostJson(config, '/host/engagement-photo/clear', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      }).catch(() => undefined)
+    },
     clipboardRead: async () => {
       try {
         return await navigator.clipboard.readText()

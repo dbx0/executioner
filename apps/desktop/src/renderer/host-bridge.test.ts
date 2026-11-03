@@ -104,15 +104,79 @@ describe('installHostBridge', () => {
   it('stubs Electron-only chrome so Landing can mount', async () => {
     installHostBridge({ baseUrl: '', bootstrapToken: '' })
     expect(window.executioner.platform).toBe('linux')
-    expect(await window.executioner.connectionHints()).toEqual({
-      sshHosts: [],
-      sshKeys: [],
-      defaultUser: '',
-      dockerImages: [],
-    })
     expect(await window.executioner.checkForUpdate()).toBeNull()
     window.executioner.windowControl('close')
     window.executioner.browser.place({ root: '/', id: 'b', bounds: null })
+  })
+
+  it('pickFolder POSTs /host/dialogs/folder with the bootstrap bearer', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ path: '/tmp/eng' }))
+    vi.stubGlobal('fetch', fetchMock)
+    installHostBridge({ baseUrl: '', bootstrapToken: 'boot' })
+
+    await expect(window.executioner.pickFolder()).resolves.toBe('/tmp/eng')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/host/dialogs/folder',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    const headers = new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers)
+    expect(headers.get('Authorization')).toBe('Bearer boot')
+  })
+
+  it('pickFolder maps a null path to undefined (cancel)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ path: null })))
+    installHostBridge({ baseUrl: '', bootstrapToken: 'boot' })
+    await expect(window.executioner.pickFolder()).resolves.toBeUndefined()
+  })
+
+  it('connectionHints GETs /host/connection-hints with the bootstrap bearer', async () => {
+    const hints = {
+      sshHosts: [{ alias: 'kali', hostname: '10.0.0.5' }],
+      sshKeys: ['/home/u/.ssh/id_ed25519'],
+      defaultUser: 'u',
+      dockerImages: ['ubuntu:22.04'],
+    }
+    const fetchMock = vi.fn(async () => Response.json(hints))
+    vi.stubGlobal('fetch', fetchMock)
+    installHostBridge({ baseUrl: '', bootstrapToken: 'boot' })
+
+    await expect(window.executioner.connectionHints()).resolves.toEqual(hints)
+    expect(fetchMock).toHaveBeenCalledWith('/host/connection-hints', expect.any(Object))
+    const headers = new Headers((fetchMock.mock.calls[0]?.[1] as RequestInit).headers)
+    expect(headers.get('Authorization')).toBe('Bearer boot')
+  })
+
+  it('engagement photo methods hit /host/engagement-photo/* with bearer', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/pick')) return Response.json({ dataUrl: 'data:image/png;base64,aaa' })
+      if (url.endsWith('/read')) return Response.json({ dataUrl: 'data:image/png;base64,bbb' })
+      if (url.endsWith('/write')) return Response.json({ dataUrl: 'data:image/png;base64,ccc' })
+      return Response.json({ ok: true })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    installHostBridge({ baseUrl: '', bootstrapToken: 'boot' })
+
+    await expect(window.executioner.pickEngagementPhoto()).resolves.toBe('data:image/png;base64,aaa')
+    await expect(window.executioner.readEngagementPhoto({ root: '/tmp/eng' })).resolves.toBe(
+      'data:image/png;base64,bbb',
+    )
+    await expect(
+      window.executioner.writeEngagementPhoto({ root: '/tmp/eng', dataUrl: 'data:image/png;base64,in' }),
+    ).resolves.toBe('data:image/png;base64,ccc')
+    window.executioner.clearEngagementPhoto({ root: '/tmp/eng' })
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+
+    const paths = fetchMock.mock.calls.map((c) => c[0])
+    expect(paths).toEqual([
+      '/host/engagement-photo/pick',
+      '/host/engagement-photo/read',
+      '/host/engagement-photo/write',
+      '/host/engagement-photo/clear',
+    ])
+    for (const call of fetchMock.mock.calls) {
+      const headers = new Headers((call[1] as RequestInit).headers)
+      expect(headers.get('Authorization')).toBe('Bearer boot')
+    }
   })
 })
 

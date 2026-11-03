@@ -6,7 +6,8 @@ function usage(): never {
   executioner-host serve [--bind 127.0.0.1:47821] [--token <bootstrap>]
 
 Start the team server (engine supervisor + portable UI).
-Prints the bootstrap token once. Open the printed URL in a browser.`)
+Prints the bootstrap token once. Open the printed URL in a browser.
+Native folder and photo dialogs require macOS (Darwin).`)
   process.exit(2)
 }
 
