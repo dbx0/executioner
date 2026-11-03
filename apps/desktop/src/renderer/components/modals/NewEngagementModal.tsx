@@ -72,11 +72,16 @@ export function NewEngagementModal(): JSX.Element | null {
   if (!open) return null
 
   const pickInto = (): void => {
-    void pickFolder().then((chosen) => {
-      if (chosen === undefined) return
-      setDir(chosen)
-      if (name.trim() === '') setName(basename(chosen))
-    })
+    void pickFolder()
+      .then((chosen) => {
+        if (chosen === undefined) return
+        setLocalError(null)
+        setDir(chosen)
+        if (name.trim() === '') setName(basename(chosen))
+      })
+      .catch((e: unknown) => {
+        setLocalError(e instanceof Error ? e.message : String(e))
+      })
   }
 
   const addTarget = (): void => {

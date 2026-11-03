@@ -38,12 +38,26 @@ function assertDarwin(platform: NodeJS.Platform): void {
   if (platform !== 'darwin') throw new Error(DARWIN_REQUIRED)
 }
 
+/**
+ * Finder must activate first. Otherwise choose-folder from a background
+ * executioner-host often opens behind the browser, which looks like a no-op.
+ */
+const CHOOSE_FOLDER = `tell application "Finder"
+  activate
+  return POSIX path of (choose folder with prompt "Open engagement")
+end tell`
+
+const CHOOSE_IMAGE = `tell application "Finder"
+  activate
+  return POSIX path of (choose file of type {"public.png", "public.jpeg", "public.tiff", "public.heic", "com.compuserve.gif", "org.webmproject.webp"} with prompt "Choose engagement photo")
+end tell`
+
 /** Native folder chooser. Returns the absolute path, or null when cancelled. */
 export async function chooseFolder(options: MacDialogOptions = {}): Promise<string | null> {
   const platform = options.platform ?? process.platform
   assertDarwin(platform)
   const run = options.runOsascript ?? defaultOsascript
-  const raw = await run('POSIX path of (choose folder with prompt "Open engagement")')
+  const raw = await run(CHOOSE_FOLDER)
   if (raw === null) return null
   return raw.endsWith('/') ? raw.slice(0, -1) : raw
 }
@@ -53,7 +67,5 @@ export async function chooseImage(options: MacDialogOptions = {}): Promise<strin
   const platform = options.platform ?? process.platform
   assertDarwin(platform)
   const run = options.runOsascript ?? defaultOsascript
-  return run(
-    'POSIX path of (choose file of type {"public.png", "public.jpeg", "public.tiff", "public.heic", "com.compuserve.gif", "org.webmproject.webp"} with prompt "Choose engagement photo")',
-  )
+  return run(CHOOSE_IMAGE)
 }

@@ -329,7 +329,13 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
   return {
     openEngagement: async (create) => {
       set({ error: null })
-      const dir = await window.executioner.pickFolder()
+      let dir: string | undefined
+      try {
+        dir = await window.executioner.pickFolder()
+      } catch (e) {
+        set({ error: (e as Error).message })
+        return
+      }
       if (dir === undefined) return
       set({ busy: true })
       try {
