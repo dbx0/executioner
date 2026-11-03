@@ -5,6 +5,7 @@ import { useApp } from '../../store.js'
 import { Button } from '../ui/button.js'
 import { scopeApi } from '../../api/scope.js'
 import { targetsApi } from '../../api/targets.js'
+import { ScopeRunWatcher } from '../../lib/scope-run-wait.js'
 import { normalizeManualTarget, type NormalizedTarget } from '../../lib/target-input.js'
 import { basename, type Phase, type TabId } from './new-engagement/constants.js'
 import { AiTab, ManualTab, ModeTabs, OpenTab } from './new-engagement/tabs.js'
@@ -19,6 +20,7 @@ export function NewEngagementModal(): JSX.Element | null {
   const createEngagement = useApp((s) => s.createEngagement)
   const openEngagementFolder = useApp((s) => s.openEngagementFolder)
   const beginScopeRun = useApp((s) => s.beginScopeRun)
+  const handleAgentEvent = useApp((s) => s.handleAgentEvent)
   const recents = useApp((s) => s.recents)
   const openEngagements = useApp((s) => s.open)
   const defaultAgent = useApp((s) => s.defaultAgent)
@@ -118,12 +120,22 @@ export function NewEngagementModal(): JSX.Element | null {
       scope,
     })
     if (root === null) return // store.error is shown
-    const client = useApp.getState().client
-    if (client === null) {
+    const state = useApp.getState()
+    const client = state.client
+    const connection = state.connection
+    if (client === null || connection === null) {
       setPhase('done') // engagement is open; just skip the parse
       return
     }
+    // Empty brief: nothing to parse — don't leave the modal on "Parsing…".
+    if (scope.trim() === '' && description.trim() === '') {
+      setPhase('done')
+      return
+    }
+    const watcher = new ScopeRunWatcher(connection, handleAgentEvent)
     try {
+      await watcher.ready
+      setPhase('running')
       const { runId: id } = await scopeApi(client).parse({
         scope,
         ...(defaultAgent !== null ? { agent: defaultAgent } : {}),
@@ -133,8 +145,15 @@ export function NewEngagementModal(): JSX.Element | null {
       })
       beginScopeRun(id)
       setRunId(id)
-      setPhase('running')
+      const result = await watcher.waitFor(id)
+      if (result === 'timeout') {
+        setLocalError('Scope parse timed out — engagement is open; add targets from Scope.')
+      } else if (result === 'error') {
+        setLocalError('Lost the engine event stream — engagement is open; add targets from Scope.')
+      }
+      setPhase('done')
     } catch (e) {
+      watcher.close()
       setLocalError((e as Error).message)
       setPhase('done')
     }

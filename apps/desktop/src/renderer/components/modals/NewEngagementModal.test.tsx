@@ -5,6 +5,13 @@ import type { AxiosInstance } from 'axios'
 
 const parse = vi.fn(async () => ({ runId: 'run-1' }))
 vi.mock('../../api/scope.js', () => ({ scopeApi: () => ({ parse }) }))
+vi.mock('../../lib/scope-run-wait.js', () => ({
+  ScopeRunWatcher: class {
+    ready = Promise.resolve()
+    waitFor = vi.fn(async () => 'done' as const)
+    close = vi.fn()
+  },
+}))
 
 const { NewEngagementModal } = await import('./NewEngagementModal.js')
 
@@ -93,10 +100,18 @@ describe('NewEngagementModal', () => {
       parse.mockClear()
       useApp.setState({
         client: {} as AxiosInstance,
+        connection: { port: 9, token: 't', projectRoot: '/home/x/acme' },
         defaultAgent: 'claude',
-        createEngagement: vi.fn(async () => '/home/x/acme') as never,
+        createEngagement: vi.fn(async () => {
+          useApp.setState({
+            client: {} as AxiosInstance,
+            connection: { port: 9, token: 't', projectRoot: '/home/x/acme' },
+          })
+          return '/home/x/acme'
+        }) as never,
         pickEngagementFolder: vi.fn(async () => '/home/x/acme') as never,
         beginScopeRun: vi.fn() as never,
+        handleAgentEvent: vi.fn() as never,
       })
     })
 
