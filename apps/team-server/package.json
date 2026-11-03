@@ -11,6 +11,7 @@
     "build": "pnpm --filter @exe/desktop run build:web && tsc -b",
     "dev": "pnpm build && node dist/cli.js serve",
     "start": "node dist/cli.js serve",
+    "start:mac": "node dist/cli.js serve --open",
     "test": "vitest run"
   },
   "dependencies": {
