@@ -238,12 +238,13 @@ pnpm -r build
 On macOS the supported full client is the portable host (no Electron). Engines stay on the host and the UI opens in your browser:
 
 ```bash
-pnpm host:mac
+pnpm host:start   # opens Host.app if built, else pnpm host:mac
+pnpm host:stop    # Dock quit + free ports 47821–47830
 ```
 
-That runs `executioner-host serve --open`. Use the printed URL if the browser does not open. Stop with **Ctrl+C** in that terminal. Closing the browser tab does not stop the host.
+`pnpm host:mac` alone runs `executioner-host serve --open` in the terminal (Ctrl+C to stop). Closing the browser tab does not stop the host.
 
-For a double-click Dock app instead, see [`apps/team-server/macos/README.md`](apps/team-server/macos/README.md) (`pnpm host:app`, then open the `.app`; quit from the Dock to shut down).
+More detail: [`apps/team-server/macos/README.md`](apps/team-server/macos/README.md) (`pnpm host:app` to build the Dock app).
 
 To run the Electron shell instead:
 

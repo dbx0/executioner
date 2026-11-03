@@ -9,10 +9,18 @@ Closing the browser tab does **not** stop the host. Engines stay up until you qu
 From the monorepo root, after `pnpm install` and `pnpm -r build`:
 
 ```bash
-pnpm host:mac
+pnpm host:start
 ```
 
-That builds `@exe/team-server` and runs `executioner-host serve --open`. The UI opens in your default browser. Stop with **Ctrl+C** in that terminal (SIGINT stops the host and its engines).
+Opens `Executioner Host.app` when it exists under `apps/team-server/dist/`. Otherwise runs `pnpm host:mac` in the foreground. Force the CLI path with `bash scripts/host-mac-start.sh --cli`.
+
+```bash
+pnpm host:stop
+```
+
+Quits the Dock app (if running) and frees `127.0.0.1:47821`–`47830`.
+
+`pnpm host:mac` alone builds `@exe/team-server` and runs `executioner-host serve --open`. Stop that path with **Ctrl+C** in the terminal.
 
 Optional flags via the CLI:
 
