@@ -33,16 +33,35 @@ export function extractPath(stdout: string): string | null {
   return value === '' ? null : value
 }
 
-/** Shell entries first, then any inherited ones the shell did not list. */
+/** The non-empty entries of a PATH, first occurrence only. */
+function entries(path: string | undefined): string[] {
+  return [...new Set((path ?? '').split(':').filter((dir) => dir !== ''))]
+}
+
+/**
+ * The inherited PATH in its own order, with each entry only the shell knows
+ * placed just before the next entry both share (or at the end). The inherited
+ * order wins because a non-interactive `-ilc` shell skips prompt hooks, so the
+ * order it prints can differ from a real terminal's: on Linux an rc that
+ * prepends ~/.local/bin would land ahead of mise's tools, and a ~/.local/bin
+ * wrapper running `mise x claude -- claude` would then exec itself forever.
+ * macOS still gets ~/.local/bin and Homebrew ahead of /usr/bin, because the
+ * shell lists them before the bare launchd entries.
+ */
 export function mergePath(shellPath: string, inherited: string | undefined): string {
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const dir of [...shellPath.split(':'), ...(inherited ?? '').split(':')]) {
-    if (dir === '' || seen.has(dir)) continue
-    seen.add(dir)
-    out.push(dir)
+  const base = entries(inherited)
+  const known = new Set(base)
+  const before = new Map<string, string[]>()
+  let pending: string[] = []
+  for (const dir of entries(shellPath)) {
+    if (!known.has(dir)) {
+      pending.push(dir)
+    } else if (pending.length > 0) {
+      before.set(dir, pending)
+      pending = []
+    }
   }
-  return out.join(':')
+  return [...base.flatMap((dir) => [...(before.get(dir) ?? []), dir]), ...pending].join(':')
 }
 
 /**

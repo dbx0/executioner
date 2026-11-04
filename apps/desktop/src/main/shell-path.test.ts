@@ -14,8 +14,21 @@ describe('extractPath', () => {
 })
 
 describe('mergePath', () => {
-  it('puts the shell entries first and keeps the inherited ones, without duplicates', () => {
+  it('puts shell-only entries ahead of the inherited entry they precede, without duplicates', () => {
     expect(mergePath('/home/u/.local/bin:/usr/bin', '/usr/bin:/bin')).toBe('/home/u/.local/bin:/usr/bin:/bin')
+  })
+
+  it('keeps the inherited order and slots shell-only entries in where the shell put them', () => {
+    // A desktop session lists mise shims before ~/.local/bin; an rc file that
+    // prepends ~/.local/bin must not flip that, or a ~/.local/bin wrapper that
+    // execs `mise x claude -- claude` resolves to itself forever.
+    const shell = '/h/.local/bin:/h/mise/installs/claude:/h/mise/shims:/usr/bin'
+    const inherited = '/h/mise/shims:/usr/bin:/h/mise/shims:/h/.local/bin'
+    expect(mergePath(shell, inherited)).toBe('/h/mise/installs/claude:/h/mise/shims:/usr/bin:/h/.local/bin')
+  })
+
+  it('appends shell entries that come after every inherited one', () => {
+    expect(mergePath('/usr/bin:/opt/x/bin', '/usr/bin:/bin')).toBe('/usr/bin:/bin:/opt/x/bin')
   })
 
   it('handles an empty inherited PATH', () => {
