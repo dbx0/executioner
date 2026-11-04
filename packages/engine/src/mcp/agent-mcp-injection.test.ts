@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MCP_INJECTABLE_AGENTS,
   MCP_TOKEN_ENV,
@@ -9,6 +9,14 @@ import {
   isMcpInjectableAgent,
 } from './agent-mcp-injection.js'
 import { OPENCODE_HEADLESS_AGENT } from '../agents/headless-cli.js'
+
+// Expected failures below log a warn line to stderr; keep the test output clean.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  const writeSync = ((fd: number, ...rest: unknown[]) =>
+    fd === 2 ? 0 : (actual.writeSync as (...a: unknown[]) => number)(fd, ...rest)) as typeof actual.writeSync
+  return { ...actual, writeSync }
+})
 
 let cwd: string
 beforeEach(() => {

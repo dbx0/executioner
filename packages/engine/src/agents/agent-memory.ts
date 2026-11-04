@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { engineLog, errorFields } from '../infra/log.js'
 
 /**
  * Claude Code's per-project memory, wired up for an engagement.
@@ -87,7 +88,8 @@ export function ensureEngagementMemory(
     const index = join(dir, 'MEMORY.md')
     if (!fs.existsSync(index)) fs.writeFileSync(index, seedIndex(engagementName), 'utf8')
     return dir
-  } catch {
+  } catch (e) {
+    engineLog.warn('agents', 'Could not prepare engagement memory', errorFields(e))
     return undefined
   }
 }

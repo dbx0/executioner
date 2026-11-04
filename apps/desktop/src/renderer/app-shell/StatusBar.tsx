@@ -65,6 +65,26 @@ export function StatusBar(): JSX.Element {
     }
   }, [api, reloadKey])
 
+  // Verbose logging shows plainly so it is not left on by accident.
+  const [verbose, setVerbose] = useState(false)
+  useEffect(() => {
+    // Absent in tests and older preloads.
+    const log = (window.executioner as Partial<Window['executioner']> | undefined)?.log
+    if (log?.getVerbose === undefined) return
+    let live = true
+    log
+      .getVerbose()
+      .then((v) => {
+        if (live) setVerbose(v)
+      })
+      .catch(() => {})
+    const off = log.onLevel((l) => setVerbose(l === 'debug'))
+    return () => {
+      live = false
+      off()
+    }
+  }, [])
+
   const now = Date.now()
   const claude = limits?.claude ?? null
   const segments = claude !== null && claude.error === null ? stripSegments(claude, now) : []
@@ -101,15 +121,25 @@ export function StatusBar(): JSX.Element {
           <UsagePanel limits={limits} isFetching={isFetching} onRefresh={() => setReloadKey((k) => k + 1)} />
         </DropdownMenuContent>
       </DropdownMenu>
-      <a
-        href={`https://github.com/dbx0/executioner/releases/tag/v${__APP_VERSION__}`}
-        target="_blank"
-        rel="noreferrer"
-        className="ml-auto flex h-full shrink-0 items-center px-3 tabular-nums text-tertiary-foreground hover:bg-surface-1 hover:text-foreground"
-        title="Release notes for this version"
-      >
-        v{__APP_VERSION__}
-      </a>
+      <div className="ml-auto flex h-full shrink-0 items-center">
+        {verbose && (
+          <span
+            className="flex h-full shrink-0 items-center px-3 text-status-warning"
+            title="Verbose logging is on. Turn it off in Settings, Logs."
+          >
+            Verbose logging
+          </span>
+        )}
+        <a
+          href={`https://github.com/dbx0/executioner/releases/tag/v${__APP_VERSION__}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex h-full shrink-0 items-center px-3 tabular-nums text-tertiary-foreground hover:bg-surface-1 hover:text-foreground"
+          title="Release notes for this version"
+        >
+          v{__APP_VERSION__}
+        </a>
+      </div>
     </footer>
   )
 }

@@ -1,5 +1,6 @@
 import type { ItemRef, PaneNode } from '../../lib/pane-tree.js'
 import { createClient } from '../../lib/connection.js'
+import { errorFields, rlog } from '../../lib/log.js'
 import { terminalsApi, type TerminalSpec } from '../../api/terminals.js'
 import { browsersApi } from '../../api/browsers.js'
 import { projectApi } from '../../api/project.js'
@@ -152,8 +153,9 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
         if (ps.resume !== undefined && ps.resume !== '') s.resume = ps.resume
         restoredSessions.push(s)
         newIdOf.set(ps.id, id)
-      } catch {
+      } catch (e) {
         /* a session that fails to recreate is dropped rather than blocking the rest */
+        rlog.warn('engagements', 'Could not restore a terminal', { agent: ps.agent, ...errorFields(e) })
       }
     }
     // Browser ids are stable, so the engine re-registers each under its old id and the saved
@@ -171,8 +173,9 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
         if (item.url !== '') {
           window.executioner?.browser?.operator({ root, id: item.id, op: { navigate: item.url } }).catch(() => undefined)
         }
-      } catch {
+      } catch (e) {
         /* a browser that fails to register is dropped rather than blocking the rest */
+        rlog.warn('engagements', 'Could not restore a browser', errorFields(e))
       }
     }
     const first = restoredSessions[0]
@@ -391,6 +394,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       try {
         await openInto(dir, create)
       } catch (e) {
+        rlog.error('engagements', 'Could not open the engagement', errorFields(e))
         set({ error: (e as Error).message })
       } finally {
         set({ busy: false })
@@ -453,6 +457,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
         void refreshEngagementMeta(connection.projectRoot)
         return connection.projectRoot
       } catch (e) {
+        rlog.error('engagements', 'Could not open the engagement', errorFields(e))
         set({ error: (e as Error).message })
         return null
       } finally {
@@ -466,6 +471,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
         await openInto(dir, false)
         return get().activeRoot
       } catch (e) {
+        rlog.error('engagements', 'Could not open the engagement', errorFields(e))
         set({ error: (e as Error).message })
         return null
       } finally {
@@ -521,6 +527,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       try {
         await openInto(root, false)
       } catch (e) {
+        rlog.error('engagements', 'Could not open the engagement', errorFields(e))
         set({ error: (e as Error).message })
       } finally {
         set({ busy: false })

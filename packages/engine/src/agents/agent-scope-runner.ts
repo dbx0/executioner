@@ -3,6 +3,7 @@ import type { TargetKind } from '@exe/protocol'
 import type { EventBus } from '../transport/events.js'
 import { AgentSessionSinks, type ScopeDraftSink } from '../mcp/agent-sessions.js'
 import type { ToolsetDeps } from '../mcp/toolset.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 /** A target the run created, as reported back to the confirmation page. */
 export interface ScopeEntry {
@@ -177,6 +178,7 @@ export class AgentScopeRunner {
       try {
         await runAgent({ scope, description, runId })
       } catch (error) {
+        engineLog.warn('agents', 'Scope agent failed', { run: runId, ...errorFields(error) })
         this.emit(runId, 'scope-progress', { message: `The agent couldn’t finish: ${(error as Error).message}` })
       } finally {
         unbind?.()
@@ -195,6 +197,7 @@ export class AgentScopeRunner {
     try {
       await runAgent({ scope, description, runId })
     } catch (error) {
+      engineLog.warn('agents', 'Scope agent failed', { run: runId, ...errorFields(error) })
       this.emit(runId, 'scope-progress', { message: `The agent couldn’t finish: ${(error as Error).message}` })
     }
 

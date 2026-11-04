@@ -13,6 +13,7 @@ import type { Project } from '@exe/project'
 import type { EventBus } from '../transport/events.js'
 import { AgentScopeRunner } from '../agents/agent-scope-runner.js'
 import type { ToolsetDeps } from '../mcp/toolset.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 /** Builds the LLM step for a scope run (claude + MCP), or undefined when no
  *  capable agent is available — in which case the run adds nothing (AI-only, no
@@ -73,7 +74,8 @@ export function scopeRoutes(deps: ScopeRouteDeps): Hono {
     // Fire and forget: the client streams progress over /events and reads the
     // final summary from the scope-done bubble + the refreshed targets tree.
     const description = parsed.data.description ?? ''
-    void runner.run({ scope: parsed.data.scope, description, runId, propose: parsed.data.propose === true }).catch(() => {
+    void runner.run({ scope: parsed.data.scope, description, runId, propose: parsed.data.propose === true }).catch((e: unknown) => {
+      engineLog.error('agents', 'Scope parse failed', { run: runId, ...errorFields(e) })
       deps.bus.publish({ type: 'agent', executionId: runId, nodeId: 'scope-done', data: JSON.stringify({ error: true }) })
     })
 
@@ -126,6 +128,7 @@ export function scopeRoutes(deps: ScopeRouteDeps): Hono {
         return { rulesAdded, targetsAdded, rejudged: project.targets.reevaluateScope() }
       })
     } catch (e) {
+      engineLog.warn('scope', 'Applying the scope proposal failed', errorFields(e))
       return c.json({ error: (e as Error).message }, 500)
     }
     const { rulesAdded, targetsAdded, rejudged } = saved

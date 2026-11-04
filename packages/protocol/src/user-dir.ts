@@ -31,4 +31,10 @@ export const globalLayout = {
   sshKeys: () => join(globalDir(), 'ssh'),
   /** Saved agents (written by the engine's SavedAgentsStore). */
   agents: () => join(globalDir(), 'agents.json'),
+  /** App session logs (one JSONL file per app session). */
+  logs: () => join(globalDir(), 'logs'),
+  /** Native crash dumps written by Electron's crash reporter. */
+  logCrashes: () => join(globalDir(), 'logs', 'crashes'),
+  /** The logging setting (minimum level). */
+  loggingConfig: () => join(globalDir(), 'logging.json'),
 }

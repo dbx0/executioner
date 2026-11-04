@@ -51,6 +51,8 @@ const engine = {
   ),
   patch: vi.fn(async (_url: string, _body?: unknown): Promise<{ data: unknown }> => ({ data: {} })),
   delete: vi.fn(async () => ({ data: {} })),
+  // createClient hooks its failure logging in here.
+  interceptors: { response: { use: vi.fn() } },
 }
 
 vi.mock('axios', () => ({ default: { create: () => engine } }))

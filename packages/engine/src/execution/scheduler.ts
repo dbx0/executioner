@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Project } from '@exe/project'
 import type { Schedule } from '@exe/db'
 import type { Target } from '@exe/protocol'
+import { engineLog, errorFields } from '../infra/log.js'
 
 /** Runs a workflow by id against an optional target; resolves when the run finishes. */
 export interface RunScheduledWorkflow {
@@ -77,6 +78,7 @@ export class Scheduler {
         this.arm(schedule)
       }
     }
+    engineLog.debug('scheduler', 'Scheduler started', { intervals: this.timers.size })
   }
 
   /** Clear every running timer. */
@@ -110,10 +112,12 @@ export class Scheduler {
   }
 
   private async runOnce(workflowId: string, targetId: string | null): Promise<void> {
+    engineLog.debug('scheduler', 'Scheduled run starting', { workflow: workflowId })
     try {
       await this.scheduledRun.run(true, () => this.deps.runWorkflow(workflowId, targetId))
-    } catch {
+    } catch (e) {
       /* best-effort: a failed scheduled run must not break the loop */
+      engineLog.warn('scheduler', 'Scheduled run failed', { workflow: workflowId, ...errorFields(e) })
     }
   }
 

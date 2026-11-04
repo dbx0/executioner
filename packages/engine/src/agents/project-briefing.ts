@@ -1,5 +1,6 @@
 import type { Project } from '@exe/project'
 import { PROFILE_TOOLS, type AgentProfile, type ToolName } from '../mcp/toolset.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 /**
  * The orientation an agent gets at launch.
@@ -149,8 +150,9 @@ export function buildProjectBriefing(
             : 'No remote backend is configured, so commands run on this machine.',
         ].join('\n'),
       )
-    } catch {
+    } catch (e) {
       /* a backend read failure must not block the launch */
+      engineLog.warn('agents', 'Briefing could not read backends', errorFields(e))
     }
   }
 
@@ -172,8 +174,9 @@ export function buildProjectBriefing(
           : ''
       sections.push(`Targets recorded (${targets.length}):\n${shown.join('\n')}${more}`)
     }
-  } catch {
+  } catch (e) {
     /* target read failure: fall through to the tool list below */
+    engineLog.warn('agents', 'Briefing could not read targets', errorFields(e))
   }
 
   try {
@@ -187,8 +190,9 @@ export function buildProjectBriefing(
           ? `Findings recorded: ${findings.length} (${severityBreakdown(findings.map((f) => f.severity))}). Call \`list_findings\` before reporting so you do not duplicate one.`
           : `Findings recorded: ${findings.length} (${severityBreakdown(findings.map((f) => f.severity))}).`,
     )
-  } catch {
+  } catch (e) {
     /* finding read failure: fall through */
+    engineLog.warn('agents', 'Briefing could not read findings', errorFields(e))
   }
 
   if (memoryDir !== undefined) {

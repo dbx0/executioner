@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Project } from '@exe/project'
 import { buildProjectBriefing } from './project-briefing.js'
+
+// Expected failures below log a warn line to stderr; keep the test output clean.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  const writeSync = ((fd: number, ...rest: unknown[]) =>
+    fd === 2 ? 0 : (actual.writeSync as (...a: unknown[]) => number)(fd, ...rest)) as typeof actual.writeSync
+  return { ...actual, writeSync }
+})
 
 /** A Project stub carrying only what the briefing reads. */
 function projectStub(over: {

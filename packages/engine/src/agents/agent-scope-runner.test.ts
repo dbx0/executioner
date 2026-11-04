@@ -6,6 +6,14 @@ import { createProject, type Project } from '@exe/project'
 import { EventBus, type EngineEvent } from '../transport/events.js'
 import { AgentScopeRunner, buildScopePrompt } from './agent-scope-runner.js'
 
+// Expected failures below log a warn line to stderr; keep the test output clean.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  const writeSync = ((fd: number, ...rest: unknown[]) =>
+    fd === 2 ? 0 : (actual.writeSync as (...a: unknown[]) => number)(fd, ...rest)) as typeof actual.writeSync
+  return { ...actual, writeSync }
+})
+
 let dir: string
 let project: Project
 

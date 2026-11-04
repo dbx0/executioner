@@ -4,6 +4,8 @@ import type { BackendProfileInput, BackendTestResult, SshEnrollResult } from './
 import type { ConnectionHints } from '../main/connection-hints.js'
 import type { UpdateInfo } from '../main/update.js'
 import type { BrowserState } from '../main/browser/page.js'
+import type { SessionInfo } from '../main/logging/session-log.js'
+import type { LogLevel, LogLine } from '@exe/protocol'
 
 declare global {
   /** The app version from package.json, injected at build time. */
@@ -73,6 +75,35 @@ declare global {
       }
       /** Match the native window appearance (macOS traffic lights) to the theme base. */
       setAppearance(mode: 'light' | 'dark'): void
+      /** App log. Main owns the session file and masks every line before writing it. */
+      log: {
+        /** Fire-and-forget; main stamps the time and forces `src` to `renderer` or `renderer/<sub>`. */
+        write(line: { lvl: LogLevel; src?: string; msg: string; data?: Record<string, unknown> }): void
+        /** Every retained session, oldest first. */
+        sessions(): Promise<SessionInfo[]>
+        /** This app instance's own session, or null when logging is unavailable. */
+        currentSession(): Promise<SessionInfo | null>
+        /** A session's lines (the last `limit` when given). */
+        read(req: { id: string; limit?: number }): Promise<LogLine[]>
+        /** Whether this session logs at debug (the saved switch or the launch flag). */
+        getVerbose(): Promise<boolean>
+        /** Save the switch and apply it now to main, the renderer and every running engine. */
+        setVerbose(verbose: boolean): Promise<void>
+        /** Reload the secret values logs are masked with, after a secret or connection changes. */
+        refreshMasks(): void
+        /** Open the logs folder in the system file manager; resolves to an error string or ''. */
+        openFolder(): Promise<string>
+        /** The previous session, when it ended without a clean shutdown. */
+        previousCrash(): Promise<SessionInfo | null>
+        /** Save a zip of logs for a bug report through the native save dialog. */
+        exportLogs(req: {
+          includeAllSessions: boolean
+          includeTargets: boolean
+          sessionId?: string
+        }): Promise<{ saved: string } | { cancelled: true }>
+        /** Subscribe to log level changes; returns the unsubscribe. */
+        onLevel(listener: (level: LogLevel) => void): () => void
+      }
       /** process.platform of the main process; macOS keeps native traffic lights,
        *  everywhere else the titlebar draws its own window controls. */
       platform: string

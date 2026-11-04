@@ -10,6 +10,7 @@ import { StepController } from '../execution/step-controller.js'
 import { buildManifestMap } from '../infra/manifests.js'
 import type { EventBus } from '../transport/events.js'
 import type { AgentRunner } from '../agents/agent-runner.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 export interface ExecutionRouteDeps {
   project: Project
@@ -94,7 +95,7 @@ export function executionRoutes(deps: ExecutionRouteDeps): Hono {
       }
       void executor
         .run({ ...runInput, beforeNode, onExecutionCreated })
-        .catch(() => {})
+        .catch((e: unknown) => engineLog.error('workflow', 'Stepped run failed', { execution: execId, ...errorFields(e) }))
         .finally(() => steps.unregister(execId))
       const executionId = await idReady
       return c.json({ executionId, status: 'running' })

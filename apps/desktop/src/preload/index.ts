@@ -86,6 +86,27 @@ contextBridge.exposeInMainWorld('executioner', {
     ready: (): void => ipcRenderer.send('startup-ready'),
   },
   setAppearance: (mode: 'light' | 'dark'): void => ipcRenderer.send('set-appearance', mode),
+  // App log: the renderer's own lines go to main, which owns the session file;
+  // the Logs page reads sessions back, flips verbose mode and exports.
+  log: {
+    write: (line: { lvl: string; src?: string; msg: string; data?: Record<string, unknown> }): void =>
+      ipcRenderer.send('log-write', line),
+    sessions: () => ipcRenderer.invoke('log-sessions'),
+    currentSession: () => ipcRenderer.invoke('log-current-session'),
+    read: (req: { id: string; limit?: number }) => ipcRenderer.invoke('log-read', req),
+    getVerbose: (): Promise<boolean> => ipcRenderer.invoke('log-get-verbose') as Promise<boolean>,
+    setVerbose: (verbose: boolean): Promise<void> => ipcRenderer.invoke('log-set-verbose', verbose) as Promise<void>,
+    refreshMasks: (): void => ipcRenderer.send('log-refresh-masks'),
+    openFolder: (): Promise<string> => ipcRenderer.invoke('log-open-folder') as Promise<string>,
+    previousCrash: () => ipcRenderer.invoke('log-previous-crash'),
+    exportLogs: (req: { includeAllSessions: boolean; includeTargets: boolean; sessionId?: string }) =>
+      ipcRenderer.invoke('log-export', req),
+    onLevel: (listener: (level: string) => void): (() => void) => {
+      const handler = (_event: unknown, level: string): void => listener(level)
+      ipcRenderer.on('log-level', handler)
+      return () => ipcRenderer.removeListener('log-level', handler)
+    },
+  },
   // Clipboard for the terminal. xterm maps Ctrl+V to the ^V control code and
   // preventDefaults it, so the browser paste event never fires and there is no
   // native path to fall back on in a frameless window with no application menu.

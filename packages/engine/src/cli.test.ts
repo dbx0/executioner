@@ -123,3 +123,24 @@ describe('runCli backend-test', () => {
     expect(code).toBe(1)
   })
 })
+
+describe('runCli log-masks', () => {
+  it('prints the global secret values as JSON', async () => {
+    const { openGlobalDatabase, SecretRepository } = await import('@exe/db')
+    const { globalLayout } = await import('@exe/protocol')
+    const db = openGlobalDatabase(globalLayout.database())
+    new SecretRepository(db).set('CENSYS_API_TOKEN', 'censys_x')
+    let out = ''
+    const write = process.stdout.write.bind(process.stdout)
+    process.stdout.write = ((chunk: string) => {
+      out += chunk
+      return true
+    }) as typeof process.stdout.write
+    try {
+      expect(await runCli(['log-masks'])).toBe(0)
+    } finally {
+      process.stdout.write = write
+    }
+    expect((JSON.parse(out) as { values: string[] }).values).toContain('censys_x')
+  })
+})

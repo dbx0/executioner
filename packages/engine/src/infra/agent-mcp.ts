@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { globalLayout } from '@exe/protocol'
+import { engineLog, errorFields } from './log.js'
 
 /**
  * The project-MCP wiring config: which agent CLIs get the project MCP server
@@ -41,7 +42,8 @@ export function readAgentMcpWiring(): AgentMcpWiring {
     const path = globalLayout.agentMcpConfig()
     if (!existsSync(path)) return { ...DEFAULT }
     return normalizeAgentMcpWiring(JSON.parse(readFileSync(path, 'utf8')))
-  } catch {
+  } catch (e) {
+    engineLog.warn('agents', 'Agent MCP wiring config is unreadable, using defaults', errorFields(e))
     return { ...DEFAULT }
   }
 }

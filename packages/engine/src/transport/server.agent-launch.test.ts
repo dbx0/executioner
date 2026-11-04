@@ -13,6 +13,14 @@ import { PROFILE_TOOLS } from '../mcp/toolset.js'
 import { OPENCODE_HEADLESS_AGENT } from '../agents/headless-cli.js'
 import { MCP_TOKEN_ENV } from '../mcp/agent-mcp-injection.js'
 
+// Expected failures below log a warn line to stderr; keep the test output clean.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  const writeSync = ((fd: number, ...rest: unknown[]) =>
+    fd === 2 ? 0 : (actual.writeSync as (...a: unknown[]) => number)(fd, ...rest)) as typeof actual.writeSync
+  return { ...actual, writeSync }
+})
+
 const TOKEN = 'master-token-master-token-master-tok'
 
 interface Launch {

@@ -5,6 +5,7 @@ import { KeyRound, Check } from 'lucide-react'
 import { secretsApi, type Secret } from '../api/secrets.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
+import { refreshLogMasks } from '../lib/log.js'
 
 interface Provider {
   name: string
@@ -147,6 +148,7 @@ function SetSecretModal({
         const v = values[key]?.trim()
         if (v !== undefined && v !== '') await api.set(key, v)
       }
+      refreshLogMasks()
       onSaved()
     } catch (e) {
       setError((e as Error).message)

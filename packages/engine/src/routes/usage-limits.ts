@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { Hono } from 'hono'
+import { engineLog, errorFields } from '../infra/log.js'
 
 /**
  * Account rate-limit windows for the local AI providers, as the status bar
@@ -253,7 +254,9 @@ export async function fetchClaudeLimits(
     if (!res.ok) return providerRefreshFailed('claude', claudeErrorMessage(res.status))
     const data = (await res.json()) as RawUsageResponse
     return normalizeClaudeUsage(data)
-  } catch {
+  } catch (e) {
+    // Offline or a timeout: expected, and the page says so.
+    engineLog.debug('usage', 'Claude usage refresh failed', errorFields(e))
     return providerRefreshFailed('claude', 'Couldn’t reach Anthropic. Check your connection.')
   }
 }

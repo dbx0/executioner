@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { TOOL_ACCESS, type ToolName } from './toolset.js'
 import { OPENCODE_HEADLESS_AGENT } from '../agents/headless-cli.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 export interface McpInjection {
   /** Extra environment for the spawned process (merged onto the inherited env). */
@@ -71,7 +72,8 @@ function upsertProjectServer(path: string, server: Record<string, unknown>): boo
     mkdirSync(dirname(path), { recursive: true })
     writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`)
     return true
-  } catch {
+  } catch (e) {
+    engineLog.warn('agents', 'Could not update the agent MCP config', errorFields(e))
     return false
   }
 }

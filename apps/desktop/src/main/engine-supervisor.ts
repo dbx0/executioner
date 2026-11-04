@@ -1,5 +1,15 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { parseHandshake, type Handshake } from '@exe/protocol'
+import { createHash } from 'node:crypto'
+import { StringDecoder } from 'node:string_decoder'
+import { parseHandshake, parseLine, type Handshake, type LogLevel, type LogLine } from '@exe/protocol'
+
+/** Stable short id for an engine's log source, `engine:<id>`. */
+export function engineSourceId(projectDir: string): string {
+  return createHash('sha256').update(projectDir).digest('hex').slice(0, 6)
+}
+
+/** Raw stderr lines kept for the exit log line. */
+const STDERR_TAIL_LINES = 50
 
 export interface EngineConnection {
   port: number
@@ -33,6 +43,10 @@ export interface SupervisorOptions {
   onReady?: (conn: EngineConnection) => void
   /** Called with the project dir when its engine is gone, by exit or by stop. */
   onExit?: (dir: string) => void
+  /** Receives every engine stderr line (re-tagged) and engine exit records. */
+  onLog?: (line: LogLine) => void
+  /** Current app log level, handed to each engine as EXECUTIONER_LOG_LEVEL. */
+  logLevel?: () => LogLevel
 }
 
 /** A live engine: the child process and the connection that reaches it. */
@@ -59,6 +73,8 @@ export class EngineSupervisor {
   /** Live engines keyed by the project dir they serve. */
   private readonly engines = new Map<string, Engine>()
   /** In-flight starts, so two opens of one project share a single engine. */
+  /** Children the supervisor is stopping itself, so their exit is not an error. */
+  private readonly stopping = new WeakSet<ChildProcess>()
   private readonly starting = new Map<string, Promise<EngineConnection>>()
   private readonly enginePath: string
   private readonly nodeBin: string
@@ -67,6 +83,8 @@ export class EngineSupervisor {
   private readonly fetchFn: FetchFn
   private readonly onReady: ((conn: EngineConnection) => void) | undefined
   private readonly onExit: ((dir: string) => void) | undefined
+  private readonly onLog: ((line: LogLine) => void) | undefined
+  private readonly logLevel: (() => LogLevel) | undefined
 
   constructor(options: SupervisorOptions) {
     this.enginePath = options.enginePath
@@ -76,6 +94,16 @@ export class EngineSupervisor {
     this.fetchFn = options.fetchFn ?? ((url) => fetch(url).then((r) => ({ ok: r.ok })))
     this.onReady = options.onReady
     this.onExit = options.onExit
+    this.onLog = options.onLog
+    this.logLevel = options.logLevel
+  }
+
+  /** Connections of every live engine. */
+  liveConnections(): EngineConnection[] {
+    return [...this.engines.keys()].flatMap((dir) => {
+      const conn = this.current(dir)
+      return conn === undefined ? [] : [conn]
+    })
   }
 
   /**
@@ -118,20 +146,43 @@ export class EngineSupervisor {
 
   private spawnEngine(projectDir: string): Promise<EngineConnection> {
     return new Promise((resolve, reject) => {
+      const sourceId = engineSourceId(projectDir)
+      this.onLog?.({ t: new Date().toISOString(), lvl: 'info', src: `engine:${sourceId}`, msg: 'Engine starting', data: { engagement: projectDir } })
       const child = this.spawnFn(this.nodeBin, [...ENGINE_V8_FLAGS, this.enginePath, 'serve', projectDir], {
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: this.spawnEnv,
+        env: this.logLevel === undefined ? this.spawnEnv : { ...this.spawnEnv, EXECUTIONER_LOG_LEVEL: this.logLevel() },
       })
+      const stdoutDecoder = new StringDecoder('utf8')
+      const stderrDecoder = new StringDecoder('utf8')
       let buffer = ''
-      let stderr = ''
+      let stderrPartial = ''
+      const stderrTail: string[] = []
       let settled = false
 
+      const forward = (raw: string) => {
+        const parsed = parseLine(raw)
+        // Only raw lines go in the tail: JSON lines are logged in their own right, scrubbed by field.
+        if (parsed === null) {
+          stderrTail.push(raw)
+          if (stderrTail.length > STDERR_TAIL_LINES) stderrTail.shift()
+          this.onLog?.({ t: new Date().toISOString(), lvl: 'error', src: `engine:${sourceId}`, msg: raw })
+          return
+        }
+        const sub = parsed.src.startsWith('engine/') ? parsed.src.slice('engine'.length) : ''
+        this.onLog?.({ ...parsed, src: `engine:${sourceId}${sub}` })
+      }
+
       child.stderr?.on('data', (chunk: Buffer) => {
-        stderr += chunk.toString()
+        const parts = (stderrPartial + stderrDecoder.write(chunk)).split('\n')
+        stderrPartial = parts.pop() ?? ''
+        for (const part of parts) {
+          const raw = part.replace(/\r$/, '')
+          if (raw.trim() !== '') forward(raw)
+        }
       })
 
       const onData = (chunk: Buffer) => {
-        buffer += chunk.toString()
+        buffer += stdoutDecoder.write(chunk)
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
         for (const line of lines) {
@@ -145,7 +196,17 @@ export class EngineSupervisor {
       }
 
       child.stdout?.on('data', onData)
-      child.on('close', (code) => {
+      child.on('close', (code, signal) => {
+        if (stderrPartial.trim() !== '') forward(stderrPartial + stderrDecoder.end())
+        stderrPartial = ''
+        const requested = this.stopping.has(child)
+        this.onLog?.({
+          t: new Date().toISOString(),
+          lvl: requested ? 'info' : 'error',
+          src: `engine:${sourceId}`,
+          msg: requested ? 'Engine stopped' : 'Engine exited',
+          data: { code, signal, stderrTail: [...stderrTail] },
+        })
         // However it ends, it is no longer serving this project. Guard on
         // identity so a restart's new child is never evicted by the old one.
         if (this.engines.get(projectDir)?.child === child) {
@@ -154,11 +215,19 @@ export class EngineSupervisor {
         }
         if (!settled) {
           settled = true
-          const detail = stderr.trim() === '' ? '' : `: ${stderr.trim().split('\n').slice(-8).join('\n')}`
+          const tail = stderrTail.slice(-8).join('\n')
+          const detail = tail.trim() === '' ? '' : `: ${tail.trim()}`
           reject(new Error(`engine exited before handshake (code ${code ?? 'unknown'})${detail}`))
         }
       })
       child.on('error', (err) => {
+        this.onLog?.({
+          t: new Date().toISOString(),
+          lvl: 'error',
+          src: `engine:${sourceId}`,
+          msg: 'Engine failed to start',
+          data: { engagement: projectDir, name: err.name, message: err.message },
+        })
         if (!settled) {
           settled = true
           reject(err)
@@ -203,6 +272,7 @@ export class EngineSupervisor {
     if (engine === undefined) return
     this.engines.delete(projectDir)
     this.onExit?.(projectDir)
+    this.stopping.add(engine.child)
     engine.child.kill('SIGTERM')
   }
 

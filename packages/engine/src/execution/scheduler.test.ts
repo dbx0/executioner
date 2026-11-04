@@ -5,6 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createProject, type Project } from '@exe/project'
 import { Scheduler } from './scheduler.js'
 
+// Expected failures below log a warn line to stderr; keep the test output clean.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  const writeSync = ((fd: number, ...rest: unknown[]) =>
+    fd === 2 ? 0 : (actual.writeSync as (...a: unknown[]) => number)(fd, ...rest)) as typeof actual.writeSync
+  return { ...actual, writeSync }
+})
+
 let dir: string
 let project: Project
 

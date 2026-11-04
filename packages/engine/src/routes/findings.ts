@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { Project } from '@exe/project'
 import { FINDING_STATUSES, SEVERITIES, type FindingFilter, type FindingInput } from '@exe/db'
 import { writeFindingsReport } from '../infra/findings-report.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 const severity = z.enum(SEVERITIES)
 const status = z.enum(FINDING_STATUSES)
@@ -94,7 +95,7 @@ export function findingRoutes(project: Project): Hono {
       return c.json(written)
     } catch (e) {
       // The fs error names absolute paths; the operator sees it in the engine log.
-      process.stderr.write(`[executioner] findings report failed: ${(e as Error).message}\n`)
+      engineLog.error('findings', 'Findings report failed', errorFields(e))
       return c.json({ error: 'could not write the report' }, 500)
     }
   })

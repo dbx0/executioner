@@ -1,4 +1,5 @@
 import { BROWSER_ACTIONS, type BrowserCall, type BrowserReply } from '@exe/protocol'
+import { mainLogger } from '../logging/logger'
 
 /** The slice of the WebSocket API the client uses, so tests can fake it. */
 export interface WebSocketLike {
@@ -123,15 +124,24 @@ export class BrowserHostClient {
     const call = parseCall(data)
     if (call === undefined) return
     let reply: BrowserReply
+    const started = Date.now()
     try {
       reply = { id: call.id, ok: true, result: await this.opts.run(call) }
     } catch (err) {
       reply = { id: call.id, ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+    // The action only: its args carry URLs, selectors and typed text.
+    mainLogger()?.debug('main/browser', 'Browser action', {
+      action: call.action,
+      ok: reply.ok,
+      ms: Date.now() - started,
+      ...(reply.ok ? {} : { error: reply.error }),
+    })
     try {
       socket.send(JSON.stringify(reply))
     } catch {
       // The socket closed while the call ran; the engine fails its pending calls itself.
+      mainLogger()?.debug('main/browser', 'Browser reply dropped: engine socket closed', { action: call.action })
     }
   }
 }

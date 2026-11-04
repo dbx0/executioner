@@ -2,11 +2,13 @@
 import { pathToFileURL } from 'node:url'
 import { serve } from '@hono/node-server'
 import { createProject, openProject, scaffoldEngagement, readConfig, writeConfig } from '@exe/project'
-import { backendProfileInputSchema, formatHandshake } from '@exe/protocol'
+import { openGlobalDatabase, SecretRepository, BackendProfileRepository } from '@exe/db'
+import { backendProfileInputSchema, formatHandshake, globalLayout } from '@exe/protocol'
 import { NodeRegistry, loadManifests, bundledManifestsDir } from '@exe/nodes'
-import { PtyRegistry } from '@exe/pty'
+import { LoggedPtyRegistry } from './agents/launch-log.js'
 import { testBackend } from './infra/backend-test.js'
 import { enrollSshKey } from './infra/ssh-enroll.js'
+import { collectMasks, engineLog } from './infra/log.js'
 import { generateToken } from './transport/auth.js'
 import { EventBus } from './transport/events.js'
 import { Executor } from './execution/executor.js'
@@ -37,7 +39,10 @@ Commands:
                              generate a keypair under <dir>, install it with the
                              password and print the result as JSON. Also stateless.
 
-Both stateless commands take their input on stdin rather than argv so a password
+  log-masks                  Print {"values": [...]} (secret and backend env values the
+                             logs must mask) as JSON, read from the global database only.
+
+The stateless commands take their input on stdin rather than argv so a password
 never appears in the process list.
 
 The serve command binds 127.0.0.1 on a random port and prints a handshake line
@@ -103,6 +108,17 @@ export async function runCli(argv: string[]): Promise<number> {
     return 0
   }
 
+  if (command === 'log-masks') {
+    const db = openGlobalDatabase(globalLayout.database())
+    try {
+      const values = collectMasks({ secrets: new SecretRepository(db), backends: new BackendProfileRepository(db) })
+      process.stdout.write(`${JSON.stringify({ values })}\n`)
+    } finally {
+      db.close()
+    }
+    return 0
+  }
+
   if (dir === undefined) {
     process.stderr.write(`error: ${command} requires a directory\n`)
     return 1
@@ -152,17 +168,33 @@ export async function runCli(argv: string[]): Promise<number> {
       'interrupted: the engine stopped while this run was in progress',
     )
     if (stale > 0) {
-      process.stderr.write(`[executioner] closed ${String(stale)} run(s) interrupted by a previous shutdown\n`)
+      engineLog.info('process', 'Closed runs interrupted by a previous shutdown', { count: stale })
     }
 
+    engineLog.setMasks(collectMasks(project))
+    // Log a fatal error before the default handling takes the process down.
+    const logFatal = (msg: string, reason: unknown): void => {
+      const err = reason instanceof Error ? reason : new Error(String(reason))
+      engineLog.error('process', msg, { name: err.name, message: err.message, stack: err.stack })
+    }
+    process.on('uncaughtException', (error) => {
+      logFatal('uncaught exception', error)
+      process.exit(1)
+    })
+    process.on('unhandledRejection', (reason) => {
+      logFatal('unhandled rejection', reason)
+      process.exit(1)
+    })
+
     const token = generateToken()
+    engineLog.addMask(token)
     const bus = new EventBus()
     const registry = new NodeRegistry(loadManifests(bundledManifestsDir()))
     // Shared with the app so a standalone run started through the executor is
     // stoppable by the same cancel route that stops workflow runs.
     const runs = new CancellationRegistry()
     const executor = new Executor(project, bus, runs)
-    const ptyRegistry = new PtyRegistry()
+    const ptyRegistry = new LoggedPtyRegistry()
     // Port is unknown until the server binds below; the app reads it lazily
     // through this mutable holder when it builds argv for spawned agents.
     const connection = { port: 0, token }
@@ -174,7 +206,7 @@ export async function runCli(argv: string[]): Promise<number> {
     })
     const address = server.address()
     if (address === null || typeof address === 'string') {
-      process.stderr.write('error: could not determine listening port\n')
+      engineLog.error('process', 'Could not determine listening port')
       return 1
     }
     connection.port = address.port

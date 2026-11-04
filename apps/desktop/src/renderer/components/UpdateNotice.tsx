@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { ArrowUpCircle, X } from 'lucide-react'
 import type { UpdateInfo } from '../../main/update.js'
 import { Button } from './ui/button.js'
+import { errorFields, rlog } from '../lib/log.js'
 
 type Phase =
   | { kind: 'available' }
@@ -69,7 +70,8 @@ export function UpdateNotice(): JSX.Element | null {
   const onRestart = (): void => {
     setPhase({ kind: 'restarting' })
     setError(null)
-    window.executioner.installUpdate().catch(() => {
+    window.executioner.installUpdate().catch((e: unknown) => {
+      rlog.error('update', 'Could not start the update install', errorFields(e))
       setPhase({ kind: 'ready' })
       setError('Could not start the update. Try again or download it from the release page.')
     })

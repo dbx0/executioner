@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { Project } from '@exe/project'
 import type { SavedAgent, SavedAgentInput, SavedAgentMember } from '@exe/db'
 import { SavedAgentsStore } from '../agents/saved-agents-store.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 const memberSchema = z.object({
   name: z.string().min(1),
@@ -63,7 +64,8 @@ export function savedAgentRoutes(project: Project, store: SavedAgentsStore = new
     let global: SavedAgent[]
     try {
       global = store.list()
-    } catch {
+    } catch (e) {
+      engineLog.warn('agents', 'Could not read saved agents', errorFields(e))
       global = []
     }
     const local = project.savedAgents.list()

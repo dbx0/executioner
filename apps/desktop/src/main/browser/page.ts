@@ -1,5 +1,6 @@
 import { Menu, WebContentsView, type BrowserWindow, type Session, type WebContents } from 'electron'
 import { editMenuTemplate } from '../edit-menu'
+import { mainLogger } from '../logging/logger'
 import { CdpDriver, type Cdp, type Dyn, type OperatorDialog } from './cdp-driver'
 import { cleanUserAgent, type EmulationState } from './emulation'
 import type { Rule } from './rewrite'
@@ -133,7 +134,8 @@ export class BrowserPage {
       this.crashedFlag = true
       this.emit()
     })
-    wc.on('render-process-gone', () => {
+    wc.on('render-process-gone', (_e, details) => {
+      mainLogger()?.error('main/browser', 'Embedded page renderer gone', { reason: details.reason, exitCode: details.exitCode })
       this.crashedFlag = true
       this.emit()
     })

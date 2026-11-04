@@ -1,3 +1,5 @@
+import { engineLog, errorFields } from '../infra/log.js'
+
 export type EngineEventType = 'status' | 'stdout' | 'stderr' | 'done' | 'agent' | 'change' | 'browser'
 
 export interface EngineEventInput {
@@ -36,9 +38,10 @@ export class EventBus {
     for (const listener of this.listeners) {
       try {
         listener(event)
-      } catch {
+      } catch (e) {
         // A broken subscriber, typically a socket that closed mid-write, must
         // not stop delivery to the rest or abort the caller's execution.
+        engineLog.debug('events', 'Event subscriber failed', errorFields(e))
       }
     }
     return event

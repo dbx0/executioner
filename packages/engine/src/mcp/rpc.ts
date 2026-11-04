@@ -1,6 +1,7 @@
 import type { ProjectToolset, ToolCaller } from './toolset.js'
 import { TOOL_SCHEMAS } from './schema.js'
 import type { McpImageResult } from '../browser/tools.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 export interface RpcRequest {
   jsonrpc: '2.0'
@@ -71,6 +72,8 @@ export async function dispatchRpc(
       return { ...base, result: { content: [{ type: 'text', text: JSON.stringify(result) }] } }
     } catch (error) {
       // MCP convention: a tool that fails returns isError content, not a protocol error.
+      // The agent sees the message; it is usually an input problem, so debug.
+      engineLog.debug('mcp', 'Tool call failed', { tool: name, ...errorFields(error) })
       return { ...base, result: { isError: true, content: [{ type: 'text', text: (error as Error).message }] } }
     }
   }

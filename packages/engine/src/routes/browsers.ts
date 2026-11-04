@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { BrowserHostHub } from '../browser/host-hub.js'
 import type { BrowserRegistry } from '../browser/registry.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 interface CreateBody {
   id?: string
@@ -61,7 +62,7 @@ export function browserRoutes(registry: BrowserRegistry, hub: BrowserHostHub): H
   app.delete('/browsers/:id', (c) => {
     const id = c.req.param('id')
     registry.remove(id)
-    if (hub.connected()) void hub.call(id, 'close', {}).catch(() => undefined)
+    if (hub.connected()) void hub.call(id, 'close', {}).catch((e: unknown) => engineLog.debug('browser', 'Browser close failed', errorFields(e)))
     return c.body(null, 204)
   })
 

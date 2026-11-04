@@ -40,7 +40,10 @@ import { usageRoutes } from '../routes/usage.js'
 import { skillRoutes } from '../routes/skills.js'
 import { readSkillsConfig, writeClaudeSkillsPlugin } from '../infra/skills.js'
 import { usageLimitsRoutes } from '../routes/usage-limits.js'
-import { logsRoutes } from '../routes/logs.js'
+import { logLevelRoutes } from '../routes/log-level.js'
+import { collectMasks, engineLog, errorFields } from '../infra/log.js'
+import { requestLog } from './request-log.js'
+import { routePath } from 'hono/route'
 import { scheduleRoutes } from '../routes/schedules.js'
 import { savedAgentRoutes } from '../routes/saved-agents.js'
 import { SavedAgentsStore } from '../agents/saved-agents-store.js'
@@ -127,6 +130,22 @@ export type EngineApp = Hono & { scheduler: Scheduler }
 
 export function createApp(options: AppOptions): EngineApp {
   const app = new Hono()
+  // The engine's own bearer token must never appear in a log line.
+  engineLog.addMask(options.token)
+
+  // First, so it times and sees the status of every response, rejected ones too.
+  app.use('*', requestLog())
+
+  // Node start/finish for verbose logs. Only the status vocabulary is logged:
+  // stdout, stderr and agent events carry tool output and prompts.
+  options.bus.subscribe((e) => {
+    if ((e.type !== 'status' && e.type !== 'done') || engineLog.level() !== 'debug') return
+    engineLog.debug('workflow', e.type === 'done' ? 'Node finished' : 'Node status', {
+      execution: e.executionId,
+      node: e.nodeId,
+      status: e.data.slice(0, 64),
+    })
+  })
 
   // A browser page can only reach this engine by naming it, so anything that
   // arrives under another hostname is a DNS-rebinding attempt.
@@ -149,7 +168,12 @@ export function createApp(options: AppOptions): EngineApp {
   // fs, SQLite or parser error can carry absolute paths and internals, so it
   // goes to the engine log rather than to the client.
   app.onError((err, c) => {
-    process.stderr.write(`[executioner] ${c.req.method} ${c.req.path} failed: ${err.stack ?? err.message}\n`)
+    engineLog.error('http', 'Request failed', {
+      method: c.req.method,
+      route: routePath(c),
+      ...errorFields(err),
+      ...(err.stack !== undefined ? { stack: err.stack } : {}),
+    })
     return c.json({ error: 'internal error' }, 500)
   })
 
@@ -330,8 +354,9 @@ export function createApp(options: AppOptions): EngineApp {
         // The briefing names exactly the tools this launch's profile has.
         const briefing = buildProjectBriefing(options.project, memoryDir, wired ? { profile } : { mcp: false })
         instructionsFiles.push(writeAgentBriefingFile(briefing, options.project.root, profile))
-      } catch {
+      } catch (e) {
         /* launch without the briefing rather than not at all */
+        engineLog.warn('agents', 'Launching without the briefing', { cli: agent, ...errorFields(e) })
       }
     }
     const headless = profile !== 'interactive'
@@ -368,8 +393,9 @@ export function createApp(options: AppOptions): EngineApp {
         projectMcpWired(agent) ? { profile: 'interactive' } : { mcp: false },
       )
       writeBriefingContextBlock(cwd, filename, briefing)
-    } catch {
+    } catch (e) {
       /* context is best-effort; never block the spawn */
+      engineLog.warn('agents', 'Could not write the agent context file', { cli: agent, ...errorFields(e) })
     }
   }
 
@@ -385,7 +411,8 @@ export function createApp(options: AppOptions): EngineApp {
     let global: SavedAgent[]
     try {
       global = savedAgentsStore.list()
-    } catch {
+    } catch (e) {
+      engineLog.warn('agents', 'Could not read saved agents', errorFields(e))
       global = []
     }
     const saved = [...options.project.savedAgents.list(), ...global].find(
@@ -533,8 +560,9 @@ export function createApp(options: AppOptions): EngineApp {
                 // about it, so it finds an empty index rather than a missing file.
                 const memoryDir = ensureEngagementMemory(options.project.root, options.project.config.name)
                 tail.push('--append-system-prompt', buildProjectBriefing(options.project, memoryDir))
-              } catch {
+              } catch (e) {
                 /* launch without the briefing rather than not at all */
+                engineLog.warn('agents', 'Launching without the briefing', { cli: adapterName, ...errorFields(e) })
               }
               if (isTeam) tail.push('--agents', JSON.stringify(resolveTeamAgents(agent ?? 'claude-team')))
             }
@@ -545,8 +573,9 @@ export function createApp(options: AppOptions): EngineApp {
               try {
                 const members = findTeamMembers(agent ?? '')
                 if (members !== undefined) writeOpencodeTeamAgents(options.project.root, members)
-              } catch {
+              } catch (e) {
                 /* roster write is best-effort */
+                engineLog.warn('agents', 'Could not write the team roster', { cli: teamBase, ...errorFields(e) })
               }
             }
             // Agent Skills: when a skills folder is configured and this agent is
@@ -565,8 +594,9 @@ export function createApp(options: AppOptions): EngineApp {
                   tail.push('--skills', skillsCfg.folder)
                 }
               }
-            } catch {
+            } catch (e) {
               /* skills wiring is best-effort; never block the spawn */
+              engineLog.warn('agents', 'Could not wire agent skills', { cli: adapterName, ...errorFields(e) })
             }
             // Non-Claude agents get the project MCP (and opencode its briefing)
             // wired in the same spirit as Claude's flag tail: per launch, gated
@@ -624,6 +654,14 @@ export function createApp(options: AppOptions): EngineApp {
 
   const api = new Hono()
   api.use('*', bearerAuth(options.token, { registry: agentTokens, routes: AGENT_API_ROUTES }))
+  // A secret or backend env value written here must be masked in logs from the
+  // next line on, so refresh the engine's mask list after any successful write.
+  api.use('*', async (c, next) => {
+    await next()
+    if (c.req.method !== 'GET' && c.res.ok && /^\/api\/(secrets|backends)(\/|$)/.test(c.req.path)) {
+      engineLog.setMasks(collectMasks(options.project))
+    }
+  })
   // on_create is fired by the repository wrap above (covers this route + tool
   // nodes), so the route no longer needs its own onCreated hook.
   api.route('/', targetRoutes(options.project))
@@ -653,7 +691,7 @@ export function createApp(options: AppOptions): EngineApp {
   api.route('/', agentMcpRoutes())
   api.route('/', usageLimitsRoutes())
   api.route('/', findingRoutes(options.project))
-  api.route('/', logsRoutes({ bus: options.bus }))
+  api.route('/', logLevelRoutes())
   api.route('/', scheduleRoutes(options.project, () => scheduler.start()))
   api.route('/', savedAgentRoutes(options.project, savedAgentsStore))
   api.route(
@@ -716,9 +754,10 @@ export function createApp(options: AppOptions): EngineApp {
                   cleanup.run()
                   resolve()
                 })
-              } catch {
+              } catch (e) {
                 // A missing claude binary, or a launch file that could not be
                 // written: revoke and clean up, then resolve so the run reports.
+                engineLog.warn('agents', 'Scope agent could not launch', errorFields(e))
                 cleanup.run()
                 resolve()
               }

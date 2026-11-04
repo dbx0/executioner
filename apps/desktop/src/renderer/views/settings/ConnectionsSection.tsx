@@ -7,6 +7,7 @@ import { backendsApi, type BackendKind, type BackendProfile } from '../../api/ba
 import { AddBackendModal } from '../../components/modals/BackendsDialog.js'
 import { Button } from '../../components/ui/button.js'
 import { PageHeading } from './parts.js'
+import { refreshLogMasks } from '../../lib/log.js'
 
 function KindIcon({ kind }: { kind: BackendKind }): JSX.Element {
   const Icon = kind === 'docker' ? Container : kind === 'ssh' ? Server : Laptop
@@ -86,7 +87,7 @@ function BackendsManager({ client }: { client: AxiosInstance }): JSX.Element {
   useEffect(refresh, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const remove = (id: string): void => {
-    void api.remove(id).catch(() => {})
+    void api.remove(id).then(refreshLogMasks).catch(() => {})
     setProfiles((ps) => ps.filter((p) => p.id !== id))
   }
 
@@ -125,7 +126,10 @@ function BackendsManager({ client }: { client: AxiosInstance }): JSX.Element {
           client={client}
           {...(modal.mode === 'edit' ? { initial: modal.profile } : {})}
           onClose={() => setModal(null)}
-          onSaved={refresh}
+          onSaved={() => {
+            refresh()
+            refreshLogMasks()
+          }}
         />
       )}
     </div>

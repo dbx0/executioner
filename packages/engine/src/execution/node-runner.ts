@@ -7,6 +7,7 @@ import type { EventBus } from '../transport/events.js'
 import type { CancellationRegistry } from './cancellation.js'
 import { createStreamThrottle } from '../transport/stream-throttle.js'
 import { LocalLauncher, type CommandLauncher } from '../infra/launcher.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 export interface NodeRunnerDeps {
   bus: EventBus
@@ -58,7 +59,8 @@ export class NodeRunner {
       let argv
       try {
         argv = buildArgv(manifest, { target, params })
-      } catch {
+      } catch (e) {
+        engineLog.warn('workflow', 'Could not build the tool command', { tool: manifest.id, execution: executionId, node: nodeId, ...errorFields(e) })
         resolve({ output: '', rows: [], status: 'failed', exitCode: null })
         return
       }
@@ -170,7 +172,8 @@ export class NodeRunner {
             )
             bus.publish({ type: 'done', executionId, nodeId, data: 'succeeded' })
             resolve({ output: stdout, rows, status: 'succeeded', exitCode: code })
-          } catch {
+          } catch (e) {
+            engineLog.warn('workflow', 'Could not parse the tool output', { tool: manifest.id, execution: executionId, node: nodeId, ...errorFields(e) })
             bus.publish({ type: 'done', executionId, nodeId, data: 'failed' })
             resolve({ output: stdout, rows: [], status: 'failed', exitCode: code })
           }

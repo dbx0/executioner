@@ -5,6 +5,7 @@ import { interpolate } from '@exe/nodes'
 import type { Project } from '@exe/project'
 import type { Target } from '@exe/protocol'
 import { buildScope, type LoopContext, type NodeOutput } from '../../infra/template-scope.js'
+import { engineLog, errorFields } from '../../infra/log.js'
 
 /** Build the template scope for a built-in node against the current run state. */
 export function scopeFor(
@@ -140,8 +141,9 @@ export function writeBuiltinEvidence(project: Project, executionId: string, node
   const path = `${dir}/${nodeId}.stdout`
   try {
     writeFileSync(path, text)
-  } catch {
+  } catch (e) {
     /* best-effort evidence */
+    engineLog.warn('workflow', 'Could not write node evidence', { execution: executionId, node: nodeId, ...errorFields(e) })
   }
   return path
 }
@@ -158,7 +160,8 @@ export function writeBuiltinStderr(
   const path = `${project.evidenceDir(executionId)}/${nodeId}.stderr`
   try {
     writeFileSync(path, text)
-  } catch {
+  } catch (e) {
+    engineLog.warn('workflow', 'Could not write node stderr', { execution: executionId, node: nodeId, ...errorFields(e) })
     return null
   }
   return path

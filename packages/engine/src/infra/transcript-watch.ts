@@ -1,6 +1,7 @@
 import { closeSync, openSync, readSync, statSync, watchFile, unwatchFile } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
 import type { EventBus } from '../transport/events.js'
+import { engineLog, errorFields } from './log.js'
 
 interface WatchState {
   path: string
@@ -135,7 +136,8 @@ export class TranscriptWatchers {
       readSync(fd, buf, 0, buf.length, state.offset)
       closeSync(fd)
       text = buf.toString('utf8')
-    } catch {
+    } catch (e) {
+      engineLog.debug('agents', 'Could not read the agent transcript', errorFields(e))
       return
     }
     state.offset = size

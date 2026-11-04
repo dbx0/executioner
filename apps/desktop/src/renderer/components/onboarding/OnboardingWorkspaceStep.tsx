@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, FolderOpen, FolderPlus, Loader2 } from 'lucide-react'
 import type { AxiosInstance } from 'axios'
 import { backendsApi } from '../../api/backends.js'
+import { errorFields, refreshLogMasks, rlog } from '../../lib/log.js'
 import { toInput, type FormState } from '../modals/backends/form-state.js'
 import { Button } from '../ui/button.js'
 
@@ -51,8 +52,11 @@ export function OnboardingWorkspaceStep({
       const input = toInput(form)
       if (identityFile !== null && identityFile !== '') input.identityFile = identityFile
       await api.create(input)
+      // The connection's env values must be masked in main's log lines too.
+      refreshLogMasks()
       onDone()
     } catch (e) {
+      rlog.warn('onboarding', 'Could not save the connection', errorFields(e))
       setError((e as Error).message)
     } finally {
       setBusy(false)

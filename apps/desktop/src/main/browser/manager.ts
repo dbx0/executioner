@@ -6,6 +6,7 @@ import type { EmulationState } from './emulation'
 import type { Rule } from './rewrite'
 import { CRASH_RELOAD_TIMEOUT_MS, crashReloadUrl } from './recovery'
 import { BrowserPage, type Bounds, type BrowserState } from './page'
+import { mainLogger } from '../logging/logger'
 
 export type { BrowserState } from './page'
 export type DialogInfo = OperatorDialog
@@ -112,8 +113,9 @@ export class BrowserManager {
   private async load(page: BrowserPage, root: string, id: string, url: string): Promise<void> {
     try {
       await page.load(url)
-    } catch {
+    } catch (err) {
       // A failed or superseded load shows as the page's own error state; nothing to report to the address bar.
+      mainLogger()?.debug('main/browser', 'Page load failed', { error: err instanceof Error ? err.message : String(err) })
     }
     this.push(root, id, page.state())
   }

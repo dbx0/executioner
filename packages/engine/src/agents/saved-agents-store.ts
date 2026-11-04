@@ -5,6 +5,7 @@ import { globalLayout } from '@exe/protocol'
 import { isoNow, newId } from '@exe/protocol'
 import type { SavedAgent, SavedAgentInput, SavedAgentMember } from '@exe/db'
 import { BUILTIN_TEAMS, type AgentTeam } from './agent-team.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 /** The set of built-in team ids, used to recognise seeded team agents. */
 const BUILTIN_TEAM_IDS = new Set(BUILTIN_TEAMS.map((t) => t.id))
@@ -206,7 +207,9 @@ export class SavedAgentsStore {
     let text: string
     try {
       text = this.fs.readFileSync(this.path, 'utf8')
-    } catch {
+    } catch (e) {
+      // Absent until the first save: expected, so debug only.
+      engineLog.debug('agents', 'Saved agents file not readable', errorFields(e))
       return undefined
     }
     try {
@@ -215,7 +218,8 @@ export class SavedAgentsStore {
       return parsed
         .filter((x): x is SavedAgent => typeof x === 'object' && x !== null)
         .map((x) => ({ ...x, scope: 'global' as const }))
-    } catch {
+    } catch (e) {
+      engineLog.warn('agents', 'Saved agents file is malformed', errorFields(e))
       return undefined
     }
   }
@@ -224,8 +228,9 @@ export class SavedAgentsStore {
     try {
       this.fs.mkdirSync(dirname(this.path), { recursive: true })
       this.fs.writeFileSync(this.path, `${JSON.stringify(agents, null, 2)}\n`, 'utf8')
-    } catch {
+    } catch (e) {
       /* best-effort: a failed write must never crash the caller */
+      engineLog.warn('agents', 'Could not write saved agents', errorFields(e))
     }
   }
 

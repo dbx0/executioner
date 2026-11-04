@@ -30,6 +30,7 @@ import { ATTENTION_TOASTER } from '../lib/toast.js'
 import { TerminalsView } from '../views/TerminalsView.js'
 import { SettingsView } from '../views/SettingsView.js'
 import { isMacPlatform, workspaceShortcut } from '../lib/shortcuts.js'
+import { errorFields, rlog } from '../lib/log.js'
 
 function NonTerminalView({ view }: { view: ViewId }): JSX.Element | null {
   switch (view) {
@@ -203,7 +204,7 @@ function useRestoreSession(): void {
     void useApp
       .getState()
       .restoreSession((fraction) => startup?.progress(fraction))
-      .catch(() => {})
+      .catch((e: unknown) => rlog.error('engagements', 'Could not restore the last session', errorFields(e)))
       .finally(() => startup?.ready())
   }, [])
 }

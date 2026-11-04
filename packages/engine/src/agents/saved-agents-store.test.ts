@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SavedAgentsStore, rosterFingerprint, type StoreFs } from './saved-agents-store.js'
 import { BUILTIN_TEAMS } from './agent-team.js'
+
+// Expected failures below log a warn line to stderr; keep the test output clean.
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  const writeSync = ((fd: number, ...rest: unknown[]) =>
+    fd === 2 ? 0 : (actual.writeSync as (...a: unknown[]) => number)(fd, ...rest)) as typeof actual.writeSync
+  return { ...actual, writeSync }
+})
 
 /** In-memory fs shim: a Map from path → contents. */
 function memFs(seed: Record<string, string> = {}): StoreFs & { files: Map<string, string> } {

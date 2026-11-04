@@ -1,3 +1,5 @@
+import { engineLog, errorFields } from '../infra/log.js'
+
 /** What a live run keeps: whether it was stopped, and how to stop its work. */
 interface RunState {
   cancelled: boolean
@@ -51,8 +53,9 @@ export class CancellationRegistry {
       state.hooks.delete(hook)
       try {
         hook()
-      } catch {
+      } catch (e) {
         /* a child that is already gone must not stop the rest being killed */
+        engineLog.debug('workflow', 'Cancel hook failed', { execution: executionId, ...errorFields(e) })
       }
     }
     return true

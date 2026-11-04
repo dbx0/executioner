@@ -4,6 +4,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { Project } from '@exe/project'
 import { confinePath } from '../infra/confine.js'
+import { engineLog, errorFields } from '../infra/log.js'
 
 /** What PUT /files takes: a path inside the engagement and its new text. */
 const writeSchema = z.object({ path: z.string().min(1), content: z.string() })
@@ -142,7 +143,8 @@ export function filesRoutes(project: Project): Hono {
       // it has to describe the bytes we just wrote — re-stat rather than reuse
       // any value read earlier.
       written = statSync(target.abs)
-    } catch {
+    } catch (e) {
+      engineLog.warn('files', 'File write failed', errorFields(e))
       return c.json({ error: 'write failed' }, 500)
     }
     return c.json({

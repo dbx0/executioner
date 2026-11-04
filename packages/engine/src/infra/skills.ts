@@ -10,6 +10,7 @@ import {
 import { basename, dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { globalLayout } from '@exe/protocol'
+import { engineLog, errorFields } from './log.js'
 
 /**
  * Agent Skills support. A "skill" is a directory holding a `SKILL.md` whose YAML
@@ -70,7 +71,8 @@ function readConfigFile(path: string): SkillsConfig | undefined {
   try {
     if (!existsSync(path)) return undefined
     return normalizeSkillsConfig(JSON.parse(readFileSync(path, 'utf8')))
-  } catch {
+  } catch (e) {
+    engineLog.warn('skills', 'Skills config is unreadable', errorFields(e))
     return undefined
   }
 }
@@ -186,7 +188,8 @@ export function discoverSkills(folder: string | null, options: { cap?: number; m
     let entries: import('node:fs').Dirent[]
     try {
       entries = readdirSync(dir, { withFileTypes: true })
-    } catch {
+    } catch (e) {
+      engineLog.debug('skills', 'Skipping an unreadable skills folder', errorFields(e))
       return
     }
     // A SKILL.md right here makes THIS dir a skill.
@@ -199,8 +202,9 @@ export function discoverSkills(folder: string | null, options: { cap?: number; m
           description: parsed.description ?? '',
           path: dir,
         })
-      } catch {
+      } catch (e) {
         /* skip an unreadable SKILL.md */
+        engineLog.debug('skills', 'Skipping an unreadable SKILL.md', errorFields(e))
       }
       if (out.length >= cap) return
     }
@@ -213,7 +217,8 @@ export function discoverSkills(folder: string | null, options: { cap?: number; m
 
   try {
     walk(folder, 0)
-  } catch {
+  } catch (e) {
+    engineLog.warn('skills', 'Skills scan failed', errorFields(e))
     return out
   }
   return out
@@ -278,13 +283,15 @@ export function writeClaudeSkillsPlugin(folder: string): string | null {
     const link = join(dir, 'skills')
     try {
       symlinkSync(folder, link, 'dir')
-    } catch {
+    } catch (e) {
       // Symlink can fail (e.g. Windows without privilege): fall back to copying.
+      engineLog.debug('skills', 'Skills symlink failed, copying instead', errorFields(e))
       mkdirSync(link, { recursive: true })
       copyDirShallow(folder, link)
     }
     return dir
-  } catch {
+  } catch (e) {
+    engineLog.warn('skills', 'Could not build the Claude skills plugin', errorFields(e))
     return null
   }
 }

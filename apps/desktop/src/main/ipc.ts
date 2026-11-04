@@ -3,6 +3,7 @@ import { isAbsolute } from 'node:path'
 import type { ConnectionHints } from './connection-hints.js'
 import type { EngineConnection, EngineSupervisor } from './engine-supervisor.js'
 import { hasPhoto, photoPath, removePhoto, writePhoto } from './engagement-photo.js'
+import { mainLogger } from './logging/logger.js'
 
 export interface OpenProjectRequest {
   dir: string
@@ -134,12 +135,14 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
     // project state, so onboarding can verify a connection before any engagement
     // is open. Input goes over stdin so a password never reaches the process list.
     testBackend: (req) =>
-      deps.runEngineJson(
-        ['backend-test', ...(req.createWorkdir === true ? ['--create-workdir'] : [])],
-        req.profile,
+      logged(
+        'Backend test',
+        { kind: profileKind(req.profile) },
+        deps.runEngineJson(['backend-test', ...(req.createWorkdir === true ? ['--create-workdir'] : [])], req.profile),
       ),
 
-    enrollSsh: (req) => deps.runEngineJson(['ssh-enroll', '--key-dir', deps.sshKeyDir()], req),
+    enrollSsh: (req) =>
+      logged('SSH key enrollment', {}, deps.runEngineJson(['ssh-enroll', '--key-dir', deps.sshKeyDir()], req)),
 
     connectionHints: () => deps.connectionHints(),
 
@@ -199,8 +202,38 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
 
     async checkAgents() {
       return Promise.all(
-        AGENT_BINARIES.map(async ({ id, binary }) => ({ id, installed: await deps.probeAgent(binary).catch(() => false) })),
+        AGENT_BINARIES.map(async ({ id, binary }) => ({
+          id,
+          installed: await deps.probeAgent(binary).catch((err: unknown) => {
+            mainLogger()?.debug('main/agents', 'Agent probe failed', { agent: id, error: String(err) })
+            return false
+          }),
+        })),
       )
     },
+  }
+}
+
+/** A backend profile's kind (local, ssh, docker), the only part of it a log line names. */
+function profileKind(profile: unknown): unknown {
+  return typeof profile === 'object' && profile !== null ? (profile as { kind?: unknown }).kind : undefined
+}
+
+/**
+ * Log a one-shot engine command's outcome: whether it passed and which step
+ * failed, never the steps' details (they name hosts and users).
+ */
+async function logged<T>(what: string, data: Record<string, unknown>, run: Promise<T>): Promise<T> {
+  try {
+    const res = await run
+    const r = (typeof res === 'object' && res !== null ? res : {}) as { ok?: unknown; steps?: unknown }
+    const failed = Array.isArray(r.steps)
+      ? (r.steps as Array<{ name?: unknown; ok?: unknown }>).find((step) => step.ok === false)?.name
+      : undefined
+    mainLogger()?.info('main/backends', what, { ...data, ok: r.ok === true, ...(typeof failed === 'string' ? { failedStep: failed } : {}) })
+    return res
+  } catch (err) {
+    mainLogger()?.warn('main/backends', `${what} could not run`, { ...data, error: String(err) })
+    throw err
   }
 }
