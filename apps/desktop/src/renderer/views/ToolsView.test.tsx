@@ -1,4 +1,4 @@
-import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { act, cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosInstance } from 'axios'
 import { useApp } from '../store.js'
@@ -154,7 +154,19 @@ async function open(): Promise<void> {
   emit(streamed)
   streamed = []
   render(<ToolsView />)
-  await screen.findByRole('button', { name: 'Nmap' })
+  // Any tool will do: a missing one may already be filtered out.
+  await waitFor(() => expect(document.querySelector('button[data-tool]')).not.toBeNull())
+}
+
+/** List the tools missing on the connection too; the catalog hides them by default. */
+function showAllTools(): void {
+  const toggle = screen.getByRole('switch', { name: 'Installed only' })
+  if (toggle.getAttribute('aria-checked') === 'true') fireEvent.click(toggle)
+}
+
+/** A tool in the catalog, by name. */
+function tool(name: string): HTMLElement {
+  return screen.getByRole('button', { name })
 }
 
 /** A recent standalone run, as the engine lists it. */
@@ -188,8 +200,8 @@ const outputRow = (over: Partial<NodeOutputRow> = {}): NodeOutputRow => ({
 })
 
 /** Pick a tool from the catalog, then a target from its list. */
-async function pick(tool: string, target: RegExp): Promise<void> {
-  fireEvent.click(screen.getByRole('button', { name: tool }))
+async function pick(name: string, target: RegExp): Promise<void> {
+  fireEvent.click(tool(name))
   const list = await screen.findByRole('listbox', { name: 'Target' })
   fireEvent.click(within(list).getByRole('option', { name: target }))
 }
@@ -205,7 +217,7 @@ describe('ToolsView', () => {
       node({ params: { ports: { type: 'string', default: '', placeholder: '80,443' } } }),
     ])
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     const ports = await screen.findByLabelText('ports')
     expect(ports.getAttribute('placeholder')).toBe('80,443')
     expect(screen.queryByText('{{ target.value }}')).toBeNull()
@@ -213,8 +225,10 @@ describe('ToolsView', () => {
 
   it('resizes the output pane from its handle and remembers the size', async () => {
     localStorage.removeItem('exe.toolsOutputSize')
+    // The pane only shows once there is a run to show.
+    executions.standalone.mockResolvedValue([pastRun()])
     await open()
-    const handle = screen.getByRole('separator', { name: 'Resize output' })
+    const handle = await screen.findByRole('separator', { name: 'Resize output' })
     const pane = handle.parentElement!
     expect(pane.style.getPropertyValue('--output-h')).toBe('480px')
 
@@ -231,12 +245,12 @@ describe('ToolsView', () => {
     await open()
     fireEvent.change(screen.getByRole('searchbox', { name: /search tools/i }), { target: { value: 'whois' } })
     expect(screen.queryByRole('button', { name: 'Nmap' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Whois' })).toBeTruthy()
+    expect(tool('Whois')).toBeTruthy()
   })
 
   it('offers only targets of a kind the tool accepts', async () => {
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     // Nmap accepts domain and ip; the url target is not offered.
     const list = await screen.findByRole('listbox', { name: 'Target' })
     expect(within(list).getByRole('option', { name: /example\.com/ })).toBeTruthy()
@@ -249,7 +263,7 @@ describe('ToolsView', () => {
     await pick('Nmap', /example\.com/)
     expect(screen.getByRole('button', { name: 'Run' }).hasAttribute('disabled')).toBe(false)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Httpx' }))
+    fireEvent.click(tool('Httpx'))
     // A domain cannot go to a url-only tool; keeping it would only earn a 400.
     expect(await screen.findByText('Pick a target to run against.')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Run' }).hasAttribute('disabled')).toBe(true)
@@ -273,7 +287,7 @@ describe('ToolsView', () => {
     await open()
     expect(screen.getByText('Pick a tool to run against example.com.')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     fireEvent.click(await screen.findByRole('button', { name: 'Run' }))
     await waitFor(() => expect(nodes.run).toHaveBeenCalledWith('nmap', { targetId: 't1', params: {} }))
     // Consumed once, so coming back to the page later starts clean.
@@ -308,7 +322,7 @@ describe('ToolsView', () => {
     backends.list.mockResolvedValue([backend()])
     await open()
     await waitFor(() => expect(tools.probeBatch).toHaveBeenCalledTimes(1))
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     const picker = await screen.findByRole('combobox', { name: 'Connection' })
 
     fireEvent.change(picker, { target: { value: 'be-1' } })
@@ -323,7 +337,8 @@ describe('ToolsView', () => {
   it('offers Install instead of Run when the tool is missing on the connection', async () => {
     probeWith({ nmap: false })
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    showAllTools()
+    fireEvent.click(tool('Nmap'))
 
     expect(await screen.findByRole('button', { name: /Install nmap/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Run' })).toBeNull()
@@ -333,7 +348,8 @@ describe('ToolsView', () => {
   it('opens the install commands for a tool missing on this machine', async () => {
     probeWith({ nmap: false })
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    showAllTools()
+    fireEvent.click(tool('Nmap'))
     fireEvent.click(await screen.findByRole('button', { name: /Install nmap/ }))
 
     expect(await screen.findByText('sudo apt install -y nmap')).toBeTruthy()
@@ -354,7 +370,7 @@ describe('ToolsView', () => {
       ),
     )
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     fireEvent.change(await screen.findByRole('combobox', { name: 'Connection' }), {
       target: { value: 'be-1' },
     })
@@ -382,14 +398,14 @@ describe('ToolsView', () => {
       },
     ])
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     expect(await screen.findByDisplayValue('22,443')).toBeTruthy()
   })
 
   it('says where seeded params came from and resets them to the defaults', async () => {
     executions.standalone.mockResolvedValue([pastRun({ params: { ports: '22,443' } })])
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     expect(await screen.findByText('Filled in from your last run of this tool.')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /Reset to defaults/ }))
@@ -399,7 +415,7 @@ describe('ToolsView', () => {
 
   it('offers a reset once a param is edited', async () => {
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     expect(screen.queryByRole('button', { name: /Reset to defaults/ })).toBeNull()
     fireEvent.change(await screen.findByLabelText('ports'), { target: { value: '80' } })
     expect(screen.getByText('Changed from the defaults.')).toBeTruthy()
@@ -422,7 +438,7 @@ describe('ToolsView', () => {
 
   it('previews the command a run would execute, with the picked target filled in', async () => {
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     expect((await screen.findByLabelText('Command')).textContent).toBe('$ nmap -p 1-1000 <target>')
 
     const list = await screen.findByRole('listbox', { name: 'Target' })
@@ -434,7 +450,7 @@ describe('ToolsView', () => {
   it('says why the command cannot be built yet', async () => {
     nodes.preview.mockRejectedValue({ response: { data: { error: 'param "userlist" is required' } } })
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     expect(await screen.findByText('Command not ready: param "userlist" is required')).toBeTruthy()
   })
 
@@ -463,7 +479,7 @@ describe('ToolsView', () => {
   it('selects every target the search shows, and clears them', async () => {
     targets.list.mockResolvedValue([...TARGETS, { id: 't3', kind: 'domain', value: 'other.org' }])
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     fireEvent.click(await screen.findByRole('button', { name: 'Select all' }))
     expect(screen.getByRole('button', { name: 'Run on 2 targets' })).toBeTruthy()
 
@@ -477,7 +493,7 @@ describe('ToolsView', () => {
       .mockResolvedValueOnce({ executionId: 'ex-1' })
       .mockRejectedValueOnce({ response: { data: { error: 'unknown target' } } })
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     fireEvent.click(await screen.findByRole('button', { name: 'Select all' }))
     fireEvent.click(screen.getByRole('button', { name: 'Run on 2 targets' }))
     expect((await screen.findByRole('alert')).textContent).toBe('1 of 2 runs did not start: unknown target')
@@ -504,7 +520,7 @@ describe('ToolsView', () => {
 
   it('runs on Ctrl+Enter, but only when Run is offered', async () => {
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     await screen.findByRole('listbox', { name: 'Target' })
     fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
     expect(nodes.run).not.toHaveBeenCalled()
@@ -520,7 +536,7 @@ describe('ToolsView', () => {
     fireEvent.keyDown(window, { key: '/' })
     expect(document.activeElement).toBe(search)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     const ports = await screen.findByLabelText('ports')
     ports.focus()
     fireEvent.keyDown(ports, { key: '/' })
@@ -531,23 +547,56 @@ describe('ToolsView', () => {
     await open()
     const search = screen.getByRole('searchbox', { name: /search tools/i })
     fireEvent.keyDown(search, { key: 'ArrowDown' })
-    const first = screen.getByRole('button', { name: 'Nmap' })
+    const first = tool('Nmap')
     expect(document.activeElement).toBe(first)
     expect(first.getAttribute('aria-current')).toBe('true')
 
     fireEvent.keyDown(first, { key: 'ArrowDown' })
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Whois' }))
-    expect(screen.getByRole('button', { name: 'Whois' }).getAttribute('aria-current')).toBe('true')
+    expect(document.activeElement).toBe(tool('Whois'))
+    expect(tool('Whois').getAttribute('aria-current')).toBe('true')
   })
 
-  it('hides tools missing on the connection when asked to', async () => {
+  it('hides tools missing on the connection by default, and lists them when turned off', async () => {
     probeWith({ nmap: false })
     await open()
-    expect(await screen.findByText('1 missing')).toBeTruthy()
-    fireEvent.click(screen.getByRole('checkbox', { name: /Installed only/ }))
+    expect(await screen.findByText('1 hidden')).toBeTruthy()
+    const toggle = screen.getByRole('switch', { name: 'Installed only' })
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
     expect(screen.queryByRole('button', { name: 'Nmap' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Whois' })).toBeTruthy()
-    expect(screen.getByText('1 hidden')).toBeTruthy()
+    expect(tool('Whois')).toBeTruthy()
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(tool('Nmap')).toBeTruthy()
+    expect(screen.queryByText('1 hidden')).toBeNull()
+  })
+
+  it('keeps the picked tool listed even when it turns out to be missing', async () => {
+    let answer: (r: ToolProbeBatchResponse) => void = () => undefined
+    tools.probeBatch.mockImplementation(() => new Promise((resolve) => (answer = resolve)))
+    await open()
+    fireEvent.click(tool('Nmap'))
+
+    act(() =>
+      answer({
+        backendId: 'local',
+        results: [
+          { program: 'nmap', installed: false, version: null },
+          { program: 'whois', installed: true, version: null },
+        ],
+      }),
+    )
+
+    expect(await screen.findByText('1 hidden')).toBeTruthy()
+    expect(tool('Nmap').getAttribute('aria-current')).toBe('true')
+  })
+
+  it('says when the filter leaves nothing to show', async () => {
+    probeWith({ nmap: false, whois: false })
+    await open()
+    expect(
+      await screen.findByText('Nothing is installed on this connection. Turn off Installed only to see every tool.'),
+    ).toBeTruthy()
   })
 
   it("narrows the history to the picked tool's runs, with all a click away", async () => {
@@ -555,7 +604,7 @@ describe('ToolsView', () => {
     await open()
     expect(await screen.findByRole('button', { name: 'Load Whois run against example.com' })).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     expect(screen.queryByRole('button', { name: 'Load Whois run against example.com' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Runs of Nmap' }).getAttribute('aria-pressed')).toBe('true')
 
@@ -566,7 +615,7 @@ describe('ToolsView', () => {
   it('adds a target from the form and picks it, when the tool has none to take', async () => {
     nodes.list.mockResolvedValue([node({ accepts: ['cidr'] })])
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     const field = await screen.findByRole('textbox', { name: 'New target' })
     expect(field.getAttribute('placeholder')).toBe('10.0.0.0/24')
 
@@ -585,7 +634,7 @@ describe('ToolsView', () => {
   it('refuses a new target of a kind the tool cannot take', async () => {
     nodes.list.mockResolvedValue([node({ accepts: ['cidr'] })])
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     const field = await screen.findByRole('textbox', { name: 'New target' })
     fireEvent.change(field, { target: { value: 'example.org' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
@@ -596,7 +645,7 @@ describe('ToolsView', () => {
   it('shows the engine refusal for a target it will not store', async () => {
     targets.create.mockRejectedValueOnce({ response: { data: { error: 'wildcards are not targets' } } })
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Nmap' }))
+    fireEvent.click(tool('Nmap'))
     await screen.findByRole('listbox', { name: 'Target' })
     fireEvent.click(screen.getByRole('button', { name: /^Add$/ }))
     const field = screen.getByRole('textbox', { name: 'New target' })
@@ -663,7 +712,7 @@ describe('ToolsView', () => {
     cleanup()
 
     await open()
-    expect(screen.getByRole('button', { name: 'Nmap' }).getAttribute('aria-current')).toBe('true')
+    expect(tool('Nmap').getAttribute('aria-current')).toBe('true')
     expect(screen.getByRole('option', { name: /example\.com/ }).getAttribute('aria-selected')).toBe('true')
     expect((screen.getByRole('combobox', { name: 'Connection' }) as HTMLSelectElement).value).toBe('be-1')
     expect((screen.getByLabelText('ports') as HTMLInputElement).value).toBe('22')
@@ -715,23 +764,26 @@ describe('ToolsView', () => {
   it('keeps what it learned about installed tools across view switches', async () => {
     probeWith({ nmap: false })
     await open()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Nmap' }).title).toBe('Nmap: missing'))
+    showAllTools()
+    await waitFor(() => expect(tool('Nmap').title).toBe('Nmap: missing'))
     cleanup()
 
     await open()
-    expect(screen.getByRole('button', { name: 'Nmap' }).title).toBe('Nmap: missing')
-    expect(screen.getByRole('button', { name: 'Whois' }).title).toBe('Whois: installed')
+    showAllTools()
+    expect(tool('Nmap').title).toBe('Nmap: missing')
+    expect(tool('Whois').title).toBe('Whois: installed')
     expect(tools.probeBatch).toHaveBeenCalledTimes(1)
   })
 
   it('asks the connection again on Recheck', async () => {
     probeWith({ nmap: false })
     await open()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Nmap' }).title).toBe('Nmap: missing'))
+    showAllTools()
+    await waitFor(() => expect(tool('Nmap').title).toBe('Nmap: missing'))
 
     probeWith({})
     fireEvent.click(screen.getByRole('button', { name: 'Recheck installed tools' }))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Nmap' }).title).toBe('Nmap: installed'))
+    await waitFor(() => expect(tool('Nmap').title).toBe('Nmap: installed'))
     expect(tools.probeBatch).toHaveBeenCalledTimes(2)
   })
 
@@ -742,7 +794,7 @@ describe('ToolsView', () => {
     cleanup()
 
     await open()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Nmap' }).title).toBe('Nmap: installed'))
+    await waitFor(() => expect(tool('Nmap').title).toBe('Nmap: installed'))
     expect(tools.probeBatch).toHaveBeenCalledTimes(2)
   })
 
@@ -874,10 +926,11 @@ describe('ToolsView', () => {
       }),
     )
     await open()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Nmap' }).title).toBe('Nmap: installed'))
+    showAllTools()
+    await waitFor(() => expect(tool('Nmap').title).toBe('Nmap: installed'))
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Connection' }), { target: { value: 'be-1' } })
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Nmap' }).title).toBe('Nmap: missing'))
+    await waitFor(() => expect(tool('Nmap').title).toBe('Nmap: missing'))
     expect(tools.probeBatch).toHaveBeenLastCalledWith(['nmap', 'whois'], 'be-1')
   })
 
@@ -941,5 +994,245 @@ describe('ToolsView', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Expand output' }))
 
     expect(await screen.findByRole('dialog', { name: 'nmap output' })).toBeTruthy()
+  })
+})
+
+describe('ToolsView catalog and output layout', () => {
+  it('keeps the output pane closed until something has run', async () => {
+    await open()
+    expect(screen.queryByRole('separator', { name: 'Resize output' })).toBeNull()
+
+    await pick('Nmap', /example\.com/)
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+
+    expect(await screen.findByRole('separator', { name: 'Resize output' })).toBeTruthy()
+  })
+
+  it('shows the output pane when the engagement already has runs', async () => {
+    executions.standalone.mockResolvedValue([pastRun()])
+    await open()
+    expect(await screen.findByRole('separator', { name: 'Resize output' })).toBeTruthy()
+  })
+
+  it('lists the tools run lately above the categories, newest first', async () => {
+    executions.standalone.mockResolvedValue([pastRun({ id: 'ex-2', nodeId: 'whois' }), pastRun({ id: 'ex-1', nodeId: 'nmap' })])
+    await open()
+    await screen.findByText('Recent')
+
+    const buttons = screen.getAllByRole('button').filter((b) => b.dataset.tool !== undefined)
+    expect(buttons.map((b) => b.dataset.tool)).toEqual(['whois', 'nmap'])
+  })
+
+  it('lists a recent tool once, under Recent and not again in its category', async () => {
+    executions.standalone.mockResolvedValue([pastRun({ nodeId: 'whois' })])
+    await open()
+    await screen.findByText('Recent')
+
+    expect(screen.getAllByRole('button', { name: 'Whois' })).toHaveLength(1)
+    const buttons = screen.getAllByRole('button').filter((b) => b.dataset.tool !== undefined)
+    expect(buttons.map((b) => b.dataset.tool)).toEqual(['whois', 'nmap'])
+  })
+
+  it('leaves Recent out while searching', async () => {
+    executions.standalone.mockResolvedValue([pastRun()])
+    await open()
+    await screen.findByText('Recent')
+    fireEvent.change(screen.getByRole('searchbox', { name: /search tools/i }), { target: { value: 'nm' } })
+
+    expect(screen.queryByText('Recent')).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Nmap' })).toHaveLength(1)
+  })
+
+  it('says what each tool does under its name', async () => {
+    await open()
+    expect(tool('Nmap').textContent).toContain('port scan')
+  })
+
+  it('sums up what is installed on the connection', async () => {
+    probeWith({ nmap: true, whois: false })
+    await open()
+    expect(await screen.findByText('1 installed')).toBeTruthy()
+    expect(screen.getByText('1 missing')).toBeTruthy()
+  })
+})
+
+describe('ToolsView run form guidance', () => {
+  const required = (): void => {
+    nodes.list.mockResolvedValue([node({ params: { query: { type: 'string', required: true, label: 'Query' } } })])
+  }
+
+  it('waits for a target before marking a missing required field', async () => {
+    required()
+    await open()
+    fireEvent.click(tool('Nmap'))
+    await screen.findByRole('listbox', { name: 'Target' })
+
+    expect(screen.getByLabelText('query').getAttribute('aria-invalid')).toBeNull()
+    expect(screen.queryByText('Required to run.')).toBeNull()
+  })
+
+  it('marks the missing required field and takes you to it', async () => {
+    required()
+    await open()
+    await pick('Nmap', /example\.com/)
+
+    const field = screen.getByLabelText('query')
+    expect(field.getAttribute('aria-invalid')).toBe('true')
+    expect(screen.getByText('Required to run.')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fill in Query to run.' }))
+    expect(document.activeElement).toBe(field)
+
+    fireEvent.change(field, { target: { value: 'apache' } })
+    expect(field.getAttribute('aria-invalid')).toBeNull()
+    expect(screen.queryByText('Required to run.')).toBeNull()
+  })
+
+  it('copies the command through the app clipboard', async () => {
+    const clipboardWrite = vi.fn(() => Promise.resolve())
+    const bridge = window.executioner
+    ;(window as { executioner: unknown }).executioner = { ...bridge, clipboardWrite }
+    try {
+      await open()
+      await pick('Nmap', /example\.com/)
+      fireEvent.click(await screen.findByRole('button', { name: 'Copy command' }))
+      await waitFor(() => expect(clipboardWrite).toHaveBeenCalledWith('nmap -p 1-1000 example.com'))
+    } finally {
+      ;(window as { executioner: unknown }).executioner = bridge
+    }
+  })
+})
+
+describe('ToolsView presets', () => {
+  beforeEach(() => localStorage.removeItem('exe.toolPresets'))
+
+  const savePreset = async (name: string): Promise<void> => {
+    fireEvent.click(screen.getByRole('button', { name: /save preset/i }))
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Preset name' }), { target: { value: name } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  }
+
+  it('saves nothing until a param differs from the defaults', async () => {
+    await open()
+    fireEvent.click(tool('Nmap'))
+    expect((await screen.findByRole('button', { name: /save preset/i })).hasAttribute('disabled')).toBe(true)
+  })
+
+  it('saves the form as a preset and applies it later', async () => {
+    await open()
+    fireEvent.click(tool('Nmap'))
+    fireEvent.change(await screen.findByLabelText('ports'), { target: { value: '1-100' } })
+    await savePreset('Quick')
+
+    const quick = await screen.findByRole('button', { name: 'Quick' })
+    expect(quick.getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.change(screen.getByLabelText('ports'), { target: { value: '22' } })
+    expect(quick.getAttribute('aria-pressed')).toBe('false')
+
+    fireEvent.click(quick)
+    expect((screen.getByLabelText('ports') as HTMLInputElement).value).toBe('1-100')
+    expect(screen.getByText('Filled in from a saved preset.')).toBeTruthy()
+  })
+
+  it('keeps presets after the page is opened again, and deletes them', async () => {
+    await open()
+    fireEvent.click(tool('Nmap'))
+    fireEvent.change(await screen.findByLabelText('ports'), { target: { value: '1-100' } })
+    await savePreset('Quick')
+    cleanup()
+
+    await open()
+    fireEvent.click(tool('Nmap'))
+    expect(await screen.findByRole('button', { name: 'Quick' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete preset Quick' }))
+    expect(screen.queryByRole('button', { name: 'Quick' })).toBeNull()
+  })
+})
+
+describe('ToolsView batch output', () => {
+  const twoTargets = (): void => {
+    targets.list.mockResolvedValue([...TARGETS, { id: 't3', kind: 'domain', value: 'other.org' }])
+    nodes.run.mockResolvedValueOnce({ executionId: 'ex-a' }).mockResolvedValueOnce({ executionId: 'ex-b' })
+  }
+  const runOnBoth = async (): Promise<void> => {
+    await open()
+    fireEvent.click(tool('Nmap'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Select all' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Run on 2 targets' }))
+  }
+
+  it('shows a multi-target run as one batch, with a tab per target', async () => {
+    twoTargets()
+    streamed = [
+      { type: 'stdout', executionId: 'ex-a', nodeId: 'nmap', data: 'scanning example\n' },
+      { type: 'stdout', executionId: 'ex-b', nodeId: 'nmap', data: 'scanning other\n' },
+    ]
+    await runOnBoth()
+
+    const list = await screen.findByRole('tablist', { name: 'Runs in this batch' })
+    expect(list.getAttribute('aria-orientation')).toBe('vertical')
+    const tabs = within(list).getAllByRole('tab')
+    expect(tabs.map((t) => t.textContent)).toEqual(['example.com', 'other.org'])
+    expect(tabs[0]!.getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByText('0 of 2 done')).toBeTruthy()
+    expect(await screen.findByText(/scanning example/)).toBeTruthy()
+
+    fireEvent.click(tabs[1]!)
+    expect(await screen.findByText(/scanning other/)).toBeTruthy()
+    expect(screen.queryByText(/scanning example/)).toBeNull()
+    expect(screen.getByRole('tab', { name: 'other.org' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('counts the batch down as its runs finish, failures included', async () => {
+    twoTargets()
+    await runOnBoth()
+    await screen.findByText('0 of 2 done')
+
+    act(() => emit([{ type: 'done', executionId: 'ex-b', nodeId: 'nmap', data: 'failed' }]))
+
+    expect(await screen.findByText('1 of 2 done')).toBeTruthy()
+    expect(screen.getByText('· 1 failed')).toBeTruthy()
+    expect(screen.getByRole('progressbar', { name: 'Batch progress' }).getAttribute('aria-valuenow')).toBe('1')
+  })
+
+  it('shows no batch for a run on one target', async () => {
+    await open()
+    await pick('Nmap', /example\.com/)
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+
+    await screen.findByRole('searchbox', { name: 'Find in output' })
+    expect(screen.queryByRole('tablist', { name: 'Runs in this batch' })).toBeNull()
+    expect(screen.queryByRole('progressbar', { name: 'Batch progress' })).toBeNull()
+  })
+})
+
+describe('ToolsView live output', () => {
+  const runNmap = async (): Promise<void> => {
+    await open()
+    await pick('Nmap', /example\.com/)
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+  }
+
+  it('finds text in the stream and counts the matches', async () => {
+    streamed = [{ type: 'stdout', executionId: 'ex-1', nodeId: 'nmap', data: '22/tcp open ssh\n80/tcp OPEN http\n443/tcp closed\n' }]
+    await runNmap()
+
+    fireEvent.change(await screen.findByRole('searchbox', { name: 'Find in output' }), { target: { value: 'open' } })
+
+    expect(screen.getByText('2 matches')).toBeTruthy()
+    expect([...document.querySelectorAll('mark')].map((m) => m.textContent)).toEqual(['open', 'OPEN'])
+  })
+
+  it('lets you stop and resume following new output', async () => {
+    await runNmap()
+    const follow = await screen.findByRole('button', { name: 'Autoscroll' })
+    expect(follow.getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.click(follow)
+    expect(follow.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(follow)
+    expect(follow.getAttribute('aria-pressed')).toBe('true')
   })
 })

@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
-import { useEffect, useRef, useState } from 'react'
-import { Square, RotateCcw, Loader2, Maximize2 } from 'lucide-react'
+import { Fragment, useEffect, useRef, useState } from 'react'
+import { Square, RotateCcw, Loader2, Maximize2, Search } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
 import { cn } from '../../lib/utils.js'
 import type { StandaloneRun } from '../../api/executions.js'
@@ -93,6 +93,185 @@ function elapsed(from: number, to: number): string {
   return `${Math.floor(secs / 60)}m ${secs % 60}s`
 }
 
+/** The text cut at every case-insensitive occurrence of `query`, with the matches flagged. */
+export function splitMatches(text: string, query: string): { text: string; match: boolean }[] {
+  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+  const parts: { text: string; match: boolean }[] = []
+  let at = 0
+  for (const m of text.matchAll(pattern)) {
+    if (m.index > at) parts.push({ text: text.slice(at, m.index), match: false })
+    parts.push({ text: m[0], match: true })
+    at = m.index + m[0].length
+  }
+  if (at < text.length) parts.push({ text: text.slice(at), match: false })
+  return parts
+}
+
+/** One run of the batch on screen, as its tab shows it. */
+export interface BatchTab {
+  executionId: string
+  /** The target it ran against. */
+  label: string
+  status: string
+}
+
+/**
+ * A multi-target run at a glance: how many of its runs are done, and a tab per
+ * run to switch the pane to it. The batch is one thing you are watching, not
+ * the first run plus a list to dig through.
+ */
+function BatchStrip({
+  batch,
+  watchingId,
+  onShow,
+}: {
+  batch: BatchTab[]
+  watchingId: string | null
+  onShow: (executionId: string) => void
+}): JSX.Element {
+  const done = batch.filter((b) => b.status !== 'running')
+  const failed = done.filter((b) => b.status !== 'succeeded' && b.status !== 'success' && b.status !== 'cancelled')
+  const running = done.length < batch.length
+  return (
+    <div className="shrink-0 border-b border-border">
+      <div className="flex items-center gap-2 px-3 pt-2 text-[11.5px]">
+        <span className={running ? 'font-medium text-status-running' : 'text-muted-foreground'}>
+          {running ? 'Running' : 'Finished'}
+        </span>
+        <span className="ml-auto tabular-nums text-muted-foreground">
+          {done.length} of {batch.length} done
+          {failed.length > 0 && <span className="text-status-error">{` · ${failed.length} failed`}</span>}
+        </span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label="Batch progress"
+        aria-valuemin={0}
+        aria-valuemax={batch.length}
+        aria-valuenow={done.length}
+        className="mx-3 mt-1.5 h-1 overflow-hidden rounded-full bg-surface-2"
+      >
+        <div
+          className="h-full bg-status-running transition-[width] motion-reduce:transition-none"
+          style={{ width: `${(done.length / batch.length) * 100}%` }}
+        />
+      </div>
+      {/* One target per line, scrolling past a handful, so a long batch never
+          becomes a strip you scroll sideways through. */}
+      <div
+        role="tablist"
+        aria-label="Runs in this batch"
+        aria-orientation="vertical"
+        className="flex max-h-32 flex-col gap-0.5 overflow-y-auto scrollbar-sleek px-2 py-1.5"
+      >
+        {batch.map((b) => (
+          <button
+            key={b.executionId}
+            type="button"
+            role="tab"
+            aria-selected={b.executionId === watchingId}
+            onClick={() => onShow(b.executionId)}
+            title={`${b.label}: ${b.status}`}
+            className={cn(
+              'flex w-full shrink-0 items-center gap-2 rounded px-2 py-1 text-left font-mono text-[11px]',
+              b.executionId === watchingId ? 'selected-surface text-foreground' : 'text-muted-foreground hover:bg-surface-2',
+            )}
+          >
+            <span className={cn('size-1.5 shrink-0 rounded-full', statusDot(b.status))} />
+            <span className="min-w-0 flex-1 truncate">{b.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * A live run's stream. It follows the newest line until you scroll up to read,
+ * and finds text in what has arrived so far. Keyed by run, so each run starts
+ * following with an empty search.
+ */
+function LiveStream({ lines }: { lines: string[] }): JSX.Element {
+  const bottom = useRef<HTMLDivElement>(null)
+  const [follow, setFollow] = useState(true)
+  const [needle, setNeedle] = useState('')
+  useEffect(() => {
+    if (follow) bottom.current?.scrollIntoView({ block: 'end' })
+  }, [lines.length, follow])
+
+  const text = lines.join('')
+  const query = needle.trim()
+  const parts = query === '' ? null : splitMatches(text, query)
+  const count = parts === null ? 0 : parts.filter((p) => p.match).length
+
+  // Scrolling away from the bottom means reading: stop following until the
+  // reader comes back down or asks for it.
+  const onScroll = (e: React.UIEvent<HTMLDivElement>): void => {
+    const box = e.currentTarget
+    setFollow(box.scrollHeight - box.scrollTop - box.clientHeight < 24)
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-surface-1">
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={needle}
+            onChange={(e) => setNeedle(e.target.value)}
+            placeholder="Find in output"
+            aria-label="Find in output"
+            className="h-6 w-full rounded-md border border-input bg-transparent pl-6 pr-2 text-[12px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
+        </div>
+        {query !== '' && (
+          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground" aria-live="polite">
+            {count === 1 ? '1 match' : `${count} matches`}
+          </span>
+        )}
+        <Button
+          variant="ghost"
+          size="xs"
+          aria-pressed={follow}
+          title={follow ? 'Stop following new output' : 'Follow new output'}
+          onClick={() => {
+            if (follow) {
+              setFollow(false)
+              return
+            }
+            setFollow(true)
+            bottom.current?.scrollIntoView({ block: 'end' })
+          }}
+          className={cn('shrink-0 text-[11px]', !follow && 'text-muted-foreground')}
+        >
+          Autoscroll
+        </Button>
+      </div>
+      <div onScroll={onScroll} className="min-h-0 flex-1 overflow-auto scrollbar-sleek p-3">
+        {lines.length === 0 ? (
+          <p className="text-[12.5px] text-muted-foreground">Waiting for output…</p>
+        ) : (
+          <pre className="whitespace-pre-wrap break-words font-mono text-[11.5px] leading-relaxed">
+            {parts === null
+              ? text
+              : parts.map((p, i) =>
+                  p.match ? (
+                    <mark key={i} className="rounded-sm bg-status-running/30 text-foreground">
+                      {p.text}
+                    </mark>
+                  ) : (
+                    <Fragment key={i}>{p.text}</Fragment>
+                  ),
+                )}
+            <div ref={bottom} />
+          </pre>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /**
  * The output pane: the watched run on top, the recent standalone runs below it.
  * While a run is live its stream scrolls by raw; once it settles the pane shows
@@ -114,6 +293,8 @@ export function OutputPane({
   connectionLabel,
   nodeName,
   onReplay,
+  batch = [],
+  onShowRun,
 }: {
   live: LiveRun | null
   lines: string[]
@@ -136,8 +317,11 @@ export function OutputPane({
   /** Resolve a node id to its display name; falls back to the id. */
   nodeName: (id: string) => string
   onReplay: (run: StandaloneRun) => void
+  /** The runs of the last multi-target Run, shown as tabs; fewer than two shows none. */
+  batch?: BatchTab[]
+  /** Switch the pane to one run of the batch. */
+  onShowRun?: (executionId: string) => void
 }): JSX.Element {
-  const bottom = useRef<HTMLDivElement>(null)
   const pane = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState<PaneSize>(loadSize)
   // The history narrows to the picked tool by default: its earlier runs are
@@ -194,9 +378,6 @@ export function OutputPane({
     setSize(DEFAULT_SIZE)
     saveSize(DEFAULT_SIZE)
   }
-  useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'end' })
-  }, [lines.length])
 
   return (
     <div
@@ -245,6 +426,10 @@ export function OutputPane({
         )}
       </div>
 
+      {batch.length > 1 && onShowRun !== undefined && (
+        <BatchStrip batch={batch} watchingId={watchingId} onShow={onShowRun} />
+      )}
+
       {live !== null && live.status !== 'running' ? (
         result === undefined ? (
           <p className="min-h-0 flex-1 bg-surface-1 p-3 text-[12.5px] text-muted-foreground">Loading output…</p>
@@ -262,19 +447,12 @@ export function OutputPane({
             className="[--output-gutter:0.75rem]"
           />
         )
+      ) : live === null ? (
+        <p className="min-h-0 flex-1 bg-surface-1 p-3 text-[12.5px] text-muted-foreground">
+          Pick a recent run to see its output.
+        </p>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek bg-surface-1 p-3">
-          {live === null ? (
-            <p className="text-[12.5px] text-muted-foreground">Run a tool and its output lands here.</p>
-          ) : lines.length === 0 ? (
-            <p className="text-[12.5px] text-muted-foreground">Waiting for output…</p>
-          ) : (
-            <pre className="whitespace-pre-wrap break-words font-mono text-[11.5px] leading-relaxed">
-              {lines.join('')}
-              <div ref={bottom} />
-            </pre>
-          )}
-        </div>
+        <LiveStream key={live.executionId} lines={lines} />
       )}
 
       <div className="flex max-h-[45%] shrink-0 flex-col border-t border-border">

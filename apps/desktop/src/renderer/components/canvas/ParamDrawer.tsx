@@ -45,12 +45,15 @@ export function ParamDrawer({
   values,
   onChange,
   chips,
+  invalid = null,
 }: {
   params: ParamSpec[]
   values: Record<string, unknown>
   onChange: (name: string, value: unknown) => void
   /** Quick-insert template chips (defaults to just {{ target.value }}); empty hides them. */
   chips?: string[]
+  /** The param that still needs a value before a run, marked on its field; null marks none. */
+  invalid?: string | null
 }): JSX.Element {
   const allChips = chips ?? DEFAULT_CHIPS
   const installedAgents = useApp((s) => s.installedAgents)
@@ -61,6 +64,8 @@ export function ParamDrawer({
     <div className="flex flex-col gap-3 p-4">
       {params.map((param) => {
         const current = values[param.name] ?? param.default ?? ''
+        const needed = invalid === param.name
+        const neededHint = needed ? <span className="text-[11px] text-destructive">Required to run.</span> : null
 
         if (param.oneOf !== undefined) {
           const isAgent = param.name === 'agent'
@@ -87,6 +92,7 @@ export function ParamDrawer({
                 onValueChange={(v) => onChange(param.name, v)}
                 options={options}
               />
+              {neededHint}
             </FieldShell>
           )
         }
@@ -119,22 +125,25 @@ export function ParamDrawer({
             {isTextarea ? (
               <textarea
                 aria-label={param.name}
+                aria-invalid={needed || undefined}
                 rows={param.ui === 'code' ? 8 : 3}
                 value={String(current)}
                 placeholder={param.placeholder}
                 onChange={(e) => onChange(param.name, e.target.value)}
-                className={cn(inputClass, 'resize-y', param.ui === 'code' && 'font-mono text-[12px]')}
+                className={cn(inputClass, 'resize-y', param.ui === 'code' && 'font-mono text-[12px]', needed && 'border-destructive')}
               />
             ) : (
               <input
                 aria-label={param.name}
+                aria-invalid={needed || undefined}
                 type={param.type === 'number' ? 'number' : 'text'}
                 value={String(current)}
                 placeholder={param.placeholder}
                 onChange={(e) => onChange(param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
-                className={inputClass}
+                className={cn(inputClass, needed && 'border-destructive')}
               />
             )}
+            {neededHint}
             {param.type === 'string' && allChips.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {allChips.map((chip) => (

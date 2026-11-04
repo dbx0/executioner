@@ -1,8 +1,8 @@
 import type { JSX, RefObject } from 'react'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
-import { Checkbox } from '../../components/ui/checkbox.js'
+import { Switch } from '../../components/ui/switch.js'
 import type { NodeListing } from '../../api/nodes.js'
 
 /** Whether a tool's binary is present on the connection in view. */
@@ -26,6 +26,49 @@ function InstallDot({ state }: { state: InstallState }): JSX.Element {
   )
 }
 
+/** One tool in the list: its install dot, its name, and what it does underneath. */
+function ToolRow({
+  node,
+  selected,
+  state,
+  onSelect,
+}: {
+  node: NodeListing
+  selected: boolean
+  state: InstallState
+  onSelect: (id: string) => void
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      data-tool={node.id}
+      onClick={() => onSelect(node.id)}
+      aria-current={selected ? 'true' : undefined}
+      // The dot is decorative, so the state belongs in the tooltip; the
+      // accessible name stays just the tool's name, the description is extra.
+      aria-label={node.name}
+      aria-description={node.description !== '' ? node.description : undefined}
+      title={`${node.name}: ${state}`}
+      className={cn(
+        'flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-[13px]',
+        selected
+          ? 'selected-surface text-sidebar-accent-foreground'
+          : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
+      )}
+    >
+      <span className="mt-[7px] flex">
+        <InstallDot state={state} />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate">{node.name}</span>
+        {node.description !== '' && (
+          <span className="truncate text-[11px] leading-snug text-muted-foreground">{node.description}</span>
+        )}
+      </span>
+    </button>
+  )
+}
+
 /**
  * The tool catalog: every node, grouped by category and filtered by a search
  * box. Install state is per connection, so a tool missing on the selected
@@ -40,6 +83,7 @@ export function CatalogPane({
   onSelect,
   installState,
   searchRef,
+  recentIds = [],
 }: {
   nodes: NodeListing[]
   query: string
@@ -49,12 +93,28 @@ export function CatalogPane({
   installState: (node: NodeListing) => InstallState
   /** The search box, so the page can focus it with "/". */
   searchRef?: RefObject<HTMLInputElement | null>
+  /** Tools run lately in this engagement, newest first, shown above the categories. */
+  recentIds?: string[]
 }): JSX.Element {
   const list = useRef<HTMLDivElement>(null)
-  // Hides only tools known to be missing: a tool we could not check may well
-  // be there, so it stays.
-  const [installedOnly, setInstalledOnly] = useState(false)
+  // On by default: what can run here is what you came for. Hides only tools
+  // known to be missing (one we could not check may well be there), and never
+  // the tool already picked, which would otherwise vanish from under the form.
+  const [installedOnly, setInstalledOnly] = useState(true)
+  const hidden = useCallback(
+    (n: NodeListing): boolean => installedOnly && n.id !== selectedId && installState(n) === 'missing',
+    [installedOnly, selectedId, installState],
+  )
+  // Only while browsing, since a search already narrows to what was asked for.
+  const recent = useMemo(() => {
+    if (query.trim() !== '') return []
+    return recentIds
+      .map((id) => nodes.find((n) => n.id === id))
+      .filter((n): n is NodeListing => n !== undefined && !hidden(n))
+  }, [recentIds, nodes, query, hidden])
   const groups = useMemo(() => {
+    // A tool listed under Recent is not listed again in its category.
+    const inRecent = new Set(recent.map((n) => n.id))
     const needle = query.trim().toLowerCase()
     const matched =
       needle === ''
@@ -67,7 +127,7 @@ export function CatalogPane({
           )
     const byCategory = new Map<string, NodeListing[]>()
     for (const node of matched) {
-      if (installedOnly && installState(node) === 'missing') continue
+      if (hidden(node) || inRecent.has(node.id)) continue
       const list = byCategory.get(node.category) ?? []
       list.push(node)
       byCategory.set(node.category, list)
@@ -79,7 +139,7 @@ export function CatalogPane({
         category,
         list: [...list].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name)),
       }))
-  }, [nodes, query, installState, installedOnly])
+  }, [nodes, query, installState, hidden, recent])
   const missingCount = useMemo(() => nodes.filter((n) => installState(n) === 'missing').length, [nodes, installState])
 
   // Up and down walk the tools in the order shown and pick each one, so the
@@ -126,49 +186,55 @@ export function CatalogPane({
         </kbd>
       </div>
 
-      <label className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5 text-[12px] text-muted-foreground">
-        <Checkbox
-          className="size-3.5"
-          checked={installedOnly}
-          onChange={(e) => setInstalledOnly(e.target.checked)}
-        />
+      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5 text-[12px] text-muted-foreground">
         <span className="flex-1">Installed only</span>
         {missingCount > 0 && (
           <span className="text-[11px]">{installedOnly ? `${missingCount} hidden` : `${missingCount} missing`}</span>
         )}
-      </label>
+        <Switch checked={installedOnly} onCheckedChange={setInstalledOnly} aria-label="Installed only" />
+      </div>
       <div ref={list} onKeyDown={onListKey} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek p-1.5">
-        {groups.length === 0 ? (
-          <p className="px-2 py-6 text-center text-[12px] text-muted-foreground">No tool matches that.</p>
+        {groups.length === 0 && recent.length === 0 ? (
+          <p className="px-2 py-6 text-center text-[12px] text-muted-foreground">
+            {query.trim() === '' && installedOnly && missingCount > 0
+              ? 'Nothing is installed on this connection. Turn off Installed only to see every tool.'
+              : 'No tool matches that.'}
+          </p>
         ) : (
-          groups.map((group) => (
-            <div key={group.category} className="mb-2">
-              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {group.category}
+          <>
+            {recent.length > 0 && (
+              <div className="mb-2">
+                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Recent
+                </div>
+                {recent.map((node) => (
+                  <ToolRow
+                    key={node.id}
+                    node={node}
+                    selected={selectedId === node.id}
+                    state={installState(node)}
+                    onSelect={onSelect}
+                  />
+                ))}
               </div>
-              {group.list.map((node) => (
-                <button
-                  key={node.id}
-                  type="button"
-                  data-tool={node.id}
-                  onClick={() => onSelect(node.id)}
-                  aria-current={selectedId === node.id ? 'true' : undefined}
-                  // The dot is decorative, so the state belongs in the tooltip;
-                  // the accessible name stays just the tool's name.
-                  title={`${node.name}: ${installState(node)}`}
-                  className={cn(
-                    'flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[13px]',
-                    selectedId === node.id
-                      ? 'selected-surface text-sidebar-accent-foreground'
-                      : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
-                  )}
-                >
-                  <InstallDot state={installState(node)} />
-                  <span className="truncate">{node.name}</span>
-                </button>
-              ))}
-            </div>
-          ))
+            )}
+            {groups.map((group) => (
+              <div key={group.category} className="mb-2">
+                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {group.category}
+                </div>
+                {group.list.map((node) => (
+                  <ToolRow
+                    key={node.id}
+                    node={node}
+                    selected={selectedId === node.id}
+                    state={installState(node)}
+                    onSelect={onSelect}
+                  />
+                ))}
+              </div>
+            ))}
+          </>
         )}
       </div>
     </div>

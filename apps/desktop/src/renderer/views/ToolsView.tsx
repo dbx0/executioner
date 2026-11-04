@@ -17,6 +17,7 @@ import type { CommandPreviewState } from './tools/CommandPreview.js'
 import { ConnectionPicker, LOCAL } from './tools/ConnectionPicker.js'
 import { OutputPane } from './tools/OutputPane.js'
 import { EMPTY_PAGE, subscribeToolEvents, useToolsStore, type ProbeState, type ToolsPage } from './tools/tools-store.js'
+import { presetsFor, readPresets, withPreset, withoutPreset, writePresets, type PresetBook } from './tools/presets.js'
 import { NodeOutputModal } from './executions/NodeOutputModal.js'
 import { safeRow } from './executions/row.js'
 
@@ -49,8 +50,8 @@ export function ToolsView(): JSX.Element {
   const root = connection?.projectRoot ?? ''
   const page = useToolsStore((s) => s.pages[root] ?? EMPTY_PAGE)
   const update = useToolsStore((s) => s.update)
-  const { query, nodeId, targetIds, backendId, params, paramsOrigin, connectionNote, live } = page
-  const { setQuery, setNodeId, setTargetIds, setBackendId, setParams, setParamsOrigin, setConnectionNote, setLive } =
+  const { query, nodeId, targetIds, backendId, params, paramsOrigin, connectionNote, live, batch } = page
+  const { setQuery, setNodeId, setTargetIds, setBackendId, setParams, setParamsOrigin, setConnectionNote, setLive, setBatch } =
     useMemo(() => {
       const field =
         <K extends keyof ToolsPage>(key: K) =>
@@ -68,6 +69,7 @@ export function ToolsView(): JSX.Element {
         setParamsOrigin: field('paramsOrigin'),
         setConnectionNote: field('connectionNote'),
         setLive: field('live'),
+        setBatch: field('batch'),
       }
     }, [root, update])
 
@@ -114,6 +116,14 @@ export function ToolsView(): JSX.Element {
   }, [pendingToolTargetId, setPendingToolTargetId, setTargetIds])
 
   const node = useMemo(() => nodes.find((n) => n.id === nodeId) ?? null, [nodes, nodeId])
+
+  // Saved param sets, read once and written through on every change.
+  const [presetBook, setPresetBook] = useState<PresetBook>(() => readPresets())
+  const presets = useMemo(() => (nodeId === null ? [] : presetsFor(presetBook, root, nodeId)), [presetBook, root, nodeId])
+  const changePresets = useCallback((next: PresetBook) => {
+    setPresetBook(next)
+    writePresets(next)
+  }, [])
 
   // ---- loading -------------------------------------------------------------
 
@@ -213,6 +223,29 @@ export function ToolsView(): JSX.Element {
     [probes, backendId],
   )
 
+  // How much of the catalog the chosen connection has, at a glance. Only an
+  // answered probe counts: "unknown" is neither installed nor missing.
+  const installCounts = useMemo(() => {
+    let installed = 0
+    let missing = 0
+    for (const n of nodes) {
+      const state = installState(n)
+      if (state === 'installed') installed++
+      else if (state === 'missing') missing++
+    }
+    return { installed, missing }
+  }, [nodes, installState])
+
+  // The tools run lately here, newest first, for the catalog's Recent group.
+  const recentToolIds = useMemo(() => {
+    const ids: string[] = []
+    for (const r of recent) {
+      if (ids.length === 5) break
+      if (!ids.includes(r.nodeId) && nodes.some((n) => n.id === r.nodeId)) ids.push(r.nodeId)
+    }
+    return ids
+  }, [recent, nodes])
+
   // ---- selection -----------------------------------------------------------
 
   /** A tool's last-used params: the newest standalone run of that node. */
@@ -294,8 +327,10 @@ export function ToolsView(): JSX.Element {
       const startedAt = run.startedAt === null ? Date.now() : Date.parse(run.startedAt)
       if (run.status === 'running') watch(run.id)
       setLive({ executionId: run.id, nodeId: run.nodeId, status: run.status, startedAt })
+      // The batch's tabs only make sense while one of its runs is on screen.
+      if (!batch.some((b) => b.executionId === run.id)) setBatch([])
     },
-    [targets, profileFor, watch, setNodeId, setParams, setParamsOrigin, setTargetIds, setBackendId, setConnectionNote, setLive],
+    [targets, profileFor, watch, batch, setNodeId, setParams, setParamsOrigin, setTargetIds, setBackendId, setConnectionNote, setLive, setBatch],
   )
 
   /** Create a target from the form, then pick it alongside any already picked. */
@@ -351,13 +386,28 @@ export function ToolsView(): JSX.Element {
     setStartError(null)
     const api = nodesApi(client)
     const body = { params, ...(backendId === LOCAL ? {} : { backendProfileId: backendId }) }
-    void Promise.allSettled(targetIds.map((tid) => api.run(node.id, { targetId: tid, ...body })))
+    const picked = [...targetIds]
+    void Promise.allSettled(picked.map((tid) => api.run(node.id, { targetId: tid, ...body })))
       .then((results) => {
+        const startedAt = Date.now()
         for (const r of results) if (r.status === 'fulfilled') watch(r.value.executionId)
         const first = results.find((r) => r.status === 'fulfilled')
         if (first !== undefined) {
-          setLive({ executionId: first.value.executionId, nodeId: node.id, status: 'running', startedAt: Date.now() })
+          setLive({ executionId: first.value.executionId, nodeId: node.id, status: 'running', startedAt })
         }
+        // Every run that started, in the order the targets were picked, for the
+        // pane's tabs. One run is not a batch.
+        const started = results.flatMap((r, i) =>
+          r.status === 'fulfilled'
+            ? [{
+                executionId: r.value.executionId,
+                nodeId: node.id,
+                target: targets.find((t) => t.id === picked[i])?.value ?? picked[i]!,
+                startedAt,
+              }]
+            : [],
+        )
+        setBatch(started.length > 1 ? started : [])
         const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
         if (failed.length > 0) {
           const why = apiErrorMessage(failed[0]!.reason, 'The run did not start.')
@@ -366,7 +416,7 @@ export function ToolsView(): JSX.Element {
         refreshRecent()
       })
       .finally(() => setStarting(false))
-  }, [client, node, targetIds, params, backendId, refreshRecent, watch, setLive])
+  }, [client, node, targetIds, targets, params, backendId, refreshRecent, watch, setLive, setBatch])
 
   const stop = useCallback(() => {
     if (client === null || live === null) return
@@ -381,6 +431,33 @@ export function ToolsView(): JSX.Element {
   // a workflow running alongside must not write into this pane.
   const finished = runs?.finished
   const lines = (live === null ? undefined : runs?.streams[live.executionId]?.chunks) ?? NO_LINES
+
+  // Each run of the batch as its tab shows it. Its end event decides; failing
+  // that, the history's word, so a missed event still settles the tab.
+  const batchTabs = useMemo(
+    () =>
+      batch.map((b) => ({
+        executionId: b.executionId,
+        label: b.target,
+        status:
+          finished?.[b.executionId] ??
+          recent.find((r) => r.id === b.executionId && r.status !== 'running')?.status ??
+          'running',
+      })),
+    [batch, finished, recent],
+  )
+
+  /** Put one run of the batch on screen; it keeps streaming if it is still going. */
+  const showRun = useCallback(
+    (executionId: string) => {
+      const entry = batch.find((b) => b.executionId === executionId)
+      if (entry === undefined) return
+      watch(executionId)
+      const status = batchTabs.find((t) => t.executionId === executionId)?.status ?? 'running'
+      setLive({ executionId, nodeId: entry.nodeId, status, startedAt: entry.startedAt })
+    },
+    [batch, batchTabs, watch, setLive],
+  )
 
   // Settled by its done event, heard even while the page was away. If even that
   // was missed (the engine restarted, say), the history's word is final.
@@ -500,6 +577,17 @@ export function ToolsView(): JSX.Element {
               Could not check this connection, so install state is unknown.
             </span>
           )}
+          {installCounts.installed + installCounts.missing > 0 && (
+            <span className="hidden shrink-0 text-[11.5px] text-muted-foreground min-[640px]:inline">
+              <span className="text-status-success">{installCounts.installed} installed</span>
+              {installCounts.missing > 0 && (
+                <>
+                  {' · '}
+                  <span className="text-destructive">{installCounts.missing} missing</span>
+                </>
+              )}
+            </span>
+          )}
           <Button
             variant="ghost"
             size="icon-xs"
@@ -533,6 +621,7 @@ export function ToolsView(): JSX.Element {
           onSelect={selectNode}
           installState={installState}
           searchRef={searchRef}
+          recentIds={recentToolIds}
         />
         <div data-tour="tools-run" className="min-h-[320px] min-w-0 shrink-0 min-[1100px]:min-h-0 min-[1100px]:flex-1 min-[1100px]:shrink">
           <RunForm
@@ -555,6 +644,18 @@ export function ToolsView(): JSX.Element {
               setParams({})
               setParamsOrigin(null)
             }}
+            presets={presets}
+            onApplyPreset={(preset) => {
+              setParams({ ...preset.params })
+              setParamsOrigin('preset')
+              setStartError(null)
+            }}
+            onSavePreset={(name) => {
+              if (nodeId !== null) changePresets(withPreset(presetBook, root, nodeId, { name, params }))
+            }}
+            onDeletePreset={(name) => {
+              if (nodeId !== null) changePresets(withoutPreset(presetBook, root, nodeId, name))
+            }}
             installState={node === null ? 'unknown' : installState(node)}
             preview={preview !== null && preview.nodeId === nodeId ? preview.state : null}
             startError={startError}
@@ -566,6 +667,7 @@ export function ToolsView(): JSX.Element {
             connectionNote={connectionNote}
           />
         </div>
+        {(live !== null || recent.length > 0) && (
         <OutputPane
           live={live}
           lines={lines}
@@ -580,7 +682,10 @@ export function ToolsView(): JSX.Element {
           connectionLabel={connectionLabel}
           nodeName={nodeName}
           onReplay={replay}
+          batch={batchTabs}
+          onShowRun={showRun}
         />
+        )}
       </div>
 
       {expanded && rawResult != null && (

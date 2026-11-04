@@ -17,6 +17,15 @@ import { LOCAL } from './ConnectionPicker.js'
  * is on screen.
  */
 
+/** One run of a batch: the tool run once per picked target, all started together. */
+export interface BatchRun {
+  executionId: string
+  nodeId: string
+  /** The target's value, for the run's tab. */
+  target: string
+  startedAt: number
+}
+
 /** What the form and the output pane were showing, per engagement. */
 export interface ToolsPage {
   query: string
@@ -27,6 +36,9 @@ export interface ToolsPage {
   paramsOrigin: ParamsOrigin
   connectionNote: string | null
   live: LiveRun | null
+  /** The runs the last multi-target Run started, for the output pane's tabs;
+   *  empty after a single-target run, which needs neither tabs nor a count. */
+  batch: BatchRun[]
 }
 
 export const EMPTY_PAGE: ToolsPage = {
@@ -38,6 +50,7 @@ export const EMPTY_PAGE: ToolsPage = {
   paramsOrigin: null,
   connectionNote: null,
   live: null,
+  batch: [],
 }
 
 /** One connection's install check: what is installed, or why we could not ask. */

@@ -1,5 +1,5 @@
 import type { JSX, RefObject } from 'react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Check, Download, Loader2, Play, Plus, RotateCcw, Search } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
 import { cn } from '../../lib/utils.js'
@@ -9,9 +9,103 @@ import type { TargetSummary } from '../../api/targets.js'
 import type { InstallState } from './CatalogPane.js'
 import { CommandPreview, type CommandPreviewState } from './CommandPreview.js'
 import { AddTargetInline } from './AddTargetInline.js'
+import { matchesPreset, type ParamPreset } from './presets.js'
 
 /** Where the form's current params came from, so the form can say so. */
-export type ParamsOrigin = 'last-run' | 'replay' | 'edited' | null
+export type ParamsOrigin = 'last-run' | 'replay' | 'preset' | 'edited' | null
+
+/** Saved param sets for this tool: pick one, save the form as one, or drop one. */
+function PresetBar({
+  presets,
+  params,
+  onApply,
+  onSave,
+  onDelete,
+}: {
+  presets: ParamPreset[]
+  params: Record<string, unknown>
+  onApply: (preset: ParamPreset) => void
+  onSave: (name: string) => void
+  onDelete: (name: string) => void
+}): JSX.Element {
+  const [naming, setNaming] = useState(false)
+  const [name, setName] = useState('')
+  // The defaults need no preset: there is nothing to save until a param changes.
+  const canSave = Object.keys(params).length > 0
+  const save = (): void => {
+    const trimmed = name.trim()
+    if (trimmed === '') return
+    onSave(trimmed)
+    setName('')
+    setNaming(false)
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-2">
+      <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Presets</span>
+      {presets.map((preset) => {
+        const on = matchesPreset(params, preset)
+        return (
+          <span
+            key={preset.name}
+            className={cn(
+              'inline-flex items-center rounded-md border text-[12px]',
+              on ? 'selected-surface border-transparent' : 'border-border',
+            )}
+          >
+            <button type="button" aria-pressed={on} onClick={() => onApply(preset)} className="py-0.5 pl-2 pr-1">
+              {preset.name}
+            </button>
+            <button
+              type="button"
+              aria-label={`Delete preset ${preset.name}`}
+              onClick={() => onDelete(preset.name)}
+              className="pr-1.5 text-muted-foreground hover:text-foreground"
+            >
+              ×
+            </button>
+          </span>
+        )
+      })}
+      {naming ? (
+        <form
+          className="inline-flex items-center gap-1"
+          onSubmit={(e) => {
+            e.preventDefault()
+            save()
+          }}
+        >
+          <input
+            // Opened by a click on Save preset, so taking focus is what was asked for.
+            autoFocus
+            aria-label="Preset name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape') return
+              setNaming(false)
+              setName('')
+            }}
+            placeholder="Name"
+            className="h-6 w-28 rounded-md border border-input bg-transparent px-2 text-[12px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
+          <Button type="submit" variant="ghost" size="xs" disabled={name.trim() === ''}>
+            Save
+          </Button>
+        </form>
+      ) : (
+        <Button
+          variant="ghost"
+          size="xs"
+          disabled={!canSave}
+          title={canSave ? undefined : 'Change a param to save it as a preset'}
+          onClick={() => setNaming(true)}
+        >
+          <Plus className="mr-1 size-3" /> Save preset
+        </Button>
+      )}
+    </div>
+  )
+}
 
 /** How the run shortcut reads on this platform. */
 const RUN_SHORTCUT = /Mac/.test(navigator.userAgent) ? '⌘↵' : 'Ctrl+Enter'
@@ -39,6 +133,10 @@ export function RunForm({
   onParam,
   paramsOrigin,
   onResetParams,
+  presets,
+  onApplyPreset,
+  onSavePreset,
+  onDeletePreset,
   installState,
   preview,
   startError,
@@ -61,6 +159,11 @@ export function RunForm({
   paramsOrigin: ParamsOrigin
   /** Drop every changed param, so each field falls back to its default. */
   onResetParams: () => void
+  /** This tool's saved param sets, and what to do with them. */
+  presets: ParamPreset[]
+  onApplyPreset: (preset: ParamPreset) => void
+  onSavePreset: (name: string) => void
+  onDeletePreset: (name: string) => void
   installState: InstallState
   preview: CommandPreviewState
   /** Why the last Run did not start, until the form changes. */
@@ -77,6 +180,7 @@ export function RunForm({
 }): JSX.Element {
   const [targetQuery, setTargetQuery] = useState('')
   const [adding, setAdding] = useState(false)
+  const formRef = useRef<HTMLDivElement>(null)
 
   // Only targets of a kind this tool accepts; an empty `accepts` accepts all.
   const eligible = useMemo(() => {
@@ -130,18 +234,30 @@ export function RunForm({
           : unfilled !== undefined
             ? `Fill in ${unfilled.label ?? unfilled.name} to run.`
             : startError
+  // When the reason is a missing value, mark that field and let the reason
+  // take you to it; one thing to fix at a time, so not before a target is picked.
+  const neededParam =
+    connectionNote === null && !missing && !(noTarget && eligible.length > 0) && unfilled !== undefined
+      ? unfilled.name
+      : null
+  const focusNeeded = (): void => {
+    if (neededParam === null) return
+    formRef.current?.querySelector<HTMLElement>(`[aria-label=${JSON.stringify(neededParam)}]`)?.focus()
+  }
   const originNote =
     paramsOrigin === 'last-run'
       ? 'Filled in from your last run of this tool.'
       : paramsOrigin === 'replay'
         ? 'Filled in from the run you picked.'
-        : paramsOrigin === 'edited'
-          ? 'Changed from the defaults.'
-          : null
+        : paramsOrigin === 'preset'
+          ? 'Filled in from a saved preset.'
+          : paramsOrigin === 'edited'
+            ? 'Changed from the defaults.'
+            : null
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+      <div ref={formRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         <div className="border-b border-border p-4">
           <div className="flex items-baseline gap-2">
             <h2 className="text-[15px] font-medium">{node.name}</h2>
@@ -244,6 +360,16 @@ export function RunForm({
           </div>
         </div>
 
+        {specs.length > 0 && (
+          <PresetBar
+            presets={presets}
+            params={params}
+            onApply={onApplyPreset}
+            onSave={onSavePreset}
+            onDelete={onDeletePreset}
+          />
+        )}
+
         {specs.length > 0 && originNote !== null && Object.keys(params).length > 0 && (
           <div className="flex items-center gap-2 border-b border-border px-4 py-2 text-[12px] text-muted-foreground">
             <span className="min-w-0 flex-1 truncate">{originNote}</span>
@@ -256,7 +382,7 @@ export function RunForm({
         {specs.length > 0 ? (
           // No template chips: a standalone run has no upstream node to reference, and
           // the target is already picked above.
-          <ParamDrawer params={specs} values={params} onChange={onParam} chips={[]} />
+          <ParamDrawer params={specs} values={params} onChange={onParam} chips={[]} invalid={neededParam} />
         ) : (
           <p className="p-4 text-[12.5px] text-muted-foreground">This tool takes no parameters.</p>
         )}
@@ -281,7 +407,16 @@ export function RunForm({
             {targetIds.length > 1 ? `Run on ${targetIds.length} targets` : 'Run'}
           </Button>
         )}
-        {reason !== null && (
+        {reason !== null && neededParam !== null ? (
+          <button
+            type="button"
+            onClick={focusNeeded}
+            className="min-w-0 truncate text-left text-[12px] text-destructive underline-offset-2 hover:underline"
+            title={reason}
+          >
+            {reason}
+          </button>
+        ) : reason !== null && (
           <span
             role={reason === startError ? 'alert' : undefined}
             className={cn(

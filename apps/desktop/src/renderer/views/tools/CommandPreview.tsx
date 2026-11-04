@@ -40,9 +40,11 @@ export function CommandPreview({ state, more }: { state: CommandPreviewState; mo
   }
 
   const line = commandLine(state.argv)
+  // Through main's clipboard: navigator.clipboard refuses under file:// in a
+  // packaged build, so the button would do nothing exactly where it is used.
   const copy = (): void => {
-    void navigator.clipboard
-      ?.writeText(line)
+    void window.executioner
+      .clipboardWrite(line)
       .then(() => {
         setCopied(true)
         setTimeout(() => setCopied(false), 1500)
