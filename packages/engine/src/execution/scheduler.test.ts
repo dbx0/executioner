@@ -48,7 +48,7 @@ describe('Scheduler', () => {
     expect(runWorkflow).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(5000)
     expect(runWorkflow).toHaveBeenCalledTimes(2)
-    expect(runWorkflow).toHaveBeenLastCalledWith('wf-1', null)
+    expect(runWorkflow).toHaveBeenLastCalledWith('wf-1', null, null)
 
     scheduler.stop()
     expect(scheduler.activeCount).toBe(0)
@@ -76,7 +76,18 @@ describe('Scheduler', () => {
 
     // Only the domain schedule matches; the ip one is skipped.
     expect(runWorkflow).toHaveBeenCalledTimes(1)
-    expect(runWorkflow).toHaveBeenCalledWith('wf-1', target.id)
+    expect(runWorkflow).toHaveBeenCalledWith('wf-1', target.id, null)
+  })
+
+  it('passes a schedule its backend profile id when firing', async () => {
+    vi.useFakeTimers()
+    const runWorkflow = vi.fn(async () => undefined)
+    project.schedules.create({ workflowId: 'wf-1', kind: 'interval', intervalSeconds: 5, backendProfileId: 'kali-1' })
+    const scheduler = new Scheduler({ project, runWorkflow })
+    scheduler.start()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(runWorkflow).toHaveBeenLastCalledWith('wf-1', null, 'kali-1')
+    scheduler.stop()
   })
 
   it('ignores on_create schedules that are disabled or mismatched', async () => {
@@ -133,7 +144,7 @@ describe('Scheduler', () => {
     await scheduler.onTargetCreated(target)
     release()
 
-    expect(runWorkflow).toHaveBeenCalledWith('wf-enum', target.id)
+    expect(runWorkflow).toHaveBeenCalledWith('wf-enum', target.id, null)
     scheduler.stop()
   })
 

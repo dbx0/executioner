@@ -9,6 +9,8 @@ export interface Schedule {
   kind: ScheduleKind
   intervalSeconds: number | null
   targetKind: string | null
+  /** A saved backend profile id to run on, or null for the engagement default. */
+  backendProfileId: string | null
   enabled: boolean
   createdAt: string
 }
@@ -19,6 +21,8 @@ export interface ScheduleInput {
   targetId?: string | null
   intervalSeconds?: number
   targetKind?: string
+  /** A saved backend profile id to pin this schedule to; omit for the default. */
+  backendProfileId?: string
   enabled?: boolean
 }
 

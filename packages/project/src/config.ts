@@ -7,6 +7,11 @@ export const projectConfigSchema = z.object({
   /** An optional emoji icon shown for the engagement (rail, tabs). */
   icon: z.string().optional(),
   defaultBackend: z.enum(['local', 'docker', 'ssh']).default('local'),
+  /** The engagement's default backend profile id. MCP `run_workflow` and
+   *  scheduled runs fall back to this when they name no backend of their own.
+   *  Unset means local. A profile id that no longer exists is a run-time error,
+   *  not a silent fall back to local. */
+  defaultBackendProfileId: z.string().optional(),
   createdAt: z.string().datetime(),
 })
 

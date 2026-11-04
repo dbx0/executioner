@@ -10,6 +10,8 @@ const scheduleInputSchema = z
     kind: z.enum(['interval', 'on_create']),
     intervalSeconds: z.number().int().positive().nullable().optional(),
     targetKind: targetKindSchema.nullable().optional(),
+    /** A saved backend profile id to run on, or null/omitted for the engagement default. */
+    backendProfileId: z.string().min(1).nullable().optional(),
     enabled: z.boolean().optional(),
   })
   .refine((v) => v.kind !== 'interval' || (v.intervalSeconds ?? 0) > 0, {
@@ -36,6 +38,12 @@ export function scheduleRoutes(project: Project, onChange?: () => void): Hono {
     if (!parsed.success) return c.json({ error: 'invalid schedule', detail: parsed.error.format() }, 400)
     if (!project.workflows.exists(parsed.data.workflowId)) {
       return c.json({ error: 'unknown workflow' }, 400)
+    }
+    // Catch a dangling backend id at create time, not only when the schedule
+    // eventually fires, so the operator learns about it while they can fix it.
+    const backendProfileId = parsed.data.backendProfileId
+    if (backendProfileId != null && backendProfileId !== 'local' && project.backends.get(backendProfileId) === undefined) {
+      return c.json({ error: 'unknown backend profile' }, 400)
     }
     const created = project.schedules.create(parsed.data)
     onChange?.()

@@ -115,6 +115,17 @@ describe('GraphExecutor', () => {
     expect(ran).not.toContain('f')
   })
 
+  it('runs on the backend profile it is given, recording that backend on the execution', async () => {
+    const bus = new EventBus()
+    const kali = project.backends.create({ name: 'kali', kind: 'ssh', host: 'kali.lan', user: 'root' })
+    // A trigger-only graph settles without spawning anything, so this asserts the
+    // chosen backend reaches the executor without needing a reachable host.
+    const graph = graphSchema.parse({ nodes: [{ id: 'start', type: 'manual', data: {} }], edges: [] })
+    const executor = new GraphExecutor({ project, bus, manifests, store: project.runs })
+    const result = await executor.run({ graph, workflowId: null, targetId: null, testMode: false, backendProfile: kali })
+    expect(project.runs.getExecution(result.executionId)?.backend).toBe('ssh')
+  })
+
   it('halts downstream nodes at a STOP node', async () => {
     const bus = new EventBus()
     const target = project.targets.upsert({ kind: 'domain', value: 'stop.com', source: 'manual' })

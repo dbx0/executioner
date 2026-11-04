@@ -4,9 +4,10 @@ import type { Schedule } from '@exe/db'
 import type { Target } from '@exe/protocol'
 import { engineLog, errorFields } from '../infra/log.js'
 
-/** Runs a workflow by id against an optional target; resolves when the run finishes. */
+/** Runs a workflow by id against an optional target on an optional backend
+ *  profile; resolves when the run finishes. */
 export interface RunScheduledWorkflow {
-  (workflowId: string, targetId: string | null): Promise<unknown>
+  (workflowId: string, targetId: string | null, backendProfileId?: string | null): Promise<unknown>
 }
 
 export interface SchedulerDeps {
@@ -98,7 +99,7 @@ export class Scheduler {
     const timer = setInterval(() => {
       if (this.runningSchedules.has(schedule.id)) return
       this.runningSchedules.add(schedule.id)
-      void this.fire(schedule.workflowId, schedule.targetId).finally(() => {
+      void this.fire(schedule.workflowId, schedule.targetId, schedule.backendProfileId).finally(() => {
         this.runningSchedules.delete(schedule.id)
       })
     }, ms)
@@ -107,14 +108,18 @@ export class Scheduler {
     this.timers.set(schedule.id, timer)
   }
 
-  private fire(workflowId: string, targetId: string | null): Promise<void> {
-    return this.track(this.runOnce(workflowId, targetId))
+  private fire(workflowId: string, targetId: string | null, backendProfileId?: string | null): Promise<void> {
+    return this.track(this.runOnce(workflowId, targetId, backendProfileId))
   }
 
-  private async runOnce(workflowId: string, targetId: string | null): Promise<void> {
+  private async runOnce(
+    workflowId: string,
+    targetId: string | null,
+    backendProfileId?: string | null,
+  ): Promise<void> {
     engineLog.debug('scheduler', 'Scheduled run starting', { workflow: workflowId })
     try {
-      await this.scheduledRun.run(true, () => this.deps.runWorkflow(workflowId, targetId))
+      await this.scheduledRun.run(true, () => this.deps.runWorkflow(workflowId, targetId, backendProfileId))
     } catch (e) {
       /* best-effort: a failed scheduled run must not break the loop */
       engineLog.warn('scheduler', 'Scheduled run failed', { workflow: workflowId, ...errorFields(e) })
@@ -138,7 +143,7 @@ export class Scheduler {
     if (this.scheduledRun.getStore() === true) return
     for (const schedule of this.deps.project.schedules.list()) {
       if (schedule.enabled && schedule.kind === 'on_create' && schedule.targetKind === target.kind) {
-        await this.fire(schedule.workflowId, target.id)
+        await this.fire(schedule.workflowId, target.id, schedule.backendProfileId)
       }
     }
   }

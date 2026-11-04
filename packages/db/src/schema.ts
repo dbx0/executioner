@@ -202,6 +202,7 @@ CREATE TABLE IF NOT EXISTS schedules (
   kind             TEXT NOT NULL,
   interval_seconds INTEGER,
   target_kind      TEXT,
+  backend_profile_id TEXT,
   enabled          INTEGER NOT NULL DEFAULT 1,
   created_at       TEXT NOT NULL
 );

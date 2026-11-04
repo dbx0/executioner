@@ -5,6 +5,7 @@ import type { AxiosInstance } from 'axios'
 import { schedulesApi, type Schedule, type ScheduleKind, type ScheduleInput } from '../../api/schedules.js'
 import { workflowsApi, type WorkflowSummary } from '../../api/workflows.js'
 import { targetsApi, type TargetSummary } from '../../api/targets.js'
+import { backendsApi, type BackendProfile } from '../../api/backends.js'
 import { scheduleDefaultsFromGraph } from '../../lib/schedule-defaults.js'
 import { Button } from '../ui/button.js'
 import { Input } from '../ui/input.js'
@@ -13,13 +14,56 @@ import { cn } from '../../lib/utils.js'
 
 const TARGET_KINDS = ['domain', 'subdomain', 'ip', 'cidr', 'url'] as const
 
-function summary(s: Schedule, workflows: WorkflowSummary[], targets: TargetSummary[]): string {
+// Radix Select forbids an empty-string item value, so "follow the engagement
+// default" carries this sentinel; scheduleInputFrom drops it so nothing is sent.
+const DEFAULT = 'default'
+// Pins the schedule to this machine even when the engagement default is remote.
+// The engine stores and resolves this id as local execution.
+const LOCAL = 'local'
+
+/** The local picker state that becomes a ScheduleInput on save. Kept pure so the
+ *  interval/on_create fields and the optional backend are testable on their own. */
+export interface ScheduleFormState {
+  workflowId: string
+  kind: ScheduleKind
+  intervalSeconds: string
+  targetId: string
+  targetKind: string
+  backendProfileId: string
+}
+
+export function scheduleInputFrom(form: ScheduleFormState): ScheduleInput {
+  const body: ScheduleInput = { workflowId: form.workflowId, kind: form.kind }
+  if (form.kind === 'interval') {
+    body.intervalSeconds = Number(form.intervalSeconds)
+    if (form.targetId !== '') body.targetId = form.targetId
+  } else {
+    body.targetKind = form.targetKind
+  }
+  // Empty or the default sentinel leaves the field off, so the engine falls back
+  // to the engagement default when the schedule fires. "local" is sent as is.
+  if (form.backendProfileId !== '' && form.backendProfileId !== DEFAULT) body.backendProfileId = form.backendProfileId
+  return body
+}
+
+function summary(
+  s: Schedule,
+  workflows: WorkflowSummary[],
+  targets: TargetSummary[],
+  backends: BackendProfile[],
+): string {
   const wf = workflows.find((w) => w.id === s.workflowId)?.name ?? s.workflowId.slice(0, 8)
+  const on =
+    s.backendProfileId === null
+      ? ''
+      : s.backendProfileId === LOCAL
+        ? ' · on this machine'
+        : ` · on ${backends.find((b) => b.id === s.backendProfileId)?.name ?? 'backend'}`
   if (s.kind === 'interval') {
     const target = s.targetId === null ? 'no target' : targets.find((t) => t.id === s.targetId)?.value ?? 'target'
-    return `${wf} · every ${s.intervalSeconds ?? 0}s · ${target}`
+    return `${wf} · every ${s.intervalSeconds ?? 0}s · ${target}${on}`
   }
-  return `${wf} · on new ${s.targetKind ?? '?'}`
+  return `${wf} · on new ${s.targetKind ?? '?'}${on}`
 }
 
 export function SchedulesDialog({
@@ -33,12 +77,14 @@ export function SchedulesDialog({
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [workflows, setWorkflows] = useState<WorkflowSummary[]>([])
   const [targets, setTargets] = useState<TargetSummary[]>([])
+  const [backends, setBackends] = useState<BackendProfile[]>([])
 
   const [kind, setKind] = useState<ScheduleKind>('interval')
   const [workflowId, setWorkflowId] = useState('')
   const [targetId, setTargetId] = useState('')
   const [intervalSeconds, setIntervalSeconds] = useState('3600')
   const [targetKind, setTargetKind] = useState<string>('domain')
+  const [backendProfileId, setBackendProfileId] = useState(DEFAULT)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -49,6 +95,7 @@ export function SchedulesDialog({
     refresh()
     void workflowsApi(client).list().then(setWorkflows).catch(() => {})
     void targetsApi(client).list().then(setTargets).catch(() => {})
+    void backendsApi(client).list().then(setBackends).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Picking a workflow prefills the trigger from its Schedule / On Create
@@ -76,14 +123,7 @@ export function SchedulesDialog({
     setBusy(true)
     setError(null)
     try {
-      const body: ScheduleInput = { workflowId, kind }
-      if (kind === 'interval') {
-        body.intervalSeconds = Number(intervalSeconds)
-        if (targetId !== '') body.targetId = targetId
-      } else {
-        body.targetKind = targetKind
-      }
-      await api.create(body)
+      await api.create(scheduleInputFrom({ workflowId, kind, intervalSeconds, targetId, targetKind, backendProfileId }))
       refresh()
     } catch (e) {
       setError((e as Error).message)
@@ -138,7 +178,7 @@ export function SchedulesDialog({
                   ) : (
                     <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
                   )}
-                  <span className="min-w-0 flex-1 truncate text-[13px]">{summary(s, workflows, targets)}</span>
+                  <span className="min-w-0 flex-1 truncate text-[13px]">{summary(s, workflows, targets, backends)}</span>
                   <button
                     type="button"
                     aria-label={s.enabled ? 'Disable' : 'Enable'}
@@ -219,6 +259,22 @@ export function SchedulesDialog({
                   value={targetKind}
                   onValueChange={(v) => setTargetKind(v)}
                   options={TARGET_KINDS.map((k) => ({ value: k, label: k }))}
+                />
+              </div>
+            )}
+
+            {backends.length > 0 && (
+              <div className="mt-3">
+                <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">Backend</label>
+                <Select
+                  ariaLabel="Backend"
+                  value={backendProfileId}
+                  onValueChange={setBackendProfileId}
+                  options={[
+                    { value: DEFAULT, label: 'Engagement default' },
+                    { value: LOCAL, label: 'Local (this machine)' },
+                    ...backends.map((b) => ({ value: b.id, label: b.name })),
+                  ]}
                 />
               </div>
             )}

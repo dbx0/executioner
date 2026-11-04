@@ -4,10 +4,16 @@ import type { AxiosInstance } from 'axios'
 import { Container, Laptop, Pencil, Plug, Plus, Server, Trash2 } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { backendsApi, type BackendKind, type BackendProfile } from '../../api/backends.js'
+import { projectApi } from '../../api/project.js'
 import { AddBackendModal } from '../../components/modals/BackendsDialog.js'
 import { Button } from '../../components/ui/button.js'
+import { Select } from '../../components/ui/select.js'
 import { PageHeading } from './parts.js'
 import { refreshLogMasks } from '../../lib/log.js'
+
+// Radix Select forbids an empty-string item value, so "run locally" carries this
+// sentinel; the engine already treats an empty/`local` default as this machine.
+const LOCAL = 'local'
 
 function KindIcon({ kind }: { kind: BackendKind }): JSX.Element {
   const Icon = kind === 'docker' ? Container : kind === 'ssh' ? Server : Laptop
@@ -76,6 +82,7 @@ function BackendCard({
 function BackendsManager({ client }: { client: AxiosInstance }): JSX.Element {
   const api = backendsApi(client)
   const [profiles, setProfiles] = useState<BackendProfile[]>([])
+  const [defaultId, setDefaultId] = useState(LOCAL)
   const [modal, setModal] = useState<{ mode: 'new' } | { mode: 'edit'; profile: BackendProfile } | null>(null)
 
   const refresh = (): void => {
@@ -84,11 +91,28 @@ function BackendsManager({ client }: { client: AxiosInstance }): JSX.Element {
       .then(setProfiles)
       .catch(() => {})
   }
-  useEffect(refresh, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    refresh()
+    void projectApi(client)
+      .get()
+      .then((m) => setDefaultId(m.defaultBackendProfileId ?? LOCAL))
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const remove = (id: string): void => {
     void api.remove(id).then(refreshLogMasks).catch(() => {})
     setProfiles((ps) => ps.filter((p) => p.id !== id))
+    // A default pointing at the backend just removed falls back to local.
+    if (defaultId === id) changeDefault(LOCAL)
+  }
+
+  // Persist the engagement's default backend for MCP/scheduled runs. The engine
+  // treats the local sentinel as "clear", so send an empty string for it.
+  const changeDefault = (v: string): void => {
+    setDefaultId(v)
+    void projectApi(client)
+      .update({ defaultBackendProfileId: v === LOCAL ? '' : v })
+      .catch(() => {})
   }
 
   return (
@@ -100,6 +124,27 @@ function BackendsManager({ client }: { client: AxiosInstance }): JSX.Element {
           Add backend
         </Button>
       </div>
+
+      {profiles.length > 0 && (
+        <div className="mb-4 rounded-lg border border-border p-3">
+          <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
+            Default backend for this engagement
+          </label>
+          <Select
+            ariaLabel="Default backend"
+            value={defaultId}
+            onValueChange={changeDefault}
+            options={[
+              { value: LOCAL, label: 'Local (this machine)' },
+              ...profiles.map((p) => ({ value: p.id, label: p.name })),
+            ]}
+          />
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            For this engagement only: where its scheduled runs and the assistant run a workflow when they
+            don&apos;t name a backend of their own. Other engagements keep their own default.
+          </p>
+        </div>
+      )}
 
       {profiles.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-6 text-center">

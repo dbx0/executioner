@@ -137,8 +137,16 @@ describe('ProjectToolset', () => {
     const toolset = new ProjectToolset({ project, runWorkflow })
     const t = project.targets.upsert({ kind: 'domain', value: 'a.com', source: 'manual' })
     const result = await toolset.call('run_workflow', { workflowId: 'wf1', targetId: t.id })
-    expect(runWorkflow).toHaveBeenCalledWith('wf1', t.id)
+    expect(runWorkflow).toHaveBeenCalledWith('wf1', t.id, undefined)
     expect(result).toMatchObject({ executionId: 'exec-9', status: 'success' })
+  })
+
+  it('passes a chosen backend profile id through to the executor', async () => {
+    const runWorkflow = vi.fn(async () => ({ executionId: 'exec-9', status: 'success' as const }))
+    const toolset = new ProjectToolset({ project, runWorkflow })
+    const t = project.targets.upsert({ kind: 'domain', value: 'a.com', source: 'manual' })
+    await toolset.call('run_workflow', { workflowId: 'wf1', targetId: t.id, backend: 'kali-1' })
+    expect(runWorkflow).toHaveBeenCalledWith('wf1', t.id, 'kali-1')
   })
 
   it('reads a target with its facts', async () => {

@@ -25,7 +25,7 @@ import type { BrowserHostHub } from '../browser/host-hub.js'
 import type { AgentSessionSinks, ScopeDraftSink } from './agent-sessions.js'
 
 export interface RunWorkflowFn {
-  (workflowId: string, targetId: string): Promise<{ executionId: string; status: 'success' | 'error' }>
+  (workflowId: string, targetId: string, backend?: string): Promise<{ executionId: string; status: 'success' | 'error' }>
 }
 
 /** A proposal captured from the assistant's propose_workflow call. */
@@ -114,7 +114,11 @@ const updateFindingArgs = z.object({
   details: z.string().optional(),
 })
 const listFindingArgs = z.object({ status: z.string().optional(), severity: z.string().optional() })
-const runArgs = z.object({ workflowId: z.string().min(1), targetId: z.string().min(1) })
+const runArgs = z.object({
+  workflowId: z.string().min(1),
+  targetId: z.string().min(1),
+  backend: z.string().optional(),
+})
 const getArgs = z.object({ value: z.string().min(1) })
 const scopeRuleArgs = z.object({
   effect: scopeEffectSchema,
@@ -359,7 +363,7 @@ export class ProjectToolset {
 
       case 'run_workflow': {
         const a = runArgs.parse(args)
-        return this.deps.runWorkflow(a.workflowId, a.targetId)
+        return this.deps.runWorkflow(a.workflowId, a.targetId, a.backend)
       }
 
       case 'list_findings': {

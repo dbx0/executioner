@@ -18,6 +18,8 @@ export interface Schedule {
   kind: ScheduleKind
   intervalSeconds: number | null
   targetKind: string | null
+  /** A saved backend profile id to run on, or null for the engagement default. */
+  backendProfileId: string | null
   enabled: boolean
   createdAt: string
 }
@@ -28,6 +30,7 @@ export interface ScheduleInput {
   kind: ScheduleKind
   intervalSeconds?: number | null | undefined
   targetKind?: string | null | undefined
+  backendProfileId?: string | null | undefined
   enabled?: boolean | undefined
 }
 
@@ -62,6 +65,7 @@ export class ScheduleRepository {
       kind: input.kind,
       intervalSeconds: input.intervalSeconds ?? null,
       targetKind: input.targetKind ?? null,
+      backendProfileId: input.backendProfileId ?? null,
       enabled: input.enabled ?? true,
       createdAt: isoNow(),
     }

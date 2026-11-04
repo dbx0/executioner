@@ -27,6 +27,20 @@ describe('ScheduleRepository', () => {
     expect(s.intervalSeconds).toBeNull()
   })
 
+  it('defaults the backend profile to null and round-trips one when given', () => {
+    const plain = schedules.create({ workflowId: 'wf-1', kind: 'interval', intervalSeconds: 60 })
+    expect(plain.backendProfileId).toBeNull()
+
+    const onKali = schedules.create({
+      workflowId: 'wf-1',
+      kind: 'interval',
+      intervalSeconds: 60,
+      backendProfileId: 'kali-1',
+    })
+    expect(onKali.backendProfileId).toBe('kali-1')
+    expect(schedules.get(onKali.id)?.backendProfileId).toBe('kali-1')
+  })
+
   it('lists schedules in creation order', () => {
     schedules.create({ workflowId: 'wf-1', kind: 'interval', intervalSeconds: 60 })
     schedules.create({ workflowId: 'wf-1', kind: 'on_create', targetKind: 'ip' })

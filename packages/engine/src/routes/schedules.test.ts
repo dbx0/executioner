@@ -55,6 +55,22 @@ describe('schedule routes', () => {
     expect(res.status).toBe(400)
   })
 
+  it('persists a backend profile id on a schedule and rejects an unknown one', async () => {
+    const kali = project.backends.create({ name: 'kali', kind: 'ssh', host: 'kali.lan', user: 'root' })
+    const ok = await app.request(
+      '/api/schedules',
+      json({ workflowId: 'wf-1', kind: 'interval', intervalSeconds: 60, backendProfileId: kali.id }),
+    )
+    expect(ok.status).toBe(201)
+    expect(((await ok.json()) as { backendProfileId: string }).backendProfileId).toBe(kali.id)
+
+    const bad = await app.request(
+      '/api/schedules',
+      json({ workflowId: 'wf-1', kind: 'interval', intervalSeconds: 60, backendProfileId: 'ghost' }),
+    )
+    expect(bad.status).toBe(400)
+  })
+
   it('creates, lists, toggles and deletes a schedule', async () => {
     const created = await app.request(
       '/api/schedules',

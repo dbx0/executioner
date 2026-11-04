@@ -293,7 +293,16 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
       'Inspect one execution to diagnose what happened. Omit executionId for the most recent run. Returns each node with its status, exit code, and stdout/stderr tail.',
     inputSchema: { type: 'object', properties: { executionId: str } },
   },
-  { name: 'run_workflow', description: 'Run a saved workflow against a target.', inputSchema: { type: 'object', properties: { workflowId: str, targetId: str }, required: ['workflowId', 'targetId'] } },
+  {
+    name: 'run_workflow',
+    description:
+      'Run a saved workflow against a target. Omit backend (or pass "local") to run on this machine; pass a saved backend profile id to run the workflow nodes on that backend (SSH/Docker). Omitting it uses the engagement default backend when one is set. An unknown backend id is an error.',
+    inputSchema: {
+      type: 'object',
+      properties: { workflowId: str, targetId: str, backend: str },
+      required: ['workflowId', 'targetId'],
+    },
+  },
   {
     name: 'list_backends',
     description:

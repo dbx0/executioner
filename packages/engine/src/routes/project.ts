@@ -6,6 +6,9 @@ const patchBody = z.object({
   name: z.string().min(1).optional(),
   // An empty string clears the icon; a non-empty string sets it.
   icon: z.string().optional(),
+  // The engagement default backend profile id for MCP/scheduled runs. An empty
+  // string clears it (back to local); a non-empty string sets it.
+  defaultBackendProfileId: z.string().optional(),
 })
 
 /**
@@ -18,12 +21,22 @@ export function projectRoutes(project: Project): Hono {
 
   app.get('/project', (c) => {
     const config = readConfig(project.root)
-    return c.json({ root: project.root, name: config.name, icon: config.icon ?? null })
+    return c.json({
+      root: project.root,
+      name: config.name,
+      icon: config.icon ?? null,
+      defaultBackendProfileId: config.defaultBackendProfileId ?? null,
+    })
   })
 
   app.patch('/project', async (c) => {
     const parsed = patchBody.safeParse(await c.req.json().catch(() => null))
     if (!parsed.success) return c.json({ error: 'invalid request', detail: parsed.error.format() }, 400)
+
+    const backend = parsed.data.defaultBackendProfileId
+    if (backend !== undefined && backend !== '' && backend !== 'local' && project.backends.get(backend) === undefined) {
+      return c.json({ error: 'unknown backend profile' }, 400)
+    }
 
     const current = readConfig(project.root)
     const next = { ...current }
@@ -32,8 +45,20 @@ export function projectRoutes(project: Project): Hono {
       if (parsed.data.icon === '') delete next.icon
       else next.icon = parsed.data.icon
     }
+    if (backend !== undefined) {
+      if (backend === '' || backend === 'local') delete next.defaultBackendProfileId
+      else next.defaultBackendProfileId = backend
+      // Update the in-memory config too, so MCP and scheduled runs in this same
+      // session fall back to the new default without waiting for a reopen.
+      project.config.defaultBackendProfileId = next.defaultBackendProfileId
+    }
     writeConfig(project.root, next)
-    return c.json({ root: project.root, name: next.name, icon: next.icon ?? null })
+    return c.json({
+      root: project.root,
+      name: next.name,
+      icon: next.icon ?? null,
+      defaultBackendProfileId: next.defaultBackendProfileId ?? null,
+    })
   })
 
   return app

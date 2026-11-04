@@ -48,6 +48,17 @@ describe('openProject', () => {
     expect(() => openProject(dir)).toThrow(/not an Executioner project/)
   })
 
+  it('round-trips an engagement default backend profile id', () => {
+    createProject(dir, { name: 'acme' }).close()
+    writeFileSync(
+      join(dir, '.executioner', 'config.json'),
+      JSON.stringify({ name: 'acme', defaultBackend: 'local', defaultBackendProfileId: 'kali-1', createdAt: new Date().toISOString() }),
+    )
+    const reopened = openProject(dir)
+    expect(reopened.config.defaultBackendProfileId).toBe('kali-1')
+    reopened.close()
+  })
+
   it('reports a corrupt config clearly rather than crashing on a type error', () => {
     createProject(dir, { name: 'a' }).close()
     writeFileSync(join(dir, '.executioner', 'config.json'), '{"name": 42}')

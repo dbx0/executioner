@@ -16,6 +16,7 @@ import { AgentRunner } from '../agents/agent-runner.js'
 import { AssistantRunner } from '../agents/assistant-runner.js'
 import { assistantRoutes } from '../routes/assistant.js'
 import { GraphExecutor } from '../execution/graph-executor.js'
+import { resolveRunBackend } from '../execution/backend-profile.js'
 import { CancellationRegistry } from '../execution/cancellation.js'
 import { healthRoutes } from '../routes/health.js'
 import { targetRoutes } from '../routes/targets.js'
@@ -200,10 +201,13 @@ export function createApp(options: AppOptions): EngineApp {
    * path: bundled + custom nodes are merged fresh per run, so custom nodes are
    * runnable without a restart.
    */
-  const runGraphWorkflow = async (workflowId: string, targetId: string | null) => {
+  const runGraphWorkflow = async (workflowId: string, targetId: string | null, backendProfileId?: string | null) => {
     const workflow = options.project.workflows.get(workflowId)
     if (workflow === undefined) throw new Error(`unknown workflow: ${workflowId}`)
     const graph = graphSchema.parse(JSON.parse(workflow.graph))
+    // An unknown profile id throws here (never a silent fall back to local), so
+    // an MCP or scheduled run aimed at a remote host fails loudly instead.
+    const backendProfile = resolveRunBackend(options.project, backendProfileId)
     const executor = new GraphExecutor({
       project: options.project,
       bus: options.bus,
@@ -212,7 +216,7 @@ export function createApp(options: AppOptions): EngineApp {
       runs,
       ...(enginePort !== undefined ? { enginePort } : {}),
     })
-    return executor.run({ graph, workflowId, targetId, testMode: false })
+    return executor.run({ graph, workflowId, targetId, testMode: false, ...(backendProfile !== undefined ? { backendProfile } : {}) })
   }
 
   const browsers = options.browsers ?? {
@@ -227,8 +231,8 @@ export function createApp(options: AppOptions): EngineApp {
     // Fresh each call so newly-created custom nodes appear in the assistant's
     // node-type catalog without a restart.
     manifests: () => [...buildManifestMap(options.registry, options.project).values()],
-    runWorkflow: async (workflowId, targetId) => {
-      const result = await runGraphWorkflow(workflowId, targetId)
+    runWorkflow: async (workflowId, targetId, backend) => {
+      const result = await runGraphWorkflow(workflowId, targetId, backend)
       return { executionId: result.executionId, status: result.status === 'succeeded' ? 'success' : 'error' }
     },
   }

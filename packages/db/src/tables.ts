@@ -174,6 +174,9 @@ export const schedules = sqliteTable(
     kind: text('kind').notNull(),
     intervalSeconds: integer('interval_seconds'),
     targetKind: text('target_kind'),
+    // A saved backend profile id to run this schedule's workflow on. NULL means
+    // the engagement default (or local when that is unset too).
+    backendProfileId: text('backend_profile_id'),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
     createdAt: text('created_at').notNull(),
   },

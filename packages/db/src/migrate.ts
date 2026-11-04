@@ -31,6 +31,9 @@ export function migrate(raw: Database): void {
   // The saved connection a standalone run used, so a replay picks that exact
   // profile back rather than the first one of the same kind.
   addColumnIfMissing(raw, 'node_executions', 'backend_profile_id', 'TEXT')
+  // The backend a schedule runs its workflow on. Additive and nullable, so an
+  // older project gains it on next open without a schema-version bump.
+  addColumnIfMissing(raw, 'schedules', 'backend_profile_id', 'TEXT')
   dropWorkflowForeignKeys(raw)
 
   const row = raw.prepare('SELECT version FROM schema_version').get() as
