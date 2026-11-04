@@ -16,56 +16,12 @@ export interface LiveRun {
   startedAt: number
 }
 
-function statusDot(status: string): string {
+/** The dot colour for a run's status. */
+export function statusDot(status: string): string {
   if (status === 'succeeded' || status === 'success') return 'bg-status-success'
   if (status === 'running') return 'bg-status-running animate-pulse'
   if (status === 'cancelled') return 'bg-muted-foreground'
   return 'bg-status-error'
-}
-
-const SIZE_KEY = 'exe.toolsOutputSize'
-/** Side by side the handle sets the pane's width; stacked, its height. */
-const WIDE = '(min-width: 1100px)'
-const DEFAULT_SIZE = { width: 380, height: 480 }
-const MIN_WIDTH = 300
-const MIN_HEIGHT = 240
-const STEP = 16
-
-interface PaneSize {
-  width: number
-  height: number
-}
-
-function loadSize(): PaneSize {
-  try {
-    const raw = JSON.parse(localStorage.getItem(SIZE_KEY) ?? 'null') as Partial<PaneSize> | null
-    if (raw !== null && typeof raw.width === 'number' && typeof raw.height === 'number') {
-      return { width: Math.max(MIN_WIDTH, raw.width), height: Math.max(MIN_HEIGHT, raw.height) }
-    }
-  } catch {
-    /* ignore */
-  }
-  return DEFAULT_SIZE
-}
-
-function saveSize(size: PaneSize): void {
-  try {
-    localStorage.setItem(SIZE_KEY, JSON.stringify(size))
-  } catch {
-    /* ignore */
-  }
-}
-
-function isWide(): boolean {
-  return typeof window.matchMedia === 'function' && window.matchMedia(WIDE).matches
-}
-
-/** Keep the pane from swallowing the form beside or above it. */
-function clampSize(size: PaneSize): PaneSize {
-  return {
-    width: Math.round(Math.min(Math.max(MIN_WIDTH, size.width), Math.max(MIN_WIDTH, window.innerWidth * 0.7))),
-    height: Math.round(Math.min(Math.max(MIN_HEIGHT, size.height), Math.max(MIN_HEIGHT, window.innerHeight * 0.9))),
-  }
 }
 
 /** How long ago an instant was, in the largest unit that fits. */
@@ -322,109 +278,40 @@ export function OutputPane({
   /** Switch the pane to one run of the batch. */
   onShowRun?: (executionId: string) => void
 }): JSX.Element {
-  const pane = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState<PaneSize>(loadSize)
   // The history narrows to the picked tool by default: its earlier runs are
   // what you compare against. "All" is one click away.
   const [onlyTool, setOnlyTool] = useState(true)
   const narrowed = onlyTool && selectedNodeId !== null
   const history = narrowed ? recent.filter((r) => r.nodeId === selectedNodeId) : recent
-  const [wide, setWide] = useState(isWide)
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return
-    const query = window.matchMedia(WIDE)
-    const onChange = (): void => setWide(query.matches)
-    query.addEventListener('change', onChange)
-    return () => query.removeEventListener('change', onChange)
-  }, [])
-
-  // Dragging the handle sizes the pane from its far edge to the pointer, so the
-  // edge follows the cursor. Pointer capture keeps the drag alive off the handle.
-  const onHandleDown = (e: React.PointerEvent<HTMLDivElement>): void => {
-    const box = pane.current?.getBoundingClientRect()
-    if (box === undefined) return
-    e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
-    let latest = size
-    const onMove = (ev: PointerEvent): void => {
-      latest = clampSize(
-        wide ? { ...latest, width: box.right - ev.clientX } : { ...latest, height: box.bottom - ev.clientY },
-      )
-      setSize(latest)
-    }
-    const handle = e.currentTarget
-    const onUp = (): void => {
-      handle.removeEventListener('pointermove', onMove)
-      handle.removeEventListener('pointerup', onUp)
-      handle.removeEventListener('pointercancel', onUp)
-      saveSize(latest)
-    }
-    handle.addEventListener('pointermove', onMove)
-    handle.addEventListener('pointerup', onUp)
-    handle.addEventListener('pointercancel', onUp)
-  }
-
-  // Arrow keys grow or shrink the pane; double-click puts it back.
-  const onHandleKey = (e: React.KeyboardEvent<HTMLDivElement>): void => {
-    const grow = { ArrowLeft: STEP, ArrowUp: STEP, ArrowRight: -STEP, ArrowDown: -STEP }[e.key]
-    if (grow === undefined) return
-    e.preventDefault()
-    const next = clampSize(wide ? { ...size, width: size.width + grow } : { ...size, height: size.height + grow })
-    setSize(next)
-    saveSize(next)
-  }
-
-  const resetSize = (): void => {
-    setSize(DEFAULT_SIZE)
-    saveSize(DEFAULT_SIZE)
-  }
 
   return (
-    <div
-      ref={pane}
-      data-tour="tools-output"
-      style={{ '--output-w': `${size.width}px`, '--output-h': `${size.height}px` } as React.CSSProperties}
-      className="relative flex h-[var(--output-h)] w-full shrink-0 flex-col border-t border-border min-[1100px]:h-full min-[1100px]:w-[var(--output-w)] min-[1100px]:border-l min-[1100px]:border-t-0"
-    >
-      <div
-        role="separator"
-        aria-label="Resize output"
-        aria-orientation={wide ? 'vertical' : 'horizontal'}
-        tabIndex={0}
-        title="Drag to resize, double-click to reset"
-        onPointerDown={onHandleDown}
-        onKeyDown={onHandleKey}
-        onDoubleClick={resetSize}
-        className="absolute inset-x-0 -top-0.5 z-10 h-1.5 cursor-row-resize touch-none outline-none hover:bg-border-strong focus-visible:bg-ring/50 min-[1100px]:inset-x-auto min-[1100px]:inset-y-0 min-[1100px]:-left-0.5 min-[1100px]:top-0 min-[1100px]:h-full min-[1100px]:w-1.5 min-[1100px]:cursor-col-resize"
-      />
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
-        <span className="text-[13px] font-medium">Output</span>
-        {live !== null && (
-          <>
-            <span className={cn('size-1.5 rounded-full', statusDot(live.status))} />
-            <span className="text-[11.5px] text-muted-foreground">
-              {live.status === 'running' ? elapsed(live.startedAt, now) : live.status}
-            </span>
-            {live.status === 'running' && (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Stop run"
-                className="ml-auto"
-                disabled={stopping}
-                onClick={onStop}
-              >
-                {stopping ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5" />}
-              </Button>
-            )}
-            {live.status !== 'running' && result != null && (
-              <Button variant="ghost" size="icon-xs" aria-label="Expand output" className="ml-auto" onClick={onExpand}>
-                <Maximize2 className="size-3.5" />
-              </Button>
-            )}
-          </>
-        )}
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {live !== null && (
+        <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
+          <span className="text-[13px] font-medium">{nodeName(live.nodeId)}</span>
+          <span className={cn('size-1.5 rounded-full', statusDot(live.status))} />
+          <span className="text-[11.5px] text-muted-foreground">
+            {live.status === 'running' ? elapsed(live.startedAt, now) : live.status}
+          </span>
+          {live.status === 'running' && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Stop run"
+              className="ml-auto"
+              disabled={stopping}
+              onClick={onStop}
+            >
+              {stopping ? <Loader2 className="size-3.5 animate-spin" /> : <Square className="size-3.5" />}
+            </Button>
+          )}
+          {live.status !== 'running' && result != null && (
+            <Button variant="ghost" size="icon-xs" aria-label="Expand output" className="ml-auto" onClick={onExpand}>
+              <Maximize2 className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      )}
 
       {batch.length > 1 && onShowRun !== undefined && (
         <BatchStrip batch={batch} watchingId={watchingId} onShow={onShowRun} />

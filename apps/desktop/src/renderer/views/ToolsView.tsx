@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import type { JSX, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../store.js'
 import { nodesApi, type NodeListing } from '../api/nodes.js'
@@ -15,15 +15,50 @@ import { CatalogPane, type InstallState } from './tools/CatalogPane.js'
 import { RunForm } from './tools/RunForm.js'
 import type { CommandPreviewState } from './tools/CommandPreview.js'
 import { ConnectionPicker, LOCAL } from './tools/ConnectionPicker.js'
-import { OutputPane } from './tools/OutputPane.js'
-import { EMPTY_PAGE, subscribeToolEvents, useToolsStore, type ProbeState, type ToolsPage } from './tools/tools-store.js'
+import { OutputPane, statusDot, type LiveRun } from './tools/OutputPane.js'
+import { EMPTY_PAGE, subscribeToolEvents, useToolsStore, type BatchRun, type ProbeState, type ToolsPage, type ToolTab } from './tools/tools-store.js'
 import { presetsFor, readPresets, withPreset, withoutPreset, writePresets, type PresetBook } from './tools/presets.js'
 import { NodeOutputModal } from './executions/NodeOutputModal.js'
 import { safeRow } from './executions/row.js'
 
 const NO_LINES: string[] = []
+const NO_BATCH: BatchRun[] = []
 const NO_PROBES: Record<string, ProbeState> = {}
 
+
+/** One of the tool panel's two tabs. */
+function ToolTabButton({
+  tab,
+  active,
+  onSelect,
+  tour,
+  children,
+}: {
+  tab: ToolTab
+  active: boolean
+  onSelect: (tab: ToolTab) => void
+  /** The page tour's anchor, when this tab is one of its stops. */
+  tour?: string
+  children: ReactNode
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      role="tab"
+      id={`tools-tab-${tab}`}
+      aria-controls={`tools-panel-${tab}`}
+      aria-selected={active}
+      data-tour={tour}
+      onClick={() => onSelect(tab)}
+      className={cn(
+        'flex items-center gap-1.5 rounded px-2.5 py-1 text-[12.5px] transition-colors',
+        active ? 'selected-surface text-foreground' : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
 
 /**
  * Tools: run one tool against one target or several, on any connection,
@@ -50,8 +85,8 @@ export function ToolsView(): JSX.Element {
   const root = connection?.projectRoot ?? ''
   const page = useToolsStore((s) => s.pages[root] ?? EMPTY_PAGE)
   const update = useToolsStore((s) => s.update)
-  const { query, nodeId, targetIds, backendId, params, paramsOrigin, connectionNote, live, batch } = page
-  const { setQuery, setNodeId, setTargetIds, setBackendId, setParams, setParamsOrigin, setConnectionNote, setLive, setBatch } =
+  const { query, nodeId, targetIds, backendId, params, paramsOrigin, connectionNote, lives, batches, tabs } = page
+  const { setQuery, setNodeId, setTargetIds, setBackendId, setParams, setParamsOrigin, setConnectionNote } =
     useMemo(() => {
       const field =
         <K extends keyof ToolsPage>(key: K) =>
@@ -68,10 +103,33 @@ export function ToolsView(): JSX.Element {
         setParams: field('params'),
         setParamsOrigin: field('paramsOrigin'),
         setConnectionNote: field('connectionNote'),
-        setLive: field('live'),
-        setBatch: field('batch'),
       }
     }, [root, update])
+
+  // Output belongs to its tool: each one keeps the run its Output tab watches
+  // and its last batch, so picking another tool never shows this one's run.
+  const live = nodeId === null ? null : (lives[nodeId] ?? null)
+  const batch = nodeId === null ? NO_BATCH : (batches[nodeId] ?? NO_BATCH)
+  const setLiveFor = useCallback(
+    (toolId: string, value: LiveRun | null | ((prev: LiveRun | null) => LiveRun | null)) =>
+      update(root, (p) => {
+        const next = typeof value === 'function' ? value(p.lives[toolId] ?? null) : value
+        const nextLives = { ...p.lives }
+        if (next === null) delete nextLives[toolId]
+        else nextLives[toolId] = next
+        return { ...p, lives: nextLives }
+      }),
+    [root, update],
+  )
+  const setTabFor = useCallback(
+    (toolId: string | null, next: ToolTab) =>
+      update(root, (p) => ({ ...p, tabs: { ...p.tabs, [toolId ?? '']: next } })),
+    [root, update],
+  )
+  const setBatchFor = useCallback(
+    (toolId: string, runs: BatchRun[]) => update(root, (p) => ({ ...p, batches: { ...p.batches, [toolId]: runs } })),
+    [root, update],
+  )
 
   // Tool output keeps arriving while the page is away; this only makes sure
   // the engagement's subscription is open. It is never closed from here.
@@ -112,8 +170,9 @@ export function ToolsView(): JSX.Element {
   useEffect(() => {
     if (pendingToolTargetId === null) return
     setTargetIds([pendingToolTargetId])
+    setTabFor(nodeId, 'run')
     setPendingToolTargetId(null)
-  }, [pendingToolTargetId, setPendingToolTargetId, setTargetIds])
+  }, [pendingToolTargetId, setPendingToolTargetId, setTargetIds, setTabFor, nodeId])
 
   const node = useMemo(() => nodes.find((n) => n.id === nodeId) ?? null, [nodes, nodeId])
 
@@ -326,11 +385,12 @@ export function ToolsView(): JSX.Element {
       // And show what it produced. A run still going streams like one started here.
       const startedAt = run.startedAt === null ? Date.now() : Date.parse(run.startedAt)
       if (run.status === 'running') watch(run.id)
-      setLive({ executionId: run.id, nodeId: run.nodeId, status: run.status, startedAt })
+      setLiveFor(run.nodeId, { executionId: run.id, nodeId: run.nodeId, status: run.status, startedAt })
+      setTabFor(run.nodeId, 'output')
       // The batch's tabs only make sense while one of its runs is on screen.
-      if (!batch.some((b) => b.executionId === run.id)) setBatch([])
+      if (!(batches[run.nodeId] ?? NO_BATCH).some((b) => b.executionId === run.id)) setBatchFor(run.nodeId, [])
     },
-    [targets, profileFor, watch, batch, setNodeId, setParams, setParamsOrigin, setTargetIds, setBackendId, setConnectionNote, setLive, setBatch],
+    [targets, profileFor, watch, batches, setNodeId, setParams, setParamsOrigin, setTargetIds, setBackendId, setConnectionNote, setLiveFor, setBatchFor, setTabFor],
   )
 
   /** Create a target from the form, then pick it alongside any already picked. */
@@ -393,7 +453,8 @@ export function ToolsView(): JSX.Element {
         for (const r of results) if (r.status === 'fulfilled') watch(r.value.executionId)
         const first = results.find((r) => r.status === 'fulfilled')
         if (first !== undefined) {
-          setLive({ executionId: first.value.executionId, nodeId: node.id, status: 'running', startedAt })
+          setLiveFor(node.id, { executionId: first.value.executionId, nodeId: node.id, status: 'running', startedAt })
+          setTabFor(node.id, 'output')
         }
         // Every run that started, in the order the targets were picked, for the
         // pane's tabs. One run is not a batch.
@@ -407,7 +468,7 @@ export function ToolsView(): JSX.Element {
               }]
             : [],
         )
-        setBatch(started.length > 1 ? started : [])
+        setBatchFor(node.id, started.length > 1 ? started : [])
         const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
         if (failed.length > 0) {
           const why = apiErrorMessage(failed[0]!.reason, 'The run did not start.')
@@ -416,7 +477,7 @@ export function ToolsView(): JSX.Element {
         refreshRecent()
       })
       .finally(() => setStarting(false))
-  }, [client, node, targetIds, targets, params, backendId, refreshRecent, watch, setLive, setBatch])
+  }, [client, node, targetIds, targets, params, backendId, refreshRecent, watch, setLiveFor, setBatchFor, setTabFor])
 
   const stop = useCallback(() => {
     if (client === null || live === null) return
@@ -447,6 +508,19 @@ export function ToolsView(): JSX.Element {
     [batch, finished, recent],
   )
 
+  // Tools with a run still going, whichever tool is on screen, so a run left
+  // behind by picking another tool is easy to find again.
+  const runningTools = useMemo(() => {
+    const ids = new Set<string>()
+    for (const run of Object.values(lives)) {
+      const ended =
+        finished?.[run.executionId] !== undefined ||
+        recent.some((r) => r.id === run.executionId && r.status !== 'running')
+      if (run.status === 'running' && !ended) ids.add(run.nodeId)
+    }
+    return ids
+  }, [lives, finished, recent])
+
   /** Put one run of the batch on screen; it keeps streaming if it is still going. */
   const showRun = useCallback(
     (executionId: string) => {
@@ -454,9 +528,9 @@ export function ToolsView(): JSX.Element {
       if (entry === undefined) return
       watch(executionId)
       const status = batchTabs.find((t) => t.executionId === executionId)?.status ?? 'running'
-      setLive({ executionId, nodeId: entry.nodeId, status, startedAt: entry.startedAt })
+      setLiveFor(entry.nodeId, { executionId, nodeId: entry.nodeId, status, startedAt: entry.startedAt })
     },
-    [batch, batchTabs, watch, setLive],
+    [batch, batchTabs, watch, setLiveFor],
   )
 
   // Settled by its done event, heard even while the page was away. If even that
@@ -465,9 +539,9 @@ export function ToolsView(): JSX.Element {
     if (live === null || live.status !== 'running') return
     const status = finished?.[live.executionId] ?? recent.find((r) => r.id === live.executionId && r.status !== 'running')?.status
     if (status === undefined) return
-    setLive((cur) => (cur === null || cur.executionId !== live.executionId ? cur : { ...cur, status }))
+    setLiveFor(live.nodeId, (cur) => (cur === null || cur.executionId !== live.executionId ? cur : { ...cur, status }))
     refreshRecent()
-  }, [finished, recent, live, refreshRecent, setLive])
+  }, [finished, recent, live, refreshRecent, setLiveFor])
 
   // Any run the history still shows as running, not just the watched one, is
   // refreshed when it finishes, so several runs at once all settle in the list.
@@ -561,6 +635,11 @@ export function ToolsView(): JSX.Element {
   }
 
   const installTool = node?.program !== undefined ? catalog[node.program] : undefined
+  // The Output tab exists once there is something to show for this tool (with
+  // none picked, the whole history); until then the tool is just its settings.
+  const outputShown = nodeId === null ? recent.length > 0 : live !== null || recent.some((r) => r.nodeId === nodeId)
+  const activeTab = outputShown ? (tabs[nodeId ?? ''] ?? 'run') : 'run'
+  const setTab = (next: ToolTab): void => setTabFor(nodeId, next)
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -609,9 +688,9 @@ export function ToolsView(): JSX.Element {
         </div>
       </div>
 
-      {/* Three columns when there is room. Narrower, they stack catalog over
-          form over output and the whole view scrolls, so the output keeps a
-          readable width instead of being squeezed beside the form. */}
+      {/* The catalog beside the tool when there is room; narrower, the catalog
+          sits above it and the whole view scrolls. The tool shows its settings
+          or its output, one at a time, so each gets the full width. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-sleek min-[1100px]:flex-row min-[1100px]:overflow-hidden">
         <CatalogPane
           nodes={nodes}
@@ -622,70 +701,106 @@ export function ToolsView(): JSX.Element {
           installState={installState}
           searchRef={searchRef}
           recentIds={recentToolIds}
+          running={runningTools}
         />
-        <div data-tour="tools-run" className="min-h-[320px] min-w-0 shrink-0 min-[1100px]:min-h-0 min-[1100px]:flex-1 min-[1100px]:shrink">
-          <RunForm
-            node={node}
-            targets={targets}
-            targetIds={targetIds}
-            onAddTarget={addTarget}
-            onTargetIds={(ids) => {
-              setTargetIds(ids)
-              setStartError(null)
-            }}
-            params={params}
-            onParam={(name, value) => {
-              setParams((prev) => ({ ...prev, [name]: value }))
-              setParamsOrigin('edited')
-              setStartError(null)
-            }}
-            paramsOrigin={paramsOrigin}
-            onResetParams={() => {
-              setParams({})
-              setParamsOrigin(null)
-            }}
-            presets={presets}
-            onApplyPreset={(preset) => {
-              setParams({ ...preset.params })
-              setParamsOrigin('preset')
-              setStartError(null)
-            }}
-            onSavePreset={(name) => {
-              if (nodeId !== null) changePresets(withPreset(presetBook, root, nodeId, { name, params }))
-            }}
-            onDeletePreset={(name) => {
-              if (nodeId !== null) changePresets(withoutPreset(presetBook, root, nodeId, name))
-            }}
-            installState={node === null ? 'unknown' : installState(node)}
-            preview={preview !== null && preview.nodeId === nodeId ? preview.state : null}
-            startError={startError}
-            starting={starting}
-            onRun={run}
-            onInstall={() => setInstallOpen(true)}
-            runRef={runRef}
-            runsOn={backendId === LOCAL ? 'this machine' : (profiles.find((p) => p.id === backendId)?.name ?? 'this connection')}
-            connectionNote={connectionNote}
-          />
+        <div className="flex min-h-[420px] min-w-0 flex-1 flex-col min-[1100px]:min-h-0">
+          {outputShown && (
+            <div role="tablist" aria-label="Tool" className="flex h-10 shrink-0 items-center gap-1 border-b border-border px-3">
+              <ToolTabButton tab="run" active={activeTab === 'run'} onSelect={setTab}>
+                Run
+              </ToolTabButton>
+              <ToolTabButton tab="output" active={activeTab === 'output'} onSelect={setTab} tour="tools-output">
+                {live !== null && <span aria-hidden="true" className={cn('size-1.5 rounded-full', statusDot(live.status))} />}
+                Output
+              </ToolTabButton>
+            </div>
+          )}
+          <div
+            id="tools-panel-run"
+            role={outputShown ? 'tabpanel' : undefined}
+            aria-labelledby={outputShown ? 'tools-tab-run' : undefined}
+            hidden={activeTab !== 'run'}
+            data-tour="tools-run"
+            className={cn('min-h-0 flex-1 flex-col', activeTab === 'run' ? 'flex' : 'hidden')}
+          >
+              <RunForm
+                node={node}
+                targets={targets}
+                targetIds={targetIds}
+                onAddTarget={addTarget}
+                onTargetIds={(ids) => {
+                  setTargetIds(ids)
+                  setStartError(null)
+                }}
+                params={params}
+                onParam={(name, value) => {
+                  setParams((prev) => ({ ...prev, [name]: value }))
+                  setParamsOrigin('edited')
+                  setStartError(null)
+                }}
+                paramsOrigin={paramsOrigin}
+                onResetParams={() => {
+                  setParams({})
+                  setParamsOrigin(null)
+                }}
+                presets={presets}
+                onApplyPreset={(preset) => {
+                  setParams({ ...preset.params })
+                  setParamsOrigin('preset')
+                  setStartError(null)
+                }}
+                onSavePreset={(name) => {
+                  if (nodeId !== null) changePresets(withPreset(presetBook, root, nodeId, { name, params }))
+                }}
+                onDeletePreset={(name) => {
+                  if (nodeId !== null) changePresets(withoutPreset(presetBook, root, nodeId, name))
+                }}
+                installState={node === null ? 'unknown' : installState(node)}
+                preview={preview !== null && preview.nodeId === nodeId ? preview.state : null}
+                startError={startError}
+                starting={starting}
+                onRun={run}
+                onInstall={() => setInstallOpen(true)}
+                runRef={runRef}
+                runsOn={backendId === LOCAL ? 'this machine' : (profiles.find((p) => p.id === backendId)?.name ?? 'this connection')}
+                connectionNote={connectionNote}
+              />
+          </div>
+          {outputShown && (
+            <div
+              id="tools-panel-output"
+              role="tabpanel"
+              aria-labelledby="tools-tab-output"
+              hidden={activeTab !== 'output'}
+              className={cn('min-h-0 flex-1 flex-col', activeTab === 'output' ? 'flex' : 'hidden')}
+            >
+              {/* Runs that did not start would otherwise be reported only on the
+                  settings, out of sight once the panel turns to the output. */}
+              {startError !== null && (
+                <p role="alert" className="shrink-0 border-b border-border px-3 py-2 text-[12px] text-status-error">
+                  {startError}
+                </p>
+              )}
+            <OutputPane
+              live={live}
+              lines={lines}
+              result={result}
+              onExpand={() => setExpanded(true)}
+              now={now}
+              stopping={stopping}
+              onStop={stop}
+              recent={recent}
+              selectedNodeId={nodeId}
+              watchingId={live?.executionId ?? null}
+              connectionLabel={connectionLabel}
+              nodeName={nodeName}
+              onReplay={replay}
+              batch={batchTabs}
+              onShowRun={showRun}
+            />
+            </div>
+          )}
         </div>
-        {(live !== null || recent.length > 0) && (
-        <OutputPane
-          live={live}
-          lines={lines}
-          result={result}
-          onExpand={() => setExpanded(true)}
-          now={now}
-          stopping={stopping}
-          onStop={stop}
-          recent={recent}
-          selectedNodeId={nodeId}
-          watchingId={live?.executionId ?? null}
-          connectionLabel={connectionLabel}
-          nodeName={nodeName}
-          onReplay={replay}
-          batch={batchTabs}
-          onShowRun={showRun}
-        />
-        )}
       </div>
 
       {expanded && rawResult != null && (

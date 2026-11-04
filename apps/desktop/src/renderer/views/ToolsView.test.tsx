@@ -164,6 +164,11 @@ function showAllTools(): void {
   if (toggle.getAttribute('aria-checked') === 'true') fireEvent.click(toggle)
 }
 
+/** Turn the tool panel to its output, where the run history lives. */
+async function showOutput(): Promise<void> {
+  fireEvent.click(await screen.findByRole('tab', { name: /Output/ }))
+}
+
 /** A tool in the catalog, by name. */
 function tool(name: string): HTMLElement {
   return screen.getByRole('button', { name })
@@ -221,24 +226,6 @@ describe('ToolsView', () => {
     const ports = await screen.findByLabelText('ports')
     expect(ports.getAttribute('placeholder')).toBe('80,443')
     expect(screen.queryByText('{{ target.value }}')).toBeNull()
-  })
-
-  it('resizes the output pane from its handle and remembers the size', async () => {
-    localStorage.removeItem('exe.toolsOutputSize')
-    // The pane only shows once there is a run to show.
-    executions.standalone.mockResolvedValue([pastRun()])
-    await open()
-    const handle = await screen.findByRole('separator', { name: 'Resize output' })
-    const pane = handle.parentElement!
-    expect(pane.style.getPropertyValue('--output-h')).toBe('480px')
-
-    // Stacked layout (jsdom has no wide viewport): up grows the pane's height.
-    fireEvent.keyDown(handle, { key: 'ArrowUp' })
-    expect(pane.style.getPropertyValue('--output-h')).toBe('496px')
-    expect(JSON.parse(localStorage.getItem('exe.toolsOutputSize')!)).toMatchObject({ height: 496 })
-
-    fireEvent.doubleClick(handle)
-    expect(pane.style.getPropertyValue('--output-h')).toBe('480px')
   })
 
   it('filters the catalog by search text', async () => {
@@ -512,6 +499,7 @@ describe('ToolsView', () => {
   it('marks the watched run in the history', async () => {
     executions.standalone.mockResolvedValue([pastRun()])
     await open()
+    await showOutput()
     const entry = await screen.findByRole('button', { name: 'Load Nmap run against example.com' })
     expect(entry.getAttribute('aria-current')).toBeNull()
     fireEvent.click(entry)
@@ -602,9 +590,13 @@ describe('ToolsView', () => {
   it("narrows the history to the picked tool's runs, with all a click away", async () => {
     executions.standalone.mockResolvedValue([pastRun(), pastRun({ id: 'ex-w', nodeId: 'whois' })])
     await open()
+    await showOutput()
     expect(await screen.findByRole('button', { name: 'Load Whois run against example.com' })).toBeTruthy()
 
+    // Picking a tool turns the panel to its settings; the history is a tab away.
     fireEvent.click(tool('Nmap'))
+    expect(screen.getByRole('tab', { name: 'Run' }).getAttribute('aria-selected')).toBe('true')
+    await showOutput()
     expect(screen.queryByRole('button', { name: 'Load Whois run against example.com' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Runs of Nmap' }).getAttribute('aria-pressed')).toBe('true')
 
@@ -679,9 +671,11 @@ describe('ToolsView', () => {
     // Saved before runs kept their profile id: only the kind survives.
     executions.standalone.mockResolvedValue([pastRun({ backend: 'ssh', backendProfileId: null })])
     await open()
+    await showOutput()
     fireEvent.click(await screen.findByRole('button', { name: 'Load Nmap run against example.com' }))
 
     expect((screen.getByRole('combobox', { name: 'Connection' }) as HTMLSelectElement).value).toBe('be-1')
+    fireEvent.click(screen.getByRole('tab', { name: 'Run' }))
     fireEvent.click(screen.getByRole('button', { name: 'Run' }))
     await waitFor(() =>
       expect(nodes.run).toHaveBeenCalledWith('nmap', { targetId: 't1', params: {}, backendProfileId: 'be-1' }),
@@ -692,11 +686,13 @@ describe('ToolsView', () => {
     backends.list.mockResolvedValue([backend(), backend({ id: 'be-2', name: 'vps' })])
     executions.standalone.mockResolvedValue([pastRun({ backend: 'ssh', backendProfileId: 'be-gone' })])
     await open()
+    await showOutput()
     fireEvent.change(screen.getByRole('combobox', { name: 'Connection' }), { target: { value: 'be-2' } })
     fireEvent.click(await screen.findByRole('button', { name: 'Load Nmap run against example.com' }))
 
     expect((screen.getByRole('combobox', { name: 'Connection' }) as HTMLSelectElement).value).toBe('be-2')
     expect(screen.getByText('The ssh connection this run used is gone, so pick where to run it.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'Run' }))
     expect(screen.getByRole('button', { name: 'Run' }).hasAttribute('disabled')).toBe(true)
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Connection' }), { target: { value: 'be-1' } })
@@ -824,9 +820,13 @@ describe('ToolsView', () => {
       },
     ])
     await open()
+    await showOutput()
     fireEvent.click(await screen.findByRole('button', { name: 'Load Whois run against example.com' }))
 
     expect(await screen.findByDisplayValue('8080')).toBeTruthy()
+    // Replaying shows what the run produced; its settings are back on the Run tab.
+    expect(screen.getByRole('tab', { name: /Output/ }).getAttribute('aria-selected')).toBe('true')
+    fireEvent.click(screen.getByRole('tab', { name: 'Run' }))
     expect(screen.getByRole('heading', { name: 'Whois' })).toBeTruthy()
   })
 
@@ -847,6 +847,7 @@ describe('ToolsView', () => {
       },
     ])
     await open()
+    await showOutput()
     fireEvent.click(await screen.findByRole('button', { name: 'Load Nmap run against example.com' }))
     // No profiles exist, so the ssh connection it ran on is gone.
     const picker = await screen.findByRole('combobox', { name: 'Connection' })
@@ -871,6 +872,7 @@ describe('ToolsView', () => {
       },
     ])
     await open()
+    await showOutput()
     fireEvent.click(await screen.findByRole('button', { name: 'Load Nmap run against example.com' }))
     const picker = await screen.findByRole('combobox', { name: 'Connection' })
     await waitFor(() => expect((picker as HTMLSelectElement).value).toBe('be-2'))
@@ -894,6 +896,7 @@ describe('ToolsView', () => {
       },
     ])
     await open()
+    await showOutput()
     fireEvent.click(await screen.findByRole('button', { name: 'Load Nmap run against example.com' }))
     const picker = await screen.findByRole('combobox', { name: 'Connection' })
     // The run named its box and that box is gone: kali is a different machine,
@@ -969,6 +972,7 @@ describe('ToolsView', () => {
     executions.standalone.mockResolvedValue([pastRun()])
     executions.output.mockResolvedValue([outputRow({ parsed: null })])
     await open()
+    await showOutput()
     fireEvent.click(await screen.findByRole('button', { name: 'Load Nmap run against example.com' }))
 
     expect(await screen.findByText('raw nmap text')).toBeTruthy()
@@ -980,6 +984,7 @@ describe('ToolsView', () => {
     executions.standalone.mockResolvedValue([pastRun()])
     executions.output.mockResolvedValue([outputRow()])
     await open()
+    await showOutput()
     fireEvent.click(await screen.findByRole('button', { name: 'Load Nmap run against example.com' }))
 
     expect(await screen.findByRole('cell', { name: 'a.example.com' })).toBeTruthy()
@@ -990,6 +995,7 @@ describe('ToolsView', () => {
     executions.standalone.mockResolvedValue([pastRun()])
     executions.output.mockResolvedValue([outputRow()])
     await open()
+    await showOutput()
     fireEvent.click(await screen.findByRole('button', { name: 'Load Nmap run against example.com' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Expand output' }))
 
@@ -998,20 +1004,23 @@ describe('ToolsView', () => {
 })
 
 describe('ToolsView catalog and output layout', () => {
-  it('keeps the output pane closed until something has run', async () => {
+  it('has no Output tab until something has run, then turns to it when a run starts', async () => {
     await open()
-    expect(screen.queryByRole('separator', { name: 'Resize output' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: /Output/ })).toBeNull()
 
     await pick('Nmap', /example\.com/)
     fireEvent.click(screen.getByRole('button', { name: 'Run' }))
 
-    expect(await screen.findByRole('separator', { name: 'Resize output' })).toBeTruthy()
+    const output = await screen.findByRole('tab', { name: /Output/ })
+    expect(output.getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: 'Run' }).getAttribute('aria-selected')).toBe('false')
   })
 
-  it('shows the output pane when the engagement already has runs', async () => {
+  it('offers the Output tab, but opens on the settings, when the engagement already has runs', async () => {
     executions.standalone.mockResolvedValue([pastRun()])
     await open()
-    expect(await screen.findByRole('separator', { name: 'Resize output' })).toBeTruthy()
+    expect((await screen.findByRole('tab', { name: /Output/ })).getAttribute('aria-selected')).toBe('false')
+    expect(screen.getByRole('tab', { name: 'Run' }).getAttribute('aria-selected')).toBe('true')
   })
 
   it('lists the tools run lately above the categories, newest first', async () => {
@@ -1234,5 +1243,82 @@ describe('ToolsView live output', () => {
     expect(follow.getAttribute('aria-pressed')).toBe('false')
     fireEvent.click(follow)
     expect(follow.getAttribute('aria-pressed')).toBe('true')
+  })
+})
+
+describe('ToolsView output belongs to its tool', () => {
+  const runNmap = async (): Promise<void> => {
+    streamed = [{ type: 'stdout', executionId: 'ex-1', nodeId: 'nmap', data: 'nmap scanning\n' }]
+    await open()
+    await pick('Nmap', /example\.com/)
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+    expect(await screen.findByText(/nmap scanning/)).toBeTruthy()
+  }
+
+  it("never shows another tool's run under the picked tool", async () => {
+    await runNmap()
+
+    fireEvent.click(tool('Whois'))
+    expect(screen.queryByText(/nmap scanning/)).toBeNull()
+    expect(screen.queryByRole('tab', { name: /Output/ })).toBeNull()
+  })
+
+  it("shows a tool's own history, not the run going on elsewhere", async () => {
+    executions.standalone.mockResolvedValue([pastRun({ id: 'ex-w', nodeId: 'whois' })])
+    await runNmap()
+    fireEvent.click(tool('Whois'))
+    await showOutput()
+
+    expect(await screen.findByRole('button', { name: 'Load Whois run against example.com' })).toBeTruthy()
+    expect(screen.queryByText(/nmap scanning/)).toBeNull()
+  })
+
+  it('finds the run still going when you come back to its tool', async () => {
+    await runNmap()
+    fireEvent.click(tool('Whois'))
+    fireEvent.click(tool('Nmap'))
+    await showOutput()
+
+    expect(screen.getByText(/nmap scanning/)).toBeTruthy()
+  })
+
+  it('marks a tool with a run still going, until it ends', async () => {
+    await runNmap()
+    fireEvent.click(tool('Whois'))
+    expect(tool('Nmap').querySelector('[data-running]')).not.toBeNull()
+    expect(tool('Whois').querySelector('[data-running]')).toBeNull()
+
+    act(() => emit([{ type: 'done', executionId: 'ex-1', nodeId: 'nmap', data: 'succeeded' }]))
+    await waitFor(() => expect(tool('Nmap').querySelector('[data-running]')).toBeNull())
+  })
+})
+
+describe('ToolsView remembers each tool tab', () => {
+  it('comes back to a tool on the tab it was left on', async () => {
+    executions.standalone.mockResolvedValue([pastRun(), pastRun({ id: 'ex-w', nodeId: 'whois' })])
+    await open()
+
+    // Nmap left on its output, Whois on its settings.
+    fireEvent.click(tool('Nmap'))
+    await showOutput()
+    fireEvent.click(tool('Whois'))
+    expect(screen.getByRole('tab', { name: 'Run' }).getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.click(tool('Nmap'))
+    expect(screen.getByRole('tab', { name: /Output/ }).getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.click(tool('Whois'))
+    expect(screen.getByRole('tab', { name: 'Run' }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('keeps the tab across leaving the page and coming back', async () => {
+    executions.standalone.mockResolvedValue([pastRun()])
+    await open()
+    fireEvent.click(tool('Nmap'))
+    await showOutput()
+    cleanup()
+
+    await open()
+    expect((await screen.findByRole('tab', { name: /Output/ })).getAttribute('aria-selected')).toBe('true')
   })
 })

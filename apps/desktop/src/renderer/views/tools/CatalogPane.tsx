@@ -31,11 +31,13 @@ function ToolRow({
   node,
   selected,
   state,
+  running = false,
   onSelect,
 }: {
   node: NodeListing
   selected: boolean
   state: InstallState
+  running?: boolean
   onSelect: (id: string) => void
 }): JSX.Element {
   return (
@@ -65,6 +67,14 @@ function ToolRow({
           <span className="truncate text-[11px] leading-snug text-muted-foreground">{node.description}</span>
         )}
       </span>
+      {running && (
+        <span
+          data-running="true"
+          title="Running"
+          aria-hidden="true"
+          className="ml-auto mt-[7px] size-1.5 shrink-0 animate-pulse rounded-full bg-status-running"
+        />
+      )}
     </button>
   )
 }
@@ -84,6 +94,7 @@ export function CatalogPane({
   installState,
   searchRef,
   recentIds = [],
+  running,
 }: {
   nodes: NodeListing[]
   query: string
@@ -95,6 +106,8 @@ export function CatalogPane({
   searchRef?: RefObject<HTMLInputElement | null>
   /** Tools run lately in this engagement, newest first, shown above the categories. */
   recentIds?: string[]
+  /** Tools with a run still going, marked so a run left in the background is easy to find. */
+  running?: ReadonlySet<string>
 }): JSX.Element {
   const list = useRef<HTMLDivElement>(null)
   // On by default: what can run here is what you came for. Hides only tools
@@ -213,6 +226,7 @@ export function CatalogPane({
                     node={node}
                     selected={selectedId === node.id}
                     state={installState(node)}
+                    running={running?.has(node.id) ?? false}
                     onSelect={onSelect}
                   />
                 ))}
@@ -229,6 +243,7 @@ export function CatalogPane({
                     node={node}
                     selected={selectedId === node.id}
                     state={installState(node)}
+                    running={running?.has(node.id) ?? false}
                     onSelect={onSelect}
                   />
                 ))}

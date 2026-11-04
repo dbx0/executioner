@@ -35,11 +35,20 @@ export interface ToolsPage {
   params: Record<string, unknown>
   paramsOrigin: ParamsOrigin
   connectionNote: string | null
-  live: LiveRun | null
-  /** The runs the last multi-target Run started, for the output pane's tabs;
-   *  empty after a single-target run, which needs neither tabs nor a count. */
-  batch: BatchRun[]
+  /** The run each tool's Output tab is watching, by tool id. Output belongs to
+   *  its tool: picking another tool shows that tool's runs, while this one keeps
+   *  going and is still here on the way back. */
+  lives: Record<string, LiveRun>
+  /** The runs each tool's last multi-target Run started, for its Output tab's
+   *  list; none after a single-target run, which needs neither list nor count. */
+  batches: Record<string, BatchRun[]>
+  /** The tab each tool was last left on, by tool id ('' with no tool picked),
+   *  so coming back to a tool finds it as it was. */
+  tabs: Record<string, ToolTab>
 }
+
+/** The tool panel's two tabs. */
+export type ToolTab = 'run' | 'output'
 
 export const EMPTY_PAGE: ToolsPage = {
   query: '',
@@ -49,8 +58,9 @@ export const EMPTY_PAGE: ToolsPage = {
   params: {},
   paramsOrigin: null,
   connectionNote: null,
-  live: null,
-  batch: [],
+  lives: {},
+  batches: {},
+  tabs: {},
 }
 
 /** One connection's install check: what is installed, or why we could not ask. */

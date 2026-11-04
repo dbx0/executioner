@@ -139,7 +139,7 @@ export const TOURS: Record<TourId, readonly TourStep[]> = {
     {
       target: 'tools-output',
       title: 'Output',
-      body: 'The live output appears here. Hosts, ports and facts it discovers are saved to the targets.',
+      body: 'Once a tool runs, its live output opens in an Output tab beside Run, and you can switch between the two. Hosts, ports and facts it discovers are saved to the targets.',
     },
     {
       target: 'tools-connection',
