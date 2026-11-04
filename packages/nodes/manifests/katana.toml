@@ -8,12 +8,15 @@ accepts = ["url"]
 depth = { type = "number", placeholder = "3", default = 3, label = "Depth", description = "Maximum crawl depth" }
 concurrency = { type = "number", placeholder = "10", default = 10, label = "Concurrency", description = "Number of concurrent crawlers" }
 js_crawl = { type = "bool", default = false, label = "JS crawl", description = "Enable JavaScript file crawling" }
+rate_limit = { type = "number", placeholder = "150", default = 0, label = "Rate limit", description = "Max requests per second (katana -rl). 0 leaves katana's default." }
 
 [command]
 program = "katana"
 # -jsonl, not -json: katana has never accepted -json, and passing it makes every
 # run exit 2 with "flag provided but not defined". Verified against katana v1.6.1.
-args = ["-u", "{{ target.value }}", "-jsonl", "-silent", "-depth", "{{ params.depth }}", "-concurrency", "{{ params.concurrency }}", "{{ params.js_crawl | -js-crawl }}"]
+# The paired `| -rl` / `?` tokens emit `-rl <n>` only when rate_limit is set, and
+# drop out together when it is blank (same idiom naabu uses for -top-ports).
+args = ["-u", "{{ target.value }}", "-jsonl", "-silent", "-depth", "{{ params.depth }}", "-concurrency", "{{ params.concurrency }}", "{{ params.js_crawl | -js-crawl }}", "{{ params.rate_limit | -rl }}", "{{ params.rate_limit? }}"]
 timeout_ms = 300000
 
 [emit]
