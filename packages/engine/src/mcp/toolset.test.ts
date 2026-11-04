@@ -187,6 +187,9 @@ describe('ProjectToolset', () => {
     const httpx = types.find((t) => t.type === 'httpx')
     expect(httpx?.kind).toBe('tool')
     expect(httpx?.params).toEqual([{ name: 'threads', type: 'number', default: 50 }])
+    // The screenshot node now takes request headers, like http_request.
+    const screenshot = types.find((t) => t.type === 'screenshot') as { params: Array<{ name: string }> } | undefined
+    expect(screenshot?.params.some((p) => p.name === 'headers')).toBe(true)
   })
 
   it('returns the live assistant graph to the session it is bound to only', async () => {

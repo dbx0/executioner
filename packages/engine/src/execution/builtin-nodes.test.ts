@@ -138,6 +138,43 @@ describe('built-in data-flow / integration nodes', () => {
     expect(project.targets.all().filter((t) => t.value === 'example.com')).toHaveLength(1)
   })
 
+  it('passes the upstream row through an IF so a downstream save_to_target can read it', async () => {
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    const graph = graphSchema.parse({
+      nodes: [
+        { id: 'a', type: 'emit-subdomain', data: {} },
+        { id: 'if', type: 'if', data: { expression: 'true' } },
+        { id: 's', type: 'save_to_target', data: { data_type: 'subdomain', field: 'host' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'a', target: 'if' },
+        { id: 'e2', source: 'if', target: 's', sourceHandle: 'true' },
+      ],
+    })
+    const exec = newExecutor(new EventBus())
+    await exec.run({ graph, workflowId: null, targetId: target.id, testMode: false })
+    // The IF used to emit only { expression, branch }, dropping the row, so the
+    // save_to_target behind it had no `host` to persist.
+    expect(project.targets.findByValue('subdomain', 'scan.example.com')).toBeDefined()
+  })
+
+  it('keeps the IF branch field readable on its own output row', async () => {
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    const graph = graphSchema.parse({
+      nodes: [
+        { id: 'a', type: 'emit-subdomain', data: {} },
+        { id: 'if', type: 'if', data: { expression: 'true' } },
+      ],
+      edges: [{ id: 'e1', source: 'a', target: 'if' }],
+    })
+    const exec = newExecutor(new EventBus())
+    const result = await exec.run({ graph, workflowId: null, targetId: target.id, testMode: false })
+    const row = (exec['store'].nodesFor(result.executionId).find((n) => n.nodeId === 'if')
+      ?.parsedOutput as Array<Record<string, unknown>>)?.[0]
+    expect(row?.branch).toBe('true')
+    expect(row?.host).toBe('scan.example.com')
+  })
+
   describe('http_request', () => {
     let server: Server
     let port: number

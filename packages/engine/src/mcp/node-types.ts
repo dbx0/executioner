@@ -290,6 +290,11 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     params: [
       param({ name: 'target', type: 'string', description: 'URL/host to screenshot. Defaults to the run target.' }),
       param({ name: 'full_page', type: 'boolean', default: false }),
+      param({
+        name: 'headers',
+        type: 'string',
+        description: 'JSON object of request headers added to requests the page makes to the target host, never to third parties it loads. Values may use {{ }} placeholders.',
+      }),
       param({ name: 'timeout', type: 'number', default: 30000 }),
     ],
     outputs: ['path'],

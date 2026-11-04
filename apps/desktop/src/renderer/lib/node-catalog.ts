@@ -307,6 +307,12 @@ export const CONTROL_ENTRIES: CatalogEntry[] = [
     params: [
       { name: 'target', type: 'string', description: 'URL/host to screenshot. Defaults to the run target.' },
       { name: 'full_page', type: 'boolean', default: false },
+      {
+        name: 'headers',
+        type: 'string',
+        ui: 'textarea',
+        description: 'JSON object of request headers added to requests the page makes to the target host, never to third parties it loads. Values may use {{ }} placeholders.',
+      },
       { name: 'timeout', type: 'number', default: 30000, description: 'Capture timeout in milliseconds.' },
     ],
     outputs: ['path'],

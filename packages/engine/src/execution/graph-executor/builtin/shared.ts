@@ -3,6 +3,7 @@ import type { EventBus } from '../../../transport/events.js'
 import type { RunRepository } from '@exe/db'
 import type { Sender } from './http-client.js'
 import type { Resolver } from './http-guard.js'
+import type { ScreenshotDriver } from './screenshot-driver.js'
 
 /** The slice of the executor's dependencies the built-in node handlers need. */
 export interface BuiltinNodeDeps {
@@ -15,6 +16,8 @@ export interface BuiltinNodeDeps {
   resolveHost?: Resolver
   /** How http_request and notify put one vetted hop on the wire. Absent → node:http(s). */
   sendHttp?: Sender
+  /** How the screenshot node captures a page. Absent → the real Chrome/CDP driver. */
+  captureScreenshot?: ScreenshotDriver
 }
 
 /** Emit the running/done lifecycle + persist a built-in node's result. */

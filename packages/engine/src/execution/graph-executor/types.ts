@@ -7,6 +7,7 @@ import type { CancellationRegistry } from '../cancellation.js'
 import type { RunRepository } from '@exe/db'
 import type { Sender } from './builtin/http-client.js'
 import type { Resolver } from './builtin/http-guard.js'
+import type { ScreenshotDriver } from './builtin/screenshot-driver.js'
 
 export const EXECUTION_CHANNEL = '__execution__'
 
@@ -24,6 +25,8 @@ export interface GraphExecutorDeps {
   resolveHost?: Resolver
   /** How http_request and notify put one vetted hop on the wire. Absent → node:http(s). Injected in tests. */
   sendHttp?: Sender
+  /** How the screenshot node captures a page. Absent → the real Chrome/CDP driver. Injected in tests. */
+  captureScreenshot?: ScreenshotDriver
 }
 
 export interface GraphRunInput {

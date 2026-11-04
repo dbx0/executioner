@@ -35,7 +35,12 @@ export function runIf(
   const expression = interpolate(written, ctx) ?? written
   const { branch, error } = evaluateIfOutcome(expression, upstreamRow)
 
-  const row: Record<string, unknown> = { expression, branch }
+  // Carry the upstream row through so a node placed after the IF (a
+  // save_to_target, say) still has the fields it came to save. `branch` and
+  // `expression` are set last so the IF's own verdict always wins, keeping
+  // `{{ nodes.if.branch }}` and downstream branch reads correct even if an
+  // upstream row happened to carry a field of the same name.
+  const row: Record<string, unknown> = { ...upstreamRow, expression, branch }
   if (written !== expression) row.written = written
   if (error !== undefined) row.error = error
   nodeOutputs[node.id] = { output: branch, rows: [row] }

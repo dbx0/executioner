@@ -1,9 +1,8 @@
-import { existsSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { escapePythonString, interpolate } from '@exe/nodes'
 import type { Target } from '@exe/protocol'
-import type { LoopContext, NodeOutput } from '../../../infra/template-scope.js'
+import { evidenceStem, type LoopContext, type NodeOutput } from '../../../infra/template-scope.js'
 import {
-  findChromeBinary,
   findPythonBinary,
   resolveNodeTarget,
   scopeFor,
@@ -11,9 +10,16 @@ import {
   writeBuiltinEvidence,
   writeBuiltinStderr,
 } from '../helpers.js'
+import { buildRequestHeaders } from './http.js'
+import { cdpScreenshot } from './screenshot-driver.js'
 import { finishBuiltin, type BuiltinNodeDeps } from './shared.js'
 
-/** screenshot: capture a URL with the system headless Chrome; records a `screenshot` fact. */
+/**
+ * screenshot: capture a URL with the system headless Chrome, driven over CDP so
+ * requests to the target's host carry the node's `headers` (templatable like http_request's).
+ * Records a `screenshot` fact. In a loop each iteration keeps its own PNG rather
+ * than overwriting the one before it.
+ */
 export async function runScreenshot(
   deps: BuiltinNodeDeps,
   node: { id: string; data: Record<string, unknown> },
@@ -32,49 +38,26 @@ export async function runScreenshot(
     return
   }
   if (!/^https?:\/\//i.test(url)) url = `https://${url}`
-  const chrome = findChromeBinary()
-  if (chrome === null) {
-    finishBuiltin(
-      deps,
-      executionId,
-      node.id,
-      'failed',
-      'no Chrome/Chromium binary found (install Google Chrome or chromium)',
-      [],
-      null,
-    )
+
+  // Headers are parsed and templated exactly as http_request does, so a value
+  // pulled from tool output cannot inject a second header or break the line.
+  let headers: Record<string, string>
+  try {
+    headers = buildRequestHeaders(node.data.headers, ctx)
+  } catch (e) {
+    finishBuiltin(deps, executionId, node.id, 'failed', (e as Error).message, [], null)
     return
   }
-  const dir = deps.project.evidenceDir(executionId)
-  const outPath = `${dir}/${node.id}.png`
+
+  const fullPage = node.data.full_page === true || node.data.full_page === 'true'
   const timeoutMs = Math.min(Math.max(5000, Number(node.data.timeout ?? 30000)), 120000)
-  const args = [
-    '--headless=new',
-    '--disable-gpu',
-    // Chrome's sandbox is what stands between a hostile page and this machine,
-    // so it stays on. Chrome refuses to start sandboxed as root (a container),
-    // which is the one case it is turned off.
-    ...(isRoot() ? ['--no-sandbox'] : []),
-    '--hide-scrollbars',
-    `--screenshot=${outPath}`,
-    '--window-size=1280,800',
-    url,
-  ]
+  const dir = deps.project.evidenceDir(executionId)
+  const outPath = `${dir}/${evidenceStem(node.id, loop)}.png`
+  const capture = deps.captureScreenshot ?? cdpScreenshot
   try {
-    const result = await spawnCapture(chrome, args, timeoutMs)
-    if (!existsSync(outPath)) {
-      finishBuiltin(
-        deps,
-        executionId,
-        node.id,
-        'failed',
-        `screenshot not produced${result.stderr !== '' ? `: ${result.stderr.slice(0, 200)}` : ''}`,
-        [],
-        null,
-      )
-      return
-    }
-    const row: Record<string, unknown> = { url, path: outPath, full_page: Boolean(node.data.full_page ?? false) }
+    const png = await capture({ url, headers, fullPage, timeoutMs })
+    writeFileSync(outPath, png)
+    const row: Record<string, unknown> = { url, path: outPath, full_page: fullPage }
     if (target !== undefined) {
       deps.project.facts.record({ targetId: target.id, kind: 'screenshot', executionId, nodeId: node.id, data: row })
     }
@@ -83,11 +66,6 @@ export async function runScreenshot(
   } catch (e) {
     finishBuiltin(deps, executionId, node.id, 'failed', String((e as Error).message), [], null)
   }
-}
-
-/** True when the engine runs as root, where Chrome will not start sandboxed. */
-function isRoot(): boolean {
-  return typeof process.getuid === 'function' && process.getuid() === 0
 }
 
 /**
