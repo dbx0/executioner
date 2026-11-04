@@ -25,6 +25,7 @@ import { EngineSupervisor, type EngineConnection } from './engine-supervisor.js'
 import { editMenuTemplate } from './edit-menu.js'
 import { createIpcHandlers, validBounds, validBrowserOp, validBrowserTarget } from './ipc.js'
 import { allowPermission, externalUrl, isAppUrl } from './security.js'
+import { resolveShellEnv } from './shell-path.js'
 import { checkForUpdate, installKind, startInstall } from './update.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -57,9 +58,14 @@ const nodeBin = app.isPackaged
   ? process.execPath
   : (process.env.npm_node_execpath ?? 'node')
 
+// A packaged app opened from Finder/Dock inherits launchd's bare PATH, so take
+// the login shell's PATH; otherwise the engine can't find the agent CLIs.
+const baseEnv: NodeJS.ProcessEnv = app.isPackaged ? resolveShellEnv(process.env) : process.env
+if (app.isPackaged) process.env.PATH = baseEnv.PATH
+
 const spawnEnv: NodeJS.ProcessEnv = app.isPackaged
-  ? { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
-  : process.env
+  ? { ...baseEnv, ELECTRON_RUN_AS_NODE: '1' }
+  : baseEnv
 
 /** Whether two paths name one folder; the engine may report a resolved form of the dir it was given. */
 function sameDir(a: string, b: string): boolean {
