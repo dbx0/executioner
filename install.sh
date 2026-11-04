@@ -154,8 +154,17 @@ install_mac() {
   local dest
   dest="$(mac_app_dir)"
   mkdir -p "$dest"
-  rm -rf "${dest}/${APP}.app"
-  ditto "${tmp}/app/${APP}.app" "${dest}/${APP}.app"
+  # Move the old copy aside rather than deleting it first, so a failed copy
+  # puts it back instead of leaving no app at all.
+  local old="${dest}/.${APP}.app.old"
+  rm -rf "$old"
+  if [ -d "${dest}/${APP}.app" ]; then mv "${dest}/${APP}.app" "$old"; fi
+  if ! ditto "${tmp}/app/${APP}.app" "${dest}/${APP}.app"; then
+    rm -rf "${dest}/${APP}.app"
+    if [ -d "$old" ]; then mv "$old" "${dest}/${APP}.app"; fi
+    fail "could not copy ${APP}.app to ${dest}"
+  fi
+  rm -rf "$old"
   # Builds without a Developer ID are only ad-hoc signed; drop the quarantine
   # flag so Gatekeeper does not refuse to open them.
   xattr -dr com.apple.quarantine "${dest}/${APP}.app" 2>/dev/null || true

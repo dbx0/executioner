@@ -9,6 +9,8 @@ import {
   expectedChecksum,
   installKind,
   isNewer,
+  MAC_INSTALL_LABEL,
+  macInstallCommand,
   relaunchTarget,
   releaseAsset,
   tagFromReleaseUrl,
@@ -59,6 +61,33 @@ describe('relaunchTarget', () => {
   it('reopens through AppRun on Linux and the bundle on macOS', () => {
     expect(relaunchTarget('linux', '/home/u/.local/opt/executioner/executioner')).toBe('/home/u/.local/opt/executioner/AppRun')
     expect(relaunchTarget('mac', '/Applications/Executioner.app/Contents/MacOS/Executioner')).toBe('/Applications/Executioner.app')
+  })
+})
+
+describe('macInstallCommand', () => {
+  const argv = macInstallCommand({
+    HOME: '/Users/u',
+    PATH: '/usr/bin:/bin',
+    EXE_PID: '42',
+    EXECUTIONER_DOWNLOAD_DIR: '/tmp/dl dir',
+    SECRET_TOKEN: 'nope',
+  })
+
+  it('submits the installer to launchd so it outlives the app', () => {
+    expect(argv.slice(0, 6)).toEqual(['submit', '-l', MAC_INSTALL_LABEL, '--', '/usr/bin/env', '-i'])
+    expect(argv.slice(-3, -1)).toEqual(['/bin/bash', '-c'])
+  })
+
+  it('passes the install variables as argv and leaves the rest behind', () => {
+    expect(argv).toContain('HOME=/Users/u')
+    expect(argv).toContain('EXE_PID=42')
+    expect(argv).toContain('EXECUTIONER_DOWNLOAD_DIR=/tmp/dl dir')
+    expect(argv).toContain(`EXE_LAUNCHD_LABEL=${MAC_INSTALL_LABEL}`)
+    expect(argv.some((a) => a.startsWith('SECRET_TOKEN='))).toBe(false)
+  })
+
+  it('removes its own job however the script ends, so launchd runs it once', () => {
+    expect(argv.at(-1)).toContain(`trap 'launchctl remove "$EXE_LAUNCHD_LABEL"' EXIT`)
   })
 })
 

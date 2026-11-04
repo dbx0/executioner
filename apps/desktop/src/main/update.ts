@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createWriteStream } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
@@ -180,7 +180,11 @@ export async function downloadUpdate(opts: {
 // The scripts read their inputs from the environment, never from interpolated
 // strings, so a path cannot inject shell. The install script finds the files
 // already downloaded through EXECUTIONER_DOWNLOAD_DIR and checks them again.
+// On macOS the script runs as a launchd job (see macInstallCommand), which
+// launchd would restart on every exit: the trap removes the job however the
+// script ends, so it runs once.
 const POSIX_SCRIPT = `
+if [ -n "\${EXE_LAUNCHD_LABEL:-}" ]; then trap 'launchctl remove "$EXE_LAUNCHD_LABEL"' EXIT; fi
 while kill -0 "$EXE_PID" 2>/dev/null; do sleep 0.2; done
 bash "$EXECUTIONER_DOWNLOAD_DIR/install.sh"
 rm -rf "$EXECUTIONER_DOWNLOAD_DIR"
@@ -201,6 +205,40 @@ export function relaunchTarget(kind: InstallKind, execPath: string): string {
   return execPath
 }
 
+export const MAC_INSTALL_LABEL = 'sh.executioner.updater'
+
+// The variables the install script and the relaunched app need from the app's
+// environment; the rest stays behind.
+const MAC_PASSED_ENV = ['HOME', 'USER', 'LOGNAME', 'PATH', 'SHELL', 'TMPDIR', 'LANG', 'LC_ALL']
+
+/**
+ * The `launchctl submit` argv that runs the install script on macOS. A child
+ * process, detached or not, stays attributed to the app that spawned it, and
+ * when the app quits LaunchServices kills the app "including subordinate
+ * processes": the installer died mid-way and the app never came back. A job
+ * submitted to launchd belongs to launchd and outlives the app. launchd does
+ * not pass an environment to it, so `env -i` hands over the variables as argv
+ * (never through a shell, so no value can inject one).
+ */
+export function macInstallCommand(env: NodeJS.ProcessEnv): string[] {
+  const vars = Object.entries(env)
+    .filter(([key, value]) => value !== undefined && (key.startsWith('EXE') || MAC_PASSED_ENV.includes(key)))
+    .map(([key, value]) => `${key}=${value}`)
+  return [
+    'submit',
+    '-l',
+    MAC_INSTALL_LABEL,
+    '--',
+    '/usr/bin/env',
+    '-i',
+    ...vars,
+    `EXE_LAUNCHD_LABEL=${MAC_INSTALL_LABEL}`,
+    '/bin/bash',
+    '-c',
+    POSIX_SCRIPT,
+  ]
+}
+
 /**
  * Start the detached installer on a finished download. The caller quits the
  * app right after: the script waits for this process to exit before replacing
@@ -219,6 +257,13 @@ export function startInstall(opts: { kind: InstallKind; tag: string; dir: string
   // The packaged app runs the engine with ELECTRON_RUN_AS_NODE; the relaunched
   // app must not inherit it.
   delete env.ELECTRON_RUN_AS_NODE
+  if (opts.kind === 'mac') {
+    // A job left over from an earlier attempt would make submit fail.
+    spawnSync('/bin/launchctl', ['remove', MAC_INSTALL_LABEL], { stdio: 'ignore' })
+    const res = spawnSync('/bin/launchctl', macInstallCommand(env), { stdio: 'ignore' })
+    if (res.status !== 0) throw new Error('could not start the installer')
+    return
+  }
   const child =
     opts.kind === 'windows'
       ? spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', WINDOWS_SCRIPT], {
