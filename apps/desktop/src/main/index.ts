@@ -26,6 +26,7 @@ import { collectConnectionHints } from './connection-hints.js'
 import { BrowserHostClient } from './browser/host-client.js'
 import { BrowserManager, type DialogInfo } from './browser/manager.js'
 import { EngineSupervisor, type EngineConnection } from './engine-supervisor.js'
+import { CloseGuard } from './close-guard.js'
 import { editMenuTemplate } from './edit-menu.js'
 import { coalesced } from './logging/coalesce.js'
 import { buildExport, type ExportRequest } from './logging/export.js'
@@ -202,6 +203,34 @@ function runEngineJson<T>(args: string[], input: unknown): Promise<T> {
 
 let mainWindow: BrowserWindow | undefined
 
+// Every close and quit waits for the user's confirmation: closing stops the
+// engines, and with them every running terminal, agent and run.
+const closeGuard = new CloseGuard({
+  ask: () => {
+    const win = mainWindow
+    if (win === undefined || win.isDestroyed()) return
+    if (win.isMinimized()) win.restore()
+    win.focus()
+    win.webContents.send('confirm-close')
+  },
+  askNative: async () => {
+    const win = mainWindow
+    if (win === undefined || win.isDestroyed()) return true
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'question',
+      buttons: ['Close', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'Close Executioner',
+      message: 'Close Executioner?',
+      detail: 'Closing stops every running terminal, agent and run.',
+    })
+    return response === 0
+  },
+  close: () => mainWindow?.close(),
+  quit: () => app.quit(),
+})
+
 /** Pixel size an engagement photo badge is stored and rendered at. */
 const PHOTO_SIZE = 128
 
@@ -338,6 +367,10 @@ function createWindow(splash?: Splash): void {
   // leave: any other scheme would launch whatever the desktop registered for it.
   // The renderer-drawn maximize button swaps its icon with the window state.
   const win = mainWindow
+  closeGuard.reset()
+  win.on('close', (event) => {
+    if (closeGuard.shouldBlock('close')) event.preventDefault()
+  })
   // The embedded browsers draw as native views over this window. The window is
   // the only thing state is pushed to; dialogs are native boxes because the
   // renderer's DOM cannot draw over a native view.
@@ -579,6 +612,9 @@ handle('clipboard-write-text', (text: unknown) => {
 
 // Minimize, maximize and close for the frameless window on Windows and Linux,
 // drawn by the renderer's titlebar (macOS keeps its native traffic lights).
+listen('close-confirm-shown', () => closeGuard.acknowledged())
+listen('close-confirm-answer', (ok: unknown) => closeGuard.answer(ok === true))
+
 listen('window-control', (action: unknown) => {
   const win = mainWindow
   if (win === undefined || win.isDestroyed()) return
@@ -685,6 +721,7 @@ handle('install-update', () => {
   })
   installingUpdate = true
   logger.info('main/update', 'Installing update', { tag: downloadedUpdate.tag })
+  closeGuard.allow()
   app.quit()
 })
 app.on('will-quit', () => {
@@ -838,7 +875,12 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  // Cmd+Q and the dock's Quit come here first: hold them for the confirmation too.
+  if (mainWindow !== undefined && !mainWindow.isDestroyed() && closeGuard.shouldBlock('quit')) {
+    event.preventDefault()
+    return
+  }
   // Logged here, synchronously: the engines' own exit lines arrive after the
   // session file has closed, so this is the last sign of the shutdown on disk.
   const count = supervisor.liveConnections().length

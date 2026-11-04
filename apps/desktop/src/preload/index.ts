@@ -120,6 +120,14 @@ contextBridge.exposeInMainWorld('executioner', {
   // native buttons are drawn over the renderer's titlebar.
   platform: process.platform,
   windowControl: (action: 'minimize' | 'maximize' | 'close'): void => ipcRenderer.send('window-control', action),
+  // Close confirmation: main holds every close and quit and asks here first.
+  onConfirmClose: (listener: () => void): (() => void) => {
+    const handler = (): void => listener()
+    ipcRenderer.on('confirm-close', handler)
+    return () => ipcRenderer.removeListener('confirm-close', handler)
+  },
+  closeConfirmShown: (): void => ipcRenderer.send('close-confirm-shown'),
+  answerClose: (ok: boolean): void => ipcRenderer.send('close-confirm-answer', ok),
   onMaximizedChange: (listener: (maximized: boolean) => void): (() => void) => {
     const handler = (_event: unknown, maximized: boolean): void => listener(maximized)
     ipcRenderer.on('window-maximized', handler)

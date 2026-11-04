@@ -108,6 +108,12 @@ declare global {
        *  everywhere else the titlebar draws its own window controls. */
       platform: string
       windowControl(action: 'minimize' | 'maximize' | 'close'): void
+      /** Main asks before any close or quit; returns the unsubscribe. */
+      onConfirmClose(listener: () => void): () => void
+      /** Tell main the confirm dialog is up, so it skips its native fallback. */
+      closeConfirmShown(): void
+      /** The user's answer: true closes (or quits), false keeps the app open. */
+      answerClose(ok: boolean): void
       /** Subscribe to maximize/unmaximize; returns the unsubscribe. */
       onMaximizedChange(listener: (maximized: boolean) => void): () => void
     }
