@@ -6,6 +6,9 @@ import type { UpdateInfo } from '../main/update.js'
 import type { BrowserState } from '../main/browser/page.js'
 
 declare global {
+  /** The app version from package.json, injected at build time. */
+  const __APP_VERSION__: string
+
   interface Window {
     executioner: {
       pickFolder(): Promise<string | undefined>

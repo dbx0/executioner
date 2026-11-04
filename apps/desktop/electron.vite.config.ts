@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'electron-vite'
@@ -39,6 +40,9 @@ function contentSecurityPolicy(): Plugin {
   }
 }
 
+/** The app version, the same one app.getVersion() reports, baked into the renderer. */
+const APP_VERSION = (JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as { version: string }).version
+
 export default defineConfig({
   main: {
     build: {
@@ -57,6 +61,7 @@ export default defineConfig({
   },
   renderer: {
     root: 'src/renderer',
+    define: { __APP_VERSION__: JSON.stringify(APP_VERSION) },
     server: {
       // The dev server's port is the renderer's localStorage origin, so it has to
       // be fixed and must never auto-bump: vite's default 5173 is taken by half

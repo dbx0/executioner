@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify('0.0.0-test') },
   resolve: {
     // Monaco's worker entry points are multi-megabyte bundles jsdom cannot run,
     // and nothing under test uses the language services they provide. The build

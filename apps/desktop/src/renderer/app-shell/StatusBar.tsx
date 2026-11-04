@@ -27,6 +27,7 @@ function stripSegments(p: ProviderLimits, now: number): string[] {
  * from the fetched five-hour / weekly / Fable windows. Clicking the strip opens
  * the Detailed usage popover (Claude + Codex rows, transcript history, accounts).
  * Polls the account limits slowly (60s) with a manual refresh in the panel.
+ * The app version sits at the far right and links to its GitHub release.
  */
 export function StatusBar(): JSX.Element {
   const client = useApp((s) => s.client)
@@ -100,6 +101,15 @@ export function StatusBar(): JSX.Element {
           <UsagePanel limits={limits} isFetching={isFetching} onRefresh={() => setReloadKey((k) => k + 1)} />
         </DropdownMenuContent>
       </DropdownMenu>
+      <a
+        href={`https://github.com/dbx0/executioner/releases/tag/v${__APP_VERSION__}`}
+        target="_blank"
+        rel="noreferrer"
+        className="ml-auto flex h-full shrink-0 items-center px-3 tabular-nums text-tertiary-foreground hover:bg-surface-1 hover:text-foreground"
+        title="Release notes for this version"
+      >
+        v{__APP_VERSION__}
+      </a>
     </footer>
   )
 }
