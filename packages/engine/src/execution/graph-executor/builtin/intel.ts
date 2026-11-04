@@ -27,7 +27,7 @@ export async function runGeoip(
     const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
     const text = await res.text()
     const data = JSON.parse(text) as Record<string, unknown>
-    const stdoutPath = writeBuiltinEvidence(deps.project, executionId, node.id, text)
+    const stdoutPath = writeBuiltinEvidence(deps.project, executionId, node.id, text, loop)
     if (data.status === 'fail') {
       finishBuiltin(deps, executionId, node.id, 'failed', String(data.message ?? 'geoip lookup failed'), [], stdoutPath)
       return
@@ -84,7 +84,7 @@ export async function runShodan(
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
     const text = await res.text()
-    const stdoutPath = writeBuiltinEvidence(deps.project, executionId, node.id, text)
+    const stdoutPath = writeBuiltinEvidence(deps.project, executionId, node.id, text, loop)
     if (!res.ok) {
       finishBuiltin(deps, executionId, node.id, 'failed', `shodan HTTP ${res.status}: ${text.slice(0, 200)}`, [], stdoutPath)
       return
@@ -169,7 +169,7 @@ export async function runCensys(
   try {
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) })
     const text = await res.text()
-    const stdoutPath = writeBuiltinEvidence(deps.project, executionId, node.id, text)
+    const stdoutPath = writeBuiltinEvidence(deps.project, executionId, node.id, text, loop)
     if (!res.ok) {
       finishBuiltin(deps, executionId, node.id, 'failed', `censys HTTP ${res.status}: ${text.slice(0, 200)}`, [], stdoutPath)
       return

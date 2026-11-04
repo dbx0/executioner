@@ -132,10 +132,10 @@ export async function runPythonScript(
   try {
     const result = await spawnCapture(python, [scriptPath], timeoutMs)
     const stdout = result.stdout
-    const stdoutPath = writeBuiltinEvidence(deps.project, executionId, node.id, stdout)
+    const stdoutPath = writeBuiltinEvidence(deps.project, executionId, node.id, stdout, loop)
     // spawnCapture collects stderr; without this it was dropped on the floor, so
     // a script diagnosing itself with print(..., file=sys.stderr) said nothing.
-    const stderrPath = writeBuiltinStderr(deps.project, executionId, node.id, result.stderr)
+    const stderrPath = writeBuiltinStderr(deps.project, executionId, node.id, result.stderr, loop)
     let rows: Array<Record<string, unknown>> = []
     const trimmed = stdout.trim()
     const lastLine = trimmed.split('\n').filter((l) => l.trim() !== '').pop() ?? ''

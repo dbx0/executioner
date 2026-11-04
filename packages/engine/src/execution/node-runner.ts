@@ -7,6 +7,7 @@ import type { EventBus } from '../transport/events.js'
 import type { CancellationRegistry } from './cancellation.js'
 import { createStreamThrottle } from '../transport/stream-throttle.js'
 import { LocalLauncher, type CommandLauncher } from '../infra/launcher.js'
+import { evidenceStem, type LoopContext } from '../infra/template-scope.js'
 import { engineLog, errorFields } from '../infra/log.js'
 
 export interface NodeRunnerDeps {
@@ -26,6 +27,9 @@ export interface NodeRunInput {
   launcher?: CommandLauncher
   /** Overrides the manifest's timeout for this node (ms), when set. */
   timeoutMs?: number
+  /** Set when this node runs inside a loop body, so its evidence files are kept
+   *  per iteration instead of each item overwriting the last. */
+  loop?: LoopContext
   /** When false, the node runs and returns parsed rows for downstream nodes but
    *  does NOT persist its emitted targets/facts to the project (the per-node
    *  "don't save" flag). Defaults to true. */
@@ -52,8 +56,9 @@ export class NodeRunner {
     const { manifest, params, target, executionId, nodeId } = input
     const { bus, project } = this.deps
     const dir = project.evidenceDir(executionId)
-    const stdoutPath = join(dir, `${nodeId}.stdout`)
-    const stderrPath = join(dir, `${nodeId}.stderr`)
+    const stem = evidenceStem(nodeId, input.loop)
+    const stdoutPath = join(dir, `${stem}.stdout`)
+    const stderrPath = join(dir, `${stem}.stderr`)
 
     return new Promise<NodeRunOutput>((resolve) => {
       let argv

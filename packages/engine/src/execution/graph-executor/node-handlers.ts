@@ -2,7 +2,7 @@ import { interpolate, resolveParams } from '@exe/nodes'
 import type { Target, TargetKind } from '@exe/protocol'
 import type { CommandLauncher } from '../../infra/launcher.js'
 import type { NodeRunner } from '../node-runner.js'
-import { buildScope, type LoopContext, type NodeOutput } from '../../infra/template-scope.js'
+import { buildScope, evidenceStem, type LoopContext, type NodeOutput } from '../../infra/template-scope.js'
 import type { GraphExecutorDeps } from './types.js'
 
 /** Classify a bare string so a loop item can become a real target row. */
@@ -100,9 +100,13 @@ export async function runToolNode(
     nodeId: node.id,
     launcher,
     persist: !noSave,
+    ...(loop !== undefined ? { loop } : {}),
     ...(Number.isFinite(timeoutOverride) && timeoutOverride > 0 ? { timeoutMs: timeoutOverride } : {}),
   })
 
+  // Record the same per-iteration evidence paths the runner wrote, so a node
+  // that ran N times in a loop keeps N distinct stdout/stderr files on disk.
+  const stem = evidenceStem(node.id, loop)
   nodeOutputs[node.id] = { output: result.output, rows: result.rows }
   deps.store.recordNode({
     executionId,
@@ -114,8 +118,8 @@ export async function runToolNode(
           ? 'succeeded'
           : 'failed',
     exitCode: result.exitCode,
-    stdoutPath: `${runDir}/${node.id}.stdout`,
-    stderrPath: `${runDir}/${node.id}.stderr`,
+    stdoutPath: `${runDir}/${stem}.stdout`,
+    stderrPath: `${runDir}/${stem}.stderr`,
     parsedOutput: result.rows,
   })
 }

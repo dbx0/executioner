@@ -118,10 +118,18 @@ describe('a tool node that names its own target', () => {
     const result = await exec.run({ graph, workflowId: null, targetId: target.id, testMode: false })
 
     const runDir = project.evidenceDir(result.executionId)
-    const out = readFileSync(join(runDir, 'scan.stdout'), 'utf8')
-    // The last iteration's output wins the file; the point is that it is the
-    // loop item, not the apex the run was started against.
-    expect(out.trim()).toBe('b.example.com')
+    // Each iteration keeps its own evidence file (suffixed with the loop index)
+    // rather than overwriting the one before it, so get_execution can show what
+    // every item actually produced.
+    expect(readFileSync(join(runDir, 'scan.0.stdout'), 'utf8').trim()).toBe('a.example.com')
+    expect(readFileSync(join(runDir, 'scan.1.stdout'), 'utf8').trim()).toBe('b.example.com')
+    // The stored node rows point at those per-iteration files, not one shared path.
+    const paths = exec['store']
+      .nodesFor(result.executionId)
+      .filter((n) => n.nodeId === 'scan')
+      .map((n) => n.stdoutPath)
+    expect(paths).toContain(join(runDir, 'scan.0.stdout'))
+    expect(paths).toContain(join(runDir, 'scan.1.stdout'))
   })
 
   it('records the item as a real target under the run target, so facts land on it', async () => {
@@ -167,8 +175,10 @@ describe('built-in nodes inside a loop body', () => {
 
     const node = nodesOf(exec, result.executionId).find((n) => n.nodeId === 'probe')
     expect(node?.status).toBe('succeeded')
-    const out = readFileSync(join(project.evidenceDir(result.executionId), 'probe.stdout'), 'utf8')
-    expect(out).toContain('saw b.example.com')
+    const runDir = project.evidenceDir(result.executionId)
+    // Each iteration keeps its own evidence file rather than overwriting it.
+    expect(readFileSync(join(runDir, 'probe.0.stdout'), 'utf8')).toContain('saw a.example.com')
+    expect(readFileSync(join(runDir, 'probe.1.stdout'), 'utf8')).toContain('saw b.example.com')
   })
 
   it('lets an if inside the body gate only its own iteration', async () => {
@@ -190,8 +200,9 @@ describe('built-in nodes inside a loop body', () => {
     // The if no longer fails outright, and the body node behind it still runs.
     const gate = nodesOf(exec, result.executionId).find((n) => n.nodeId === 'gate')
     expect(gate?.status).not.toBe('failed')
-    const out = readFileSync(join(project.evidenceDir(result.executionId), 'after.stdout'), 'utf8')
-    expect(out).toContain('ran for drop')
+    const runDir = project.evidenceDir(result.executionId)
+    expect(readFileSync(join(runDir, 'after.0.stdout'), 'utf8')).toContain('ran for keep')
+    expect(readFileSync(join(runDir, 'after.1.stdout'), 'utf8')).toContain('ran for drop')
   })
 })
 

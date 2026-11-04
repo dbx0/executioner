@@ -95,9 +95,15 @@ function timeoutParam(raw: unknown, fallback: number): number {
  * Fails the node with a message the operator can see. A refusal is only useful
  * if they learn why, so it goes to the node's stderr, live and on disk.
  */
-function failNode(deps: BuiltinNodeDeps, executionId: string, nodeId: string, message: string): void {
+function failNode(
+  deps: BuiltinNodeDeps,
+  executionId: string,
+  nodeId: string,
+  message: string,
+  loop?: LoopContext,
+): void {
   deps.bus.publish({ type: 'stderr', executionId, nodeId, data: `${message}\n` })
-  const stderrPath = writeBuiltinStderr(deps.project, executionId, nodeId, `${message}\n`)
+  const stderrPath = writeBuiltinStderr(deps.project, executionId, nodeId, `${message}\n`, loop)
   finishBuiltin(deps, executionId, nodeId, 'failed', message, [], null, stderrPath)
 }
 
@@ -119,7 +125,7 @@ export async function runHttpRequest(
   const bodyType = String(node.data.body_type ?? 'json')
   const timeoutMs = timeoutParam(node.data.timeout, DEFAULT_TIMEOUT_MS)
   const allowInternal = allowsInternal(node.data)
-  const fail = (message: string): void => failNode(deps, executionId, node.id, message)
+  const fail = (message: string): void => failNode(deps, executionId, node.id, message, loop)
 
   let headers: Record<string, string>
   try {
@@ -158,7 +164,7 @@ export async function runHttpRequest(
     const rows = Array.isArray(parsed)
       ? (parsed as Array<Record<string, unknown>>)
       : [{ status: res.status, ok: res.ok, ...(parsed !== undefined ? { body: parsed } : { body: text }) }]
-    const stdoutPath = writeBuiltinEvidence(deps.project, executionId, node.id, text)
+    const stdoutPath = writeBuiltinEvidence(deps.project, executionId, node.id, text, loop)
     nodeOutputs[node.id] = { output: text, rows }
     finishBuiltin(deps, executionId, node.id, res.ok ? 'succeeded' : 'failed', text, rows, stdoutPath)
   } catch (e) {
@@ -191,7 +197,7 @@ export async function runNotify(
   const timeoutMs = timeoutParam(node.data.timeout, NOTIFY_TIMEOUT_MS)
   const allowInternal = allowsInternal(node.data)
   if (webhookUrl.trim() === '') {
-    failNode(deps, executionId, node.id, 'missing webhook_url')
+    failNode(deps, executionId, node.id, 'missing webhook_url', loop)
     return
   }
   // The message is substituted as plain text and the payload serialised after,
@@ -213,6 +219,6 @@ export async function runNotify(
     nodeOutputs[node.id] = { output: JSON.stringify(row), rows: [row] }
     finishBuiltin(deps, executionId, node.id, res.ok ? 'succeeded' : 'failed', JSON.stringify(row), [row], null)
   } catch (e) {
-    failNode(deps, executionId, node.id, String((e as Error).message))
+    failNode(deps, executionId, node.id, String((e as Error).message), loop)
   }
 }

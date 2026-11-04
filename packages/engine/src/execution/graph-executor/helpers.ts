@@ -4,7 +4,7 @@ import type { buildAdjacency, Graph } from '@exe/graph'
 import { interpolate } from '@exe/nodes'
 import type { Project } from '@exe/project'
 import type { Target } from '@exe/protocol'
-import { buildScope, type LoopContext, type NodeOutput } from '../../infra/template-scope.js'
+import { buildScope, evidenceStem, type LoopContext, type NodeOutput } from '../../infra/template-scope.js'
 import { engineLog, errorFields } from '../../infra/log.js'
 
 /** Build the template scope for a built-in node against the current run state. */
@@ -135,10 +135,17 @@ export function spawnCapture(
   })
 }
 
-/** Write a built-in node's raw output into the run's evidence dir. */
-export function writeBuiltinEvidence(project: Project, executionId: string, nodeId: string, text: string): string {
+/** Write a built-in node's raw output into the run's evidence dir. In a loop the
+ *  filename carries the iteration index so each item keeps its own file. */
+export function writeBuiltinEvidence(
+  project: Project,
+  executionId: string,
+  nodeId: string,
+  text: string,
+  loop?: LoopContext,
+): string {
   const dir = project.evidenceDir(executionId)
-  const path = `${dir}/${nodeId}.stdout`
+  const path = `${dir}/${evidenceStem(nodeId, loop)}.stdout`
   try {
     writeFileSync(path, text)
   } catch (e) {
@@ -155,9 +162,10 @@ export function writeBuiltinStderr(
   executionId: string,
   nodeId: string,
   text: string,
+  loop?: LoopContext,
 ): string | null {
   if (text === '') return null
-  const path = `${project.evidenceDir(executionId)}/${nodeId}.stderr`
+  const path = `${project.evidenceDir(executionId)}/${evidenceStem(nodeId, loop)}.stderr`
   try {
     writeFileSync(path, text)
   } catch (e) {

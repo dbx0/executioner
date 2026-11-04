@@ -9,6 +9,16 @@ export interface LoopContext {
   count: number
 }
 
+/**
+ * The evidence-file stem for a node's run. A node inside a loop body runs once
+ * per item under the same id, so without the index every iteration would write
+ * over the one before it and only the last would survive on disk. Outside a
+ * loop the stem is just the node id, so non-loop evidence paths are unchanged.
+ */
+export function evidenceStem(nodeId: string, loop?: LoopContext): string {
+  return loop === undefined ? nodeId : `${nodeId}.${String(loop.index)}`
+}
+
 export interface ScopeInput {
   params: Record<string, unknown>
   target: { value: string; kind: string }
