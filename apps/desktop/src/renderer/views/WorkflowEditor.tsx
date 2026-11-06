@@ -40,7 +40,6 @@ import { graphEdgeTypes } from '../components/canvas/AddEdge.js'
 import { useGraphHistory } from '../lib/useGraphHistory.js'
 import type { CatalogEntry } from '../lib/node-catalog.js'
 import { notify } from '../lib/toast.js'
-import { errorFields, rlog } from '../lib/log.js'
 import { runSummaryMessage } from '../lib/run-summary.js'
 import { useNewIds } from '../lib/motion.js'
 import { useEngineEvents } from '../lib/events.js'
@@ -665,9 +664,9 @@ export function WorkflowEditor({
     downloadJson(`${slug === '' ? 'workflow' : slug}.json`, { name, graph: buildGraph() })
   }
 
-  const applyWorkflowImport = (text: string): void => {
+  const applyWorkflowImport = (text: string): number | null => {
     const parsed = parseWorkflowFile(text)
-    if (parsed === null) throw new Error('Expected workflow JSON with graph.nodes and graph.edges arrays.')
+    if (parsed === null) return null
     const hydrated = hydrateGraph(parsed.graph)
     setWorkflowId(undefined)
     setName(parsed.name ?? 'Imported workflow')
@@ -677,55 +676,35 @@ export function WorkflowEditor({
     nextCanvas()
     history.reset(hydrated.nodes, hydrated.edges)
     setSelectedId(undefined)
-    rlog.info('workflows', 'Workflow imported', { nodes: hydrated.nodes.length, edges: hydrated.edges.length })
-    notify.success(`Imported ${hydrated.nodes.length} nodes. Save to keep this workflow.`)
+    return hydrated.nodes.length
   }
 
-  const importFailed = (error: unknown): void => {
-    rlog.error('workflows', 'Workflow import failed', errorFields(error))
-    notify.error('Import failed. ' + (error instanceof Error ? error.message : 'Could not read workflow JSON.'))
-  }
-
-  const onImport = async (): Promise<void> => {
-    rlog.info('workflows', 'Workflow import requested')
-    const pick = window.executioner?.pickWorkflowFile
-    if (pick === undefined) {
-      importRef.current?.click()
-      return
-    }
+  const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file === undefined) return
     try {
-      const file = await pick()
-      if (file !== undefined) applyWorkflowImport(file.text)
-    } catch (error) {
-      importFailed(error)
+      if (applyWorkflowImport(await file.text()) === null) {
+        notify.error('Import failed. Not a valid workflow file.')
+      }
+    } catch {
+      notify.error('Import failed. Could not read the file.')
     }
   }
 
   const onPasteImport = async (): Promise<void> => {
-    rlog.info('workflows', 'Workflow clipboard import requested')
     try {
       const text = window.executioner?.clipboardRead !== undefined
         ? await window.executioner.clipboardRead()
         : await navigator.clipboard.readText()
-      applyWorkflowImport(text)
-    } catch (error) {
-      importFailed(error)
-    }
-  }
-
-  const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
-    const input = e.currentTarget
-    const file = input.files?.[0]
-    if (file === undefined) {
-      rlog.info('workflows', 'Workflow file selection was empty')
-      return
-    }
-    try {
-      applyWorkflowImport(await file.text())
-    } catch (error) {
-      importFailed(error)
-    } finally {
-      input.value = ''
+      const nodeCount = applyWorkflowImport(text.replace(/^\uFEFF/, ''))
+      if (nodeCount === null) {
+        notify.error('Import failed. Expected workflow JSON with graph.nodes and graph.edges arrays.')
+        return
+      }
+      notify.success(`Imported ${nodeCount} nodes. Save to keep this workflow.`)
+    } catch {
+      notify.error('Import failed. Could not import workflow JSON from the clipboard.')
     }
   }
 
@@ -817,7 +796,6 @@ export function WorkflowEditor({
         onDuplicateWorkflow={() => void duplicateWorkflow()}
         onRequestDelete={() => setDeleteConfirm(true)}
         onExport={exportWorkflow}
-        onImport={() => void onImport()}
         onPasteImport={() => void onPasteImport()}
         onImportFile={(e) => void onImportFile(e)}
         onUndo={undo}

@@ -52,10 +52,10 @@ async function paste(text: string): Promise<void> {
 }
 
 describe('WorkflowEditor clipboard import', () => {
-  it('loads pasted workflow JSON and saves it as a new workflow', async () => {
+  it('loads pasted workflow JSON with a BOM and saves it as a new workflow', async () => {
     const create = vi.spyOn(client, 'post').mockResolvedValue({ data: { id: 'created' } })
     const update = vi.spyOn(client, 'put')
-    await paste(JSON.stringify(importedWorkflow))
+    await paste('\uFEFF' + JSON.stringify(importedWorkflow))
 
     expect(screen.getByText(importedWorkflow.name)).toBeTruthy()
     expect(create).not.toHaveBeenCalled()

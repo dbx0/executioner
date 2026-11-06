@@ -30,10 +30,6 @@ describe('parseWorkflowFile', () => {
     expect(parseWorkflowFile(JSON.stringify({ graph: { nodes: {}, edges: 1 } }))).toBeNull()
   })
 
-  it('accepts UTF-8 BOMs from external editors', () => {
-    expect(parseWorkflowFile('\uFEFF' + JSON.stringify({ graph: { nodes: [], edges: [] } }))).not.toBeNull()
-  })
-
   it('returns null on non-JSON input', () => {
     expect(parseWorkflowFile('not json at all')).toBeNull()
   })

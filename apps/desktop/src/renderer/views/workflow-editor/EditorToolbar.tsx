@@ -27,7 +27,6 @@ export function EditorToolbar({
   onDuplicateWorkflow,
   onRequestDelete,
   onExport,
-  onImport,
   onPasteImport,
   onImportFile,
   onUndo,
@@ -54,7 +53,6 @@ export function EditorToolbar({
   onDuplicateWorkflow: () => void
   onRequestDelete: () => void
   onExport: () => void
-  onImport: () => void
   onPasteImport: () => void
   onImportFile: (e: React.ChangeEvent<HTMLInputElement>) => void
   onUndo: () => void
@@ -136,7 +134,7 @@ export function EditorToolbar({
         size="icon-sm"
         aria-label="Import workflow"
         title="Import workflow"
-        onClick={onImport}
+        onClick={() => importRef.current?.click()}
       >
         <Upload className="size-4" strokeWidth={1.75} />
       </Button>
