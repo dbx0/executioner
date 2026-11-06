@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 // The only surface the renderer sees. Everything else is plain HTTP to the engine.
 contextBridge.exposeInMainWorld('executioner', {
   pickFolder: (): Promise<string | undefined> => ipcRenderer.invoke('pick-folder'),
+  pickWorkflowFile: (): Promise<{ name: string; text: string } | undefined> => ipcRenderer.invoke('pick-workflow-file'),
   openProject: (req: {
     dir: string
     create: boolean

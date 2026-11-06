@@ -14,6 +14,7 @@ declare global {
   interface Window {
     executioner: {
       pickFolder(): Promise<string | undefined>
+      pickWorkflowFile?(): Promise<{ name: string; text: string } | undefined>
       openProject(req: {
         dir: string
         create: boolean

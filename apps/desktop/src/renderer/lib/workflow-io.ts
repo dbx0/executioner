@@ -30,7 +30,7 @@ function isGraph(value: unknown): value is Graph {
 export function parseWorkflowFile(text: string): { name?: string; graph: Graph } | null {
   let parsed: unknown
   try {
-    parsed = JSON.parse(text)
+    parsed = JSON.parse(text.replace(/^\uFEFF/, ''))
   } catch {
     return null
   }

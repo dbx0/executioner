@@ -37,6 +37,7 @@ import { createIpcHandlers, validBounds, validBrowserOp, validBrowserTarget } fr
 import { allowPermission, externalUrl, isAppUrl } from './security.js'
 import { resolveShellEnv } from './shell-path.js'
 import { showSplash, type Splash } from './splash.js'
+import { pickWorkflowFile } from './workflow-file.js'
 import { checkForUpdate, downloadUpdate, installKind, startInstall } from './update.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -548,6 +549,10 @@ function listen<T>(channel: string, listener: (req: T) => void): void {
 }
 
 handle('pick-folder', () => handlers.pickFolder())
+handle('pick-workflow-file', () => pickWorkflowFile(
+  () => showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Workflow JSON', extensions: ['json'] }] }),
+  logger,
+))
 /** The argument an IPC handler takes, as the renderer sends it. */
 type Req<K extends keyof typeof handlers> = Parameters<(typeof handlers)[K]>[0]
 
