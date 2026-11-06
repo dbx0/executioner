@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import type { MutableRefObject } from 'react'
-import { Play, Save, Pencil, Network, Copy, Trash2, Download, Upload, Undo2, Redo2, ArrowLeft, Sparkles } from 'lucide-react'
+import { Play, Save, Pencil, Network, Copy, Trash2, Download, Upload, ClipboardPaste, Undo2, Redo2, ArrowLeft, Sparkles } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
 import { Input } from '../../components/ui/input.js'
 
@@ -27,6 +27,7 @@ export function EditorToolbar({
   onDuplicateWorkflow,
   onRequestDelete,
   onExport,
+  onPasteImport,
   onImportFile,
   onUndo,
   onRedo,
@@ -52,6 +53,7 @@ export function EditorToolbar({
   onDuplicateWorkflow: () => void
   onRequestDelete: () => void
   onExport: () => void
+  onPasteImport: () => void
   onImportFile: (e: React.ChangeEvent<HTMLInputElement>) => void
   onUndo: () => void
   onRedo: () => void
@@ -135,6 +137,15 @@ export function EditorToolbar({
         onClick={() => importRef.current?.click()}
       >
         <Upload className="size-4" strokeWidth={1.75} />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Paste workflow JSON"
+        title="Paste workflow JSON"
+        onClick={onPasteImport}
+      >
+        <ClipboardPaste className="size-4" strokeWidth={1.75} />
       </Button>
       <input
         ref={importRef}

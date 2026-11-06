@@ -664,27 +664,47 @@ export function WorkflowEditor({
     downloadJson(`${slug === '' ? 'workflow' : slug}.json`, { name, graph: buildGraph() })
   }
 
+  const applyWorkflowImport = (text: string): number | null => {
+    const parsed = parseWorkflowFile(text)
+    if (parsed === null) return null
+    const hydrated = hydrateGraph(parsed.graph)
+    setWorkflowId(undefined)
+    setName(parsed.name ?? 'Imported workflow')
+    applyingHistory.current = true
+    setNodes(hydrated.nodes)
+    setEdges(hydrated.edges)
+    nextCanvas()
+    history.reset(hydrated.nodes, hydrated.edges)
+    setSelectedId(undefined)
+    return hydrated.nodes.length
+  }
+
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (file === undefined) return
     try {
-      const parsed = parseWorkflowFile(await file.text())
-      if (parsed === null) {
+      if (applyWorkflowImport(await file.text()) === null) {
         notify.error('Import failed. Not a valid workflow file.')
-        return
       }
-      const hydrated = hydrateGraph(parsed.graph)
-      setWorkflowId(undefined)
-      setName(parsed.name ?? 'Imported workflow')
-      applyingHistory.current = true
-      setNodes(hydrated.nodes)
-      setEdges(hydrated.edges)
-      nextCanvas()
-      history.reset(hydrated.nodes, hydrated.edges)
-      setSelectedId(undefined)
     } catch {
       notify.error('Import failed. Could not read the file.')
+    }
+  }
+
+  const onPasteImport = async (): Promise<void> => {
+    try {
+      const text = window.executioner?.clipboardRead !== undefined
+        ? await window.executioner.clipboardRead()
+        : await navigator.clipboard.readText()
+      const nodeCount = applyWorkflowImport(text.replace(/^\uFEFF/, ''))
+      if (nodeCount === null) {
+        notify.error('Import failed. Expected workflow JSON with graph.nodes and graph.edges arrays.')
+        return
+      }
+      notify.success(`Imported ${nodeCount} nodes. Save to keep this workflow.`)
+    } catch {
+      notify.error('Import failed. Could not import workflow JSON from the clipboard.')
     }
   }
 
@@ -776,6 +796,7 @@ export function WorkflowEditor({
         onDuplicateWorkflow={() => void duplicateWorkflow()}
         onRequestDelete={() => setDeleteConfirm(true)}
         onExport={exportWorkflow}
+        onPasteImport={() => void onPasteImport()}
         onImportFile={(e) => void onImportFile(e)}
         onUndo={undo}
         onRedo={redo}
