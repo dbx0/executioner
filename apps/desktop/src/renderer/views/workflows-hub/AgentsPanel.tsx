@@ -10,6 +10,7 @@ export function AgentsPanel({
   singleAgents,
   onAddTeam,
   onAddAgent,
+  onRun,
   onEdit,
   onDelete,
 }: {
@@ -17,6 +18,7 @@ export function AgentsPanel({
   singleAgents: SavedAgent[]
   onAddTeam: () => void
   onAddAgent: () => void
+  onRun: (a: SavedAgent) => void
   onEdit: (a: SavedAgent) => void
   onDelete: (a: SavedAgent) => void
 }): JSX.Element {
@@ -28,7 +30,7 @@ export function AgentsPanel({
           <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3 pb-1">
             <AddTile label="Add team" onClick={onAddTeam} />
             {teams.map((a) => (
-              <AgentCard key={a.id} agent={a} onEdit={() => onEdit(a)} onDelete={() => onDelete(a)} />
+              <AgentCard key={a.id} agent={a} onRun={() => onRun(a)} onEdit={() => onEdit(a)} onDelete={() => onDelete(a)} />
             ))}
           </div>
         </ScrollArea>
@@ -39,7 +41,7 @@ export function AgentsPanel({
           <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3 pb-1">
             <AddTile label="Add agent" onClick={onAddAgent} />
             {singleAgents.map((a) => (
-              <AgentCard key={a.id} agent={a} onEdit={() => onEdit(a)} onDelete={() => onDelete(a)} />
+              <AgentCard key={a.id} agent={a} onRun={() => onRun(a)} onEdit={() => onEdit(a)} onDelete={() => onDelete(a)} />
             ))}
           </div>
         </ScrollArea>

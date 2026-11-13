@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { Copy, Pencil, Plus, Trash2, Workflow } from 'lucide-react'
+import { Copy, Pencil, Play, Plus, Trash2, Workflow } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
 import { AgentIcon } from '../../components/brand/AgentIcon.js'
 import { Skeleton } from '../../components/ui/skeleton.js'
@@ -75,18 +75,20 @@ export function WorkflowCard({
   )
 }
 
-/** One saved-agent (or team) card with edit/delete actions. */
+/** One saved-agent (or team) card with run/edit/delete actions. */
 export function AgentCard({
   agent,
+  onRun,
   onEdit,
   onDelete,
 }: {
   agent: SavedAgent
+  onRun: () => void
   onEdit: () => void
   onDelete: () => void
 }): JSX.Element {
   return (
-    <div className="group relative flex min-h-[92px] flex-col rounded-lg border border-border bg-card p-3 transition-all hover:border-border-strong hover:shadow-sm">
+    <div className="group relative flex min-h-[104px] flex-col rounded-lg border border-border bg-card p-3 transition-all hover:border-border-strong hover:shadow-sm">
       <div className="flex items-center gap-2">
         <span className="grid size-8 shrink-0 place-items-center rounded-md bg-surface-2">
           <AgentIcon agent={agent.agent} className="size-4" />
@@ -104,7 +106,19 @@ export function AgentCard({
           {agent.scope}
         </span>
       </div>
-      <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">{agent.description}</p>
+      <p className="mt-2 line-clamp-2 flex-1 text-[11px] text-muted-foreground">{agent.description}</p>
+      <div className="mt-2.5 flex items-center">
+        <Button
+          variant="secondary"
+          size="sm"
+          title="Run this agent against targets"
+          onClick={onRun}
+          className="h-7 gap-1.5 px-2.5 text-[12px]"
+        >
+          <Play className="size-3.5" strokeWidth={2} />
+          Run
+        </Button>
+      </div>
       <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
         <Button variant="ghost" size="icon-sm" aria-label="Edit" title="Edit" onClick={onEdit}>
           <Pencil className="size-4" strokeWidth={1.75} />

@@ -7,6 +7,7 @@ import { WorkflowPreviewModal } from '../components/modals/WorkflowPreviewModal.
 import { RunWorkflowModal } from '../components/modals/RunWorkflowModal.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
 import { SavedAgentModal } from '../components/modals/SavedAgentModal.js'
+import { RunAgentModal } from '../components/modals/RunAgentModal.js'
 import { HubHeader } from './workflows-hub/HubHeader.js'
 import { WorkflowsPanel } from './workflows-hub/WorkflowsPanel.js'
 import { AgentsPanel } from './workflows-hub/AgentsPanel.js'
@@ -40,6 +41,7 @@ export function WorkflowsHub({
   const [agents, setAgents] = useState<SavedAgent[]>([])
   // `kind` seeds the modal when creating (Add agent vs Add team).
   const [agentModal, setAgentModal] = useState<{ agent: SavedAgent | null; kind?: 'agent' | 'team' } | null>(null)
+  const [runAgentFor, setRunAgentFor] = useState<SavedAgent | null>(null)
   const [deleteAgentFor, setDeleteAgentFor] = useState<SavedAgent | null>(null)
 
   const teams = useMemo(() => agents.filter((a) => isTeamSavedAgent(a)), [agents])
@@ -107,6 +109,7 @@ export function WorkflowsHub({
           singleAgents={singleAgents}
           onAddTeam={() => setAgentModal({ agent: null, kind: 'team' })}
           onAddAgent={() => setAgentModal({ agent: null, kind: 'agent' })}
+          onRun={(a) => setRunAgentFor(a)}
           onEdit={(a) => setAgentModal({ agent: a })}
           onDelete={(a) => setDeleteAgentFor(a)}
         />
@@ -151,6 +154,13 @@ export function WorkflowsHub({
             setDeleteFor(null)
             void remove(id, keepHistory)
           }}
+        />
+      )}
+
+      {runAgentFor !== null && (
+        <RunAgentModal
+          agent={{ name: runAgentFor.name, agent: runAgentFor.agent, prompt: runAgentFor.prompt }}
+          onClose={() => setRunAgentFor(null)}
         />
       )}
 
