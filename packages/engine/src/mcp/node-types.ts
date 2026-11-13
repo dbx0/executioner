@@ -108,8 +108,12 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     label: 'Loop',
     kind: 'loop',
     category: 'control',
-    description: 'Iterate the body over a newline/JSON list resolved from a template.',
-    params: [param({ name: 'source', type: 'string' })],
+    description:
+      'Run every downstream node once per item. Set source to {{ nodes.<nodeId>.rows }} to walk the parsed rows of an upstream node; the body reads {{ loop.item.<field> }}. A source that resolves to a JSON array or to lines of text is walked item by item, read as {{ loop.item }}.',
+    params: [
+      param({ name: 'source', type: 'string', description: 'Usually {{ nodes.<nodeId>.rows }}.' }),
+      param({ name: 'max_items', type: 'number', description: 'Stop after this many items. Leave empty to walk them all.' }),
+    ],
   },
   {
     type: 'stop',
@@ -164,7 +168,8 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     label: 'Save to Target',
     kind: 'save_to_target',
     category: 'data',
-    description: 'Persist upstream rows to the workflow target as targets or facts.',
+    description:
+      'Persist a value from upstream rows to the workflow target. Only for values no node saved: tool and recon nodes already save their own results, so do not put this after one.',
     params: [
       param({ name: 'data_type', type: 'enum', oneOf: ['subdomain', 'open_port', 'technology', 'raw_output'], default: 'raw_output' }),
       param({ name: 'field', type: 'string', default: 'value', description: 'Row field holding the value to save.' }),
@@ -360,7 +365,7 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     kind: 'python_script',
     category: 'logic',
     description:
-      'Run an arbitrary Python script (python3). Print a JSON dict/array for downstream rows. Put {{ }} placeholders inside a string literal: values are inserted escaped, as text.',
+      'Last resort, for a step no node or combination of nodes can do. Runs a Python script (python3); print a JSON dict/array for downstream rows. Put {{ }} placeholders inside a string literal: values are inserted escaped, as text.',
     params: [
       param({ name: 'script', type: 'string', default: 'import json\nprint(json.dumps({"status": "ok"}))' }),
       param({ name: 'timeout', type: 'number', default: 60000 }),

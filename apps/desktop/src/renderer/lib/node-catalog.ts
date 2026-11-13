@@ -116,8 +116,16 @@ export const CONTROL_ENTRIES: CatalogEntry[] = [
     label: 'Loop',
     kind: 'loop',
     category: 'control',
-    description: 'Iterate the body over a newline/JSON list resolved from a template.',
-    params: [{ name: 'source', type: 'string' }],
+    description: 'Run every downstream node once per item, for example once per result of another node.',
+    params: [
+      {
+        name: 'source',
+        type: 'string',
+        description:
+          'What to walk. Use {{ nodes.<node id>.rows }} for the results of another node, then read a field in the body with {{ loop.item.<field> }}. A JSON list or lines of text also work, read as {{ loop.item }}.',
+      },
+      { name: 'max_items', type: 'number', description: 'Stop after this many items. Leave empty to walk them all.' },
+    ],
   },
   {
     type: 'stop',

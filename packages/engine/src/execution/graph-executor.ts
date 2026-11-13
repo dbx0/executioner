@@ -160,7 +160,10 @@ export class GraphExecutor {
       }
 
       if (node.type === 'loop') {
-        const items = resolveLoopItems(project, node.data.source, target, exec.id, nodeOutputs)
+        const all = resolveLoopItems(project, node.data.source, target, exec.id, nodeOutputs)
+        // A cap on how many items the body runs for; 0 or unset walks them all.
+        const maxItems = Number(node.data.max_items ?? 0)
+        const items = Number.isFinite(maxItems) && maxItems > 0 ? all.slice(0, Math.floor(maxItems)) : all
         const body = loopBody(nodeId, adj)
         for (const id of body) loopHandled.add(id)
         for (let index = 0; index < items.length; index += 1) {

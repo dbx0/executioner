@@ -188,7 +188,15 @@ export function lastUpstreamRow(
   return {}
 }
 
-/** LOOP source resolves to a JSON array if parseable, else newline-split lines. */
+/** `{{ nodes.<id>.rows }}`, alone: the loop walks that node's parsed rows. */
+const ROWS_SOURCE = /^\{\{\s*nodes\.([A-Za-z0-9_-]+)\.rows\s*\}\}$/
+
+/**
+ * The items a LOOP walks. `{{ nodes.<id>.rows }}` is that node's parsed rows,
+ * each one an object, so the body reads `{{ loop.item.host }}` whatever format
+ * the tool printed. Any other source resolves as a template to a JSON array if
+ * it parses as one, else to its non-empty lines.
+ */
 export function resolveLoopItems(
   project: Project,
   source: unknown,
@@ -197,6 +205,8 @@ export function resolveLoopItems(
   nodeOutputs: Record<string, NodeOutput>,
 ): unknown[] {
   if (typeof source !== 'string') return []
+  const rowsOf = ROWS_SOURCE.exec(source.trim())
+  if (rowsOf !== null) return nodeOutputs[rowsOf[1] as string]?.rows ?? []
   const runDir = project.evidenceDir(executionId)
   const scope = buildScope({
     params: {},
