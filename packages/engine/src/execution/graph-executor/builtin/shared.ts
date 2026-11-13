@@ -4,6 +4,7 @@ import type { RunRepository } from '@exe/db'
 import type { Sender } from './http-client.js'
 import type { Resolver } from './http-guard.js'
 import type { ScreenshotDriver } from './screenshot-driver.js'
+import type { DnsLookup, TlsProbe } from './surface-drivers.js'
 
 /** The slice of the executor's dependencies the built-in node handlers need. */
 export interface BuiltinNodeDeps {
@@ -18,6 +19,10 @@ export interface BuiltinNodeDeps {
   sendHttp?: Sender
   /** How the screenshot node captures a page. Absent → the real Chrome/CDP driver. */
   captureScreenshot?: ScreenshotDriver
+  /** How tls_cert reads a served certificate. Absent → a real TLS handshake. */
+  probeTls?: TlsProbe
+  /** How dns_records resolves. Absent → the system resolvers. */
+  dnsLookup?: DnsLookup
 }
 
 /** Emit the running/done lifecycle + persist a built-in node's result. */

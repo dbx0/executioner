@@ -8,6 +8,7 @@ import type { RunRepository } from '@exe/db'
 import type { Sender } from './builtin/http-client.js'
 import type { Resolver } from './builtin/http-guard.js'
 import type { ScreenshotDriver } from './builtin/screenshot-driver.js'
+import type { DnsLookup, TlsProbe } from './builtin/surface-drivers.js'
 
 export const EXECUTION_CHANNEL = '__execution__'
 
@@ -27,6 +28,10 @@ export interface GraphExecutorDeps {
   sendHttp?: Sender
   /** How the screenshot node captures a page. Absent → the real Chrome/CDP driver. Injected in tests. */
   captureScreenshot?: ScreenshotDriver
+  /** How tls_cert reads a served certificate. Absent → a real TLS handshake. Injected in tests. */
+  probeTls?: TlsProbe
+  /** How dns_records resolves. Absent → the system resolvers. Injected in tests. */
+  dnsLookup?: DnsLookup
 }
 
 export interface GraphRunInput {

@@ -6,7 +6,7 @@ accepts = ["url", "domain", "subdomain"]
 
 [command]
 program = "httpx"
-args = ["-u", "{{ target.value }}", "-json", "-silent", "-nc"]
+args = ["-u", "{{ target.value }}", "-json", "-silent", "-nc", "-tls-grab"]
 timeout_ms = 120000
 
 [emit]
@@ -17,3 +17,9 @@ records = "$"
 [[emit.facts]]
 kind = "http_service"
 data = { url = "{{ record.url }}", status_code = "{{ record.status_code }}", title = "{{ record.title }}" }
+
+# Present only on an https row that completed a handshake; any other row has no
+# `tls` object, so the rule resolves nothing and is skipped.
+[[emit.facts]]
+kind = "certificate"
+data = { host = "{{ record.tls.host }}", port = "{{ record.tls.port }}", issuer = "{{ record.tls.issuer_cn }}", not_before = "{{ record.tls.not_before }}", not_after = "{{ record.tls.not_after }}", sans = "{{ record.tls.subject_an }}" }

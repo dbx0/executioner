@@ -59,4 +59,24 @@ describe('applyEmit', () => {
     const { targets } = applyEmit([{ ip: '10.0.0.1' }], emit, ctx)
     expect(targets[0]?.parentId).toBeNull()
   })
+
+  it('drops a fact when a field named in skip_if_empty resolves to nothing', () => {
+    // A tool reports "asked, and there is none" as an empty value (dnsx gives a
+    // null MX as [""]). That is not a record worth keeping.
+    const emit = emitSchema.parse({
+      parser: 'json',
+      facts: [{ kind: 'dns_record', data: { type: 'MX', value: '{{ record.mx }}' }, skip_if_empty: ['value'] }],
+    })
+    const { facts } = applyEmit([{ mx: [''] }, { mx: ['mail.example.com'] }], emit, ctx)
+    expect(facts.map((f) => f.data)).toEqual([{ type: 'MX', value: 'mail.example.com' }])
+  })
+
+  it('keeps an empty field on a rule that does not ask for it to be skipped', () => {
+    const emit = emitSchema.parse({
+      parser: 'json',
+      facts: [{ kind: 'http_service', data: { url: '{{ record.url }}', title: '{{ record.title }}' } }],
+    })
+    const { facts } = applyEmit([{ url: 'https://example.com', title: '' }], emit, ctx)
+    expect(facts.map((f) => f.data)).toEqual([{ url: 'https://example.com', title: '' }])
+  })
 })

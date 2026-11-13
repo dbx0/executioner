@@ -112,13 +112,38 @@ describe('wafw00f', () => {
 })
 
 describe('dnsx', () => {
-  it('builds argv with a record-type flag and parses resolved hosts', () => {
+  it('resolves the target itself with -l, asking for every record type by default', () => {
+    // -d is the brute-force input and refuses to run without a wordlist.
     expect(argvFor('dnsx', 'example.com', {})).toEqual([
-      '-d', 'example.com', '-resp', '-json', '-silent', '-a',
+      '-l', 'example.com', '-resp', '-json', '-silent', '-a', '-aaaa', '-cname', '-mx', '-ns', '-txt',
     ])
+  })
+
+  it('asks only for the ticked record types and passes a resolver when one is set', () => {
+    expect(
+      argvFor('dnsx', '1.1.1.1', { a: false, aaaa: false, cname: false, mx: false, ns: false, txt: false, ptr: true, resolvers: '1.1.1.1' }),
+    ).toEqual(['-l', '1.1.1.1', '-resp', '-json', '-silent', '-ptr', '-r', '1.1.1.1'])
+  })
+
+  it('still records each resolved host as raw output', () => {
     const { facts } = emitFor('dnsx', 'dnsx-sample.jsonl', 'domain', 'example.com')
-    expect(facts.map((f) => f.data.host)).toEqual(['example.com', 'www.example.com'])
-    expect(facts.every((f) => f.kind === 'raw_output')).toBe(true)
+    const raw = facts.filter((f) => f.kind === 'raw_output')
+    expect(raw.map((f) => f.data.host)).toEqual(['example.com', 'www.github.com', '1.1.1.1'])
+  })
+
+  it('keeps every answer as a dns_record, one per name and record type', () => {
+    const { facts } = emitFor('dnsx', 'dnsx-sample.jsonl', 'domain', 'example.com')
+    expect(facts.filter((f) => f.kind === 'dns_record').map((f) => f.data)).toEqual([
+      { name: 'example.com', type: 'A', value: '172.66.147.243,104.20.23.154' },
+      { name: 'example.com', type: 'AAAA', value: '2606:4700:10::6814:179a,2606:4700:10::ac42:93f3' },
+      // example.com publishes a null MX, which dnsx reports as [""]: no MX row.
+      { name: 'example.com', type: 'NS', value: 'hera.ns.cloudflare.com,elliott.ns.cloudflare.com' },
+      { name: 'example.com', type: 'TXT', value: 'v=spf1 -all,_k2n1y4vw3qtb4skdx9e7dxt97qrmmq9' },
+      { name: 'www.github.com', type: 'A', value: '4.228.31.150' },
+      { name: 'www.github.com', type: 'CNAME', value: 'github.com' },
+      { name: 'www.github.com', type: 'MX', value: 'github-com.mail.protection.outlook.com' },
+      { name: '1.1.1.1', type: 'PTR', value: 'one.one.one.one' },
+    ])
   })
 })
 
@@ -143,14 +168,28 @@ describe('naabu', () => {
 describe('httpx', () => {
   it('probes a single target via -u and emits http services', () => {
     expect(argvFor('httpx', 'https://example.com', {})).toEqual([
-      '-u', 'https://example.com', '-json', '-silent', '-nc',
+      '-u', 'https://example.com', '-json', '-silent', '-nc', '-tls-grab',
     ])
     const { facts } = emitFor('httpx', 'httpx-sample.jsonl', 'url', 'https://example.com')
-    expect(facts.map((f) => ({ url: f.data.url, status: f.data.status_code, title: f.data.title }))).toEqual([
+    const services = facts.filter((f) => f.kind === 'http_service')
+    expect(services.map((f) => ({ url: f.data.url, status: f.data.status_code, title: f.data.title }))).toEqual([
       { url: 'https://example.com', status: '200', title: 'Example Domain' },
       { url: 'https://example.com/login', status: '302', title: 'Login' },
     ])
-    expect(facts.every((f) => f.kind === 'http_service')).toBe(true)
+  })
+
+  it('keeps the certificate a TLS probe saw, and nothing for a row without one', () => {
+    const { facts } = emitFor('httpx', 'httpx-sample.jsonl', 'url', 'https://example.com')
+    expect(facts.filter((f) => f.kind === 'certificate').map((f) => f.data)).toEqual([
+      {
+        host: 'example.com',
+        port: '443',
+        issuer: 'Cloudflare TLS Issuing ECC CA 3',
+        not_before: '2026-09-26T22:49:11Z',
+        not_after: '2026-12-25T22:56:35Z',
+        sans: 'example.com,*.example.com',
+      },
+    ])
   })
 })
 

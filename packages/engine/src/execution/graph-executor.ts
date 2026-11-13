@@ -12,7 +12,10 @@ import { type LoopContext, type NodeOutput } from '../infra/template-scope.js'
 import type { Graph } from '@exe/graph'
 import type { Target } from '@exe/protocol'
 import {
+  runAsn,
   runCensys,
+  runCloudBuckets,
+  runDnsRecords,
   runGeoip,
   runHttpRequest,
   runMerge,
@@ -24,6 +27,7 @@ import {
   runIf,
   runSetVariable,
   runShodan,
+  runTlsCert,
   runTrigger,
 } from './graph-executor/builtin-nodes.js'
 import { lastUpstreamRow, resolveLoopItems } from './graph-executor/helpers.js'
@@ -263,6 +267,14 @@ export class GraphExecutor {
       await runShodan(this.deps, node, target, executionId, nodeOutputs, vars, secrets, loop)
     } else if (node.type === 'censys') {
       await runCensys(this.deps, node, target, executionId, nodeOutputs, vars, secrets, loop)
+    } else if (node.type === 'tls_cert') {
+      await runTlsCert(this.deps, node, target, executionId, nodeOutputs, vars, secrets, loop)
+    } else if (node.type === 'dns_records') {
+      await runDnsRecords(this.deps, node, target, executionId, nodeOutputs, vars, secrets, loop)
+    } else if (node.type === 'asn') {
+      await runAsn(this.deps, node, target, executionId, nodeOutputs, vars, secrets, loop)
+    } else if (node.type === 'cloud_buckets') {
+      await runCloudBuckets(this.deps, node, target, executionId, nodeOutputs, vars, secrets, loop)
     } else if (node.type === 'screenshot') {
       await runScreenshot(this.deps, node, target, executionId, nodeOutputs, vars, secrets, loop)
     } else if (node.type === 'python_script') {

@@ -282,6 +282,61 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     ],
   },
   {
+    type: 'tls_cert',
+    label: 'TLS Certificate',
+    kind: 'tls_cert',
+    category: 'recon',
+    description: 'Read the certificate a host serves (issuer, names, expiry) with one TLS handshake. Records a certificate fact. No external tool.',
+    params: [
+      param({ name: 'target', type: 'string', description: 'Host, host:port or URL. Defaults to the run target.' }),
+      param({ name: 'port', type: 'number', description: 'Defaults to the port in the target, or 443.' }),
+      param({ name: 'timeout', type: 'number', default: 15000 }),
+    ],
+    outputs: ['host', 'port', 'subject_cn', 'issuer', 'not_before', 'not_after', 'sans', 'days_left', 'expired'],
+  },
+  {
+    type: 'dns_records',
+    label: 'DNS Records',
+    kind: 'dns_records',
+    category: 'recon',
+    description:
+      'Resolve a name and record each answer set as a dns_record fact; addresses become child ip targets. On an IP it reverse-resolves (PTR) and saves the names as targets. One output row per answer. No external tool.',
+    params: [
+      param({ name: 'target', type: 'string', description: 'Name or IP. Defaults to the run target.' }),
+      param({ name: 'record_types', type: 'string', default: 'A,AAAA,CNAME,MX,NS,TXT', description: 'Comma separated. Ignored for an IP.' }),
+    ],
+    outputs: ['name', 'type', 'value'],
+  },
+  {
+    type: 'asn',
+    label: 'ASN Ranges',
+    kind: 'asn',
+    category: 'recon',
+    description:
+      'Find the AS announcing an IP (or take an AS number) and list its announced ranges via RIPEstat (no API key). One output row per range. Ranges are saved as cidr targets only when there are at most max_prefixes.',
+    params: [
+      param({ name: 'target', type: 'string', description: 'IP or AS number such as AS15169. Defaults to the run target.' }),
+      param({ name: 'max_prefixes', type: 'number', default: 100 }),
+      param({ name: 'ipv6', type: 'boolean', default: false }),
+      param({ name: 'timeout', type: 'number', default: 30000 }),
+    ],
+    outputs: ['asn', 'holder', 'prefix'],
+  },
+  {
+    type: 'cloud_buckets',
+    label: 'Cloud Buckets',
+    kind: 'cloud_buckets',
+    category: 'recon',
+    description:
+      'Guess bucket names from a keyword and check which exist on S3, Google Cloud Storage and Azure. One output row per bucket found, with access = open or protected. Found buckets are saved as url targets.',
+    params: [
+      param({ name: 'keyword', type: 'string', description: 'Defaults to the registrable label of the run target (acme for acme.com).' }),
+      param({ name: 'wordlist', type: 'string', description: 'Extra words tried as <keyword>-<word>, one per line.' }),
+      param({ name: 'timeout', type: 'number', default: 10000 }),
+    ],
+    outputs: ['provider', 'bucket', 'url', 'access', 'status_code'],
+  },
+  {
     type: 'screenshot',
     label: 'Screenshot',
     kind: 'screenshot',

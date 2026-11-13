@@ -40,9 +40,9 @@ describe('node catalogue parity', () => {
     expect([...desktopByType.keys()].sort()).toEqual([...engineByType.keys()].sort())
   })
 
-  it('declares 18 built-in node types', () => {
-    expect(desktopByType.size).toBe(18)
-    expect(engineByType.size).toBe(18)
+  it('declares 22 built-in node types', () => {
+    expect(desktopByType.size).toBe(22)
+    expect(engineByType.size).toBe(22)
   })
 
   for (const type of [...new Set([...desktopByType.keys()])].sort()) {

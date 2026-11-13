@@ -59,6 +59,10 @@ export const targetFactKindSchema = z.enum([
   'whois',
   'vulnerability',
   'geolocation',
+  /** A TLS certificate as served on one port: who issued it, for which names, until when. */
+  'certificate',
+  /** The answer set for one name and record type (A, CNAME, MX, ...). */
+  'dns_record',
   'raw_output',
 ])
 

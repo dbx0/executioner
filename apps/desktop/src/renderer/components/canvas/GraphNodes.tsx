@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { createContext, useContext, useState } from 'react'
 import { Handle, NodeToolbar, Position, useUpdateNodeInternals, type NodeProps } from 'reactflow'
-import { GitBranch, Repeat, OctagonX, Bot, Wrench, Braces, GitMerge, Database, ShieldAlert, Globe, Bell, MapPin, Radar, ScanSearch, Camera, FileCode, MousePointerClick, Clock, Sparkles, Copy, Trash2, Play, Plus } from 'lucide-react'
+import { GitBranch, Repeat, OctagonX, Bot, Wrench, Braces, GitMerge, Database, ShieldAlert, Globe, Bell, MapPin, Radar, ScanSearch, Lock, ListTree, Network, Cloud, Camera, FileCode, MousePointerClick, Clock, Sparkles, Copy, Trash2, Play, Plus } from 'lucide-react'
 import { categoryColor, type NodeKind } from '../../lib/node-catalog.js'
 import type { ParamSpec } from './ParamDrawer.js'
 import { cn } from '../../lib/utils.js'
@@ -248,6 +248,10 @@ export const NotifyNode = flowNode(<Bell className="size-4" strokeWidth={1.75} /
 export const GeoipNode = flowNode(<MapPin className="size-4" strokeWidth={1.75} />)
 export const ShodanNode = flowNode(<Radar className="size-4" strokeWidth={1.75} />)
 export const CensysNode = flowNode(<ScanSearch className="size-4" strokeWidth={1.75} />)
+export const TlsCertNode = flowNode(<Lock className="size-4" strokeWidth={1.75} />)
+export const DnsRecordsNode = flowNode(<ListTree className="size-4" strokeWidth={1.75} />)
+export const AsnNode = flowNode(<Network className="size-4" strokeWidth={1.75} />)
+export const CloudBucketsNode = flowNode(<Cloud className="size-4" strokeWidth={1.75} />)
 export const ScreenshotNode = flowNode(<Camera className="size-4" strokeWidth={1.75} />)
 export const PythonScriptNode = flowNode(<FileCode className="size-4" strokeWidth={1.75} />)
 
@@ -269,6 +273,10 @@ export const graphNodeTypes = {
   geoip: GeoipNode,
   shodan: ShodanNode,
   censys: CensysNode,
+  tls_cert: TlsCertNode,
+  dns_records: DnsRecordsNode,
+  asn: AsnNode,
+  cloud_buckets: CloudBucketsNode,
   screenshot: ScreenshotNode,
   python_script: PythonScriptNode,
 }
