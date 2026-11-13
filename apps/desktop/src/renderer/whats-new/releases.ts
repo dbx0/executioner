@@ -30,6 +30,7 @@ export const RELEASES: Release[] = [
           'A Recon starter workflow built from nodes alone, with no scripts to maintain.',
           'Agent in the new session menu: choose any installed CLI, saved agent or team, then the targets and where it runs.',
           'One session per target: start a separate agent session for each selected target.',
+          'Four specialist agents ship with every install: Recon Scout, Web Vuln Hunter, API & GraphQL Hunter and Mobile Recon.',
         ],
       },
       {

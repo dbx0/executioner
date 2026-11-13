@@ -105,7 +105,7 @@ export function memberLabel(m: TeamMember): string {
  * are told to use its real tool names (`run_command`, `upsert_target`,
  * `add_finding`, `list_findings`) rather than a vague "the project tools".
  */
-const ENGAGEMENT_RULES = [
+export const ENGAGEMENT_RULES = [
   'Rules of engagement:',
   '- Touch only assets the operator has confirmed in scope. When a lead points outside scope, record it and stop there.',
   '- Never run a destructive, denial-of-service, or data-modifying action against a live target. Prove access; do not abuse it.',
@@ -119,7 +119,7 @@ const ENGAGEMENT_RULES = [
  * reportable finding from an observation, so every member that can claim a
  * finding carries it.
  */
-const IMPACT_GATE = [
+export const IMPACT_GATE = [
   'Impact gate — nothing is a finding until it passes:',
   '- Write the sentence literally: "As an attacker I could <concrete action>, resulting in <concrete harm to the target, its data, or its users>, demonstrated by <captured request/response, decrypted data, screenshot, or callback hit>." If any of the three brackets can only be filled with speculation, it is a lead and not a finding — keep testing or drop it.',
   '- Execute the attack rather than describing it. Reaching a sink proves reachability, not impact; show what the attacker ends up holding. Reading your own data, an endpoint that correctly answers 401, and a documented feature working as designed are not boundary crossings.',

@@ -5,6 +5,7 @@ import { globalLayout } from '@exe/protocol'
 import { isoNow, newId } from '@exe/protocol'
 import type { SavedAgent, SavedAgentInput, SavedAgentMember } from '@exe/db'
 import { BUILTIN_TEAMS, type AgentTeam } from './agent-team.js'
+import { BUILTIN_AGENTS, type BuiltinAgent } from './builtin-agents.js'
 import { engineLog, errorFields } from '../infra/log.js'
 
 /** The set of built-in team ids, used to recognise seeded team agents. */
@@ -32,6 +33,24 @@ function membersOf(team: AgentTeam): SavedAgentMember[] {
  */
 export function rosterFingerprint(members: readonly SavedAgentMember[] | undefined): string {
   const canonical = (members ?? []).map((m) => [m.name, m.description, m.prompt, m.model ?? '', (m.tools ?? []).join(',')])
+  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex').slice(0, 16)
+}
+
+/**
+ * A stable fingerprint of a built-in single agent's content. Two definitions
+ * hash equal only when name, description, prompt, base CLI, model pin and tool
+ * allowlist all match, so a stored seed whose fingerprint equals its own
+ * `seedHash` is one we wrote and the user has not edited.
+ */
+export function builtinAgentFingerprint(a: {
+  name: string
+  description: string
+  prompt: string
+  agent: string
+  model?: string
+  tools?: readonly string[]
+}): string {
+  const canonical = [a.name, a.description, a.prompt, a.agent, a.model ?? '', (a.tools ?? []).join(',')]
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex').slice(0, 16)
 }
 
@@ -130,6 +149,44 @@ export class SavedAgentsStore {
   }
 
   /**
+   * Seed one standalone specialist (see builtin-agents.ts). A single Claude
+   * launch with a prompt and no roster, stamped with its content fingerprint and
+   * its stable built-in id so a later version can recognise and refresh it.
+   */
+  private agentSeed(def: BuiltinAgent): SavedAgent {
+    const now = isoNow()
+    const seed: SavedAgent = {
+      id: newId(),
+      name: def.name,
+      description: def.description,
+      agent: def.agent,
+      prompt: def.prompt,
+      scope: 'global',
+      createdAt: now,
+      updatedAt: now,
+      builtin: def.id,
+      seedHash: builtinAgentFingerprint(def),
+    }
+    if (def.model !== undefined && def.model !== '') seed.model = def.model
+    if (def.tools !== undefined && def.tools.length > 0) seed.tools = [...def.tools]
+    return seed
+  }
+
+  private agentSeedAgents(): SavedAgent[] {
+    return BUILTIN_AGENTS.map((def) => this.agentSeed(def))
+  }
+
+  /**
+   * True when a stored built-in single-agent seed is still exactly what we
+   * shipped, i.e. the user has not edited it: its content fingerprint matches
+   * the `seedHash` we stamped when it was written. Editing any field changes the
+   * fingerprint and drops this out of agreement, which is the intent.
+   */
+  private isUntouchedAgentSeed(a: SavedAgent): boolean {
+    return a.seedHash !== undefined && a.seedHash === builtinAgentFingerprint(a)
+  }
+
+  /**
    * True when the stored roster of a built-in team seed is still exactly one we
    * shipped, i.e. the user has not edited it. Checked against this record's own
    * `seedHash` first (set from the version that seeded it) and then against the
@@ -195,11 +252,26 @@ export class SavedAgentsStore {
       changed = true
       return { ...a, members: current, seedHash: currentHash, updatedAt: isoNow() }
     })
-    // 4. Add any built-in team not represented yet (matched by its agent string).
-    const present = new Set(refreshed.map((a) => a.agent))
-    const missing = BUILTIN_TEAMS.filter((t) => !present.has(`claude-team:${t.id}`)).map((t) => this.teamSeed(t))
-    if (missing.length > 0) changed = true
-    return { agents: [...missing, ...refreshed], changed }
+    // 4. Push a built-in prompt revision into any untouched single-agent seed,
+    //    keeping its record id; an edited one is left exactly as the user left it.
+    const withAgents = refreshed.map((a) => {
+      if (a.builtin === undefined) return a
+      const def = BUILTIN_AGENTS.find((d) => d.id === a.builtin)
+      if (def === undefined) return a
+      if (builtinAgentFingerprint(a) === builtinAgentFingerprint(def)) return a
+      if (!this.isUntouchedAgentSeed(a)) return a
+      changed = true
+      return { ...this.agentSeed(def), id: a.id, createdAt: a.createdAt }
+    })
+    // 5. Add any built-in team not represented yet (matched by its agent string).
+    const present = new Set(withAgents.map((a) => a.agent))
+    const missingTeams = BUILTIN_TEAMS.filter((t) => !present.has(`claude-team:${t.id}`)).map((t) => this.teamSeed(t))
+    if (missingTeams.length > 0) changed = true
+    // 6. Add any built-in specialist not represented yet (matched by its id).
+    const presentBuiltins = new Set(withAgents.map((a) => a.builtin).filter((id) => id !== undefined))
+    const missingAgents = BUILTIN_AGENTS.filter((d) => !presentBuiltins.has(d.id)).map((d) => this.agentSeed(d))
+    if (missingAgents.length > 0) changed = true
+    return { agents: [...missingAgents, ...missingTeams, ...withAgents], changed }
   }
 
   /** Read the raw array from disk, or undefined when the file is absent/malformed. */
@@ -242,7 +314,7 @@ export class SavedAgentsStore {
       if (changed) this.write(agents)
       return agents
     }
-    const seeded = this.teamSeedAgents()
+    const seeded = [...this.agentSeedAgents(), ...this.teamSeedAgents()]
     this.write(seeded)
     return seeded
   }

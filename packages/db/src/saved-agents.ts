@@ -44,12 +44,21 @@ export interface SavedAgent {
   createdAt: string
   updatedAt: string
   /**
-   * Fingerprint of the roster this agent was seeded with. Only set by the
-   * global file store on a built-in team seed, and only used there: it is how a
-   * later version tells an untouched seed (safe to refresh in place) from one
-   * the user has edited. Editing an agent drops it, which is the intent.
+   * Fingerprint of the content this agent was seeded with. Only set by the
+   * global file store on a built-in seed (a team's roster, or a single agent's
+   * own fields), and only used there: it is how a later version tells an
+   * untouched seed (safe to refresh in place) from one the user has edited.
+   * Editing an agent drops it, which is the intent.
    */
   seedHash?: string
+  /**
+   * The stable built-in id this record was seeded from. Only set by the global
+   * file store on a built-in single-agent seed (see the engine's
+   * builtin-agents); it is how the seeder recognises its own agents across
+   * versions. Absent on every user-created agent and on team seeds (those are
+   * matched by their `claude-team:<id>` agent string instead).
+   */
+  builtin?: string
 }
 
 /** Fields accepted when creating/updating a saved agent (no id/timestamps). */
