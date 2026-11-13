@@ -10,7 +10,6 @@ import { workflowsApi, type WorkflowSummary } from '../api/workflows.js'
 import { intervalText, kindWithArticle, runsOnText, STANDALONE_BUILTIN_NODES, suggestionsFor, type ActionForm } from '../lib/actions.js'
 import { apiErrorMessage } from '../lib/api-error.js'
 import { buildCatalog } from '../lib/node-catalog.js'
-import { scheduleDefaultsFromGraph } from '../lib/schedule-defaults.js'
 import { cn } from '../lib/utils.js'
 import { NewActionPanel, type ActionTool } from '../components/actions/NewActionPanel.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
@@ -331,9 +330,6 @@ export function ActionsView(): JSX.Element {
           targets={targets}
           backends={backends}
           engagementName={engagementName}
-          triggerOf={async (workflowId) =>
-            client === null ? undefined : scheduleDefaultsFromGraph((await workflowsApi(client).get(workflowId)).graph)
-          }
           onCreate={create}
           onClose={() => setCreating(null)}
         />

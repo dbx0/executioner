@@ -35,6 +35,16 @@ describe('seedStarterWorkflows', () => {
     }
   })
 
+  it('starts every starter from the one start node, with no settings on it', () => {
+    // When a workflow runs is an action's business; the retired schedule and
+    // on_create trigger nodes only looked as if they decided it.
+    for (const starter of STARTER_WORKFLOWS) {
+      const nodes = starter.graph.nodes as Array<{ type: string; data: Record<string, unknown> }>
+      expect(nodes.filter((n) => n.type === 'manual')).toEqual([expect.objectContaining({ data: {} })])
+      expect(nodes.some((n) => n.type === 'schedule' || n.type === 'on_create')).toBe(false)
+    }
+  })
+
   it('ships a recon workflow built from nodes alone', () => {
     const recon = STARTER_WORKFLOWS.find((s) => s.id === 'starter-recon')
     expect(recon?.name).toBe('Recon')

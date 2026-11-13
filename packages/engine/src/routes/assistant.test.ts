@@ -113,6 +113,8 @@ describe('assistant routes', () => {
     expect(first).toContain('{{ loop.item.<field> }}')
     expect(first).toContain('"__no_save": true')
     expect(first).toMatch(/python_script[^.]*last resort/i)
+    // When a workflow runs is not something the graph can say.
+    expect(first).toMatch(/Actions page/)
     // And nothing presents a script as an ordinary building block any more.
     expect(first).not.toMatch(/with python_script nodes for/i)
 

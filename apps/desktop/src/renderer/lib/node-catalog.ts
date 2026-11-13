@@ -5,8 +5,6 @@ export type NodeKind =
   | 'tool'
   | 'agent'
   | 'manual'
-  | 'schedule'
-  | 'on_create'
   | 'if'
   | 'loop'
   | 'stop'
@@ -63,38 +61,11 @@ export function categoryColor(category: string): string {
 export const CONTROL_ENTRIES: CatalogEntry[] = [
   {
     type: 'manual',
-    label: 'Manual Trigger',
+    label: 'Start',
     kind: 'manual',
     category: 'trigger',
-    description: 'Entry point for a workflow started by hand. No parameters.',
+    description: 'Where the workflow begins. When it runs (by hand, on a schedule, when a target is added) is set on the Actions page.',
     params: [],
-  },
-  {
-    type: 'schedule',
-    label: 'Schedule Trigger',
-    kind: 'schedule',
-    category: 'trigger',
-    description: 'Entry point run on a recurring interval. Arm it per engagement in Schedules, which reads this interval.',
-    params: [
-      { name: 'interval_seconds', type: 'number', default: 3600, description: 'How often to run, in seconds.' },
-      { name: 'cron', type: 'string', description: 'Optional cron expression (informational; interval_seconds drives runs).' },
-    ],
-  },
-  {
-    type: 'on_create',
-    label: 'On Create Trigger',
-    kind: 'on_create',
-    category: 'trigger',
-    description: 'Entry point fired when a matching target is created. Arm it per engagement in Schedules, which reads this kind.',
-    params: [
-      {
-        name: 'target_kind',
-        type: 'string',
-        oneOf: ['domain', 'subdomain', 'ip', 'cidr', 'url'],
-        default: 'domain',
-        description: 'Target kind whose creation fires this workflow.',
-      },
-    ],
   },
   {
     type: 'if',

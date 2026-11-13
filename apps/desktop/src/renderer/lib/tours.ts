@@ -95,7 +95,7 @@ export const TOURS: Record<TourId, readonly TourStep[]> = {
     {
       target: 'workflows-create',
       title: 'Build your own',
-      body: 'Open the canvas and connect a trigger to tools, conditions and scripts.',
+      body: 'Open the canvas and connect the Start node to tools and conditions.',
     },
     {
       target: 'workflows-schedules',

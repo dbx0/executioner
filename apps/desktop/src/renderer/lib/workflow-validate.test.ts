@@ -73,13 +73,13 @@ describe('validateWorkflow', () => {
     expect(warn?.message).toBe('Lonely is not connected')
   })
 
-  it('warns when there is no trigger node', () => {
+  it('warns when there is no Start node', () => {
     const nodes = [node('a'), node('b')]
     const edges = [edge('e1', 'a', 'b')]
     const issues = validateWorkflow(nodes, edges)
     expect(
       issues.some(
-        (i) => i.severity === 'warning' && i.message.startsWith('No trigger node'),
+        (i) => i.severity === 'warning' && i.message.startsWith('No Start node'),
       ),
     ).toBe(true)
   })

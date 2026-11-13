@@ -14,7 +14,7 @@ import {
   type ScopeRule,
   type ToolManifest,
 } from '@exe/protocol'
-import { graphSchema, validateGraph } from '@exe/graph'
+import { graphSchema, validateGraph, withStartNode } from '@exe/graph'
 import { writeProgramDescription, type Project } from '@exe/project'
 import { launcherForProfile, type CommandLauncher } from '../infra/launcher.js'
 import { buildNodeTypes } from './node-types.js'
@@ -457,12 +457,15 @@ export class ProjectToolset {
         }
         const validation = validateGraph(parsedGraph.data)
         if (!validation.ok) return { ok: false, errors: validation.errors }
+        // A graph with no start node runs all the same, so nothing ever tells the
+        // assistant it left one out. Add it here instead of asking for it.
+        const graph = withStartNode(parsedGraph.data)
         if (session?.proposal === undefined) {
           throw new Error('propose_workflow is only accepted from a running workflow assistant turn')
         }
         session.proposal({
           ...(a.name === undefined ? {} : { name: a.name }),
-          graph: parsedGraph.data,
+          graph,
           summary: a.summary,
         })
         return { ok: true }

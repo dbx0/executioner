@@ -100,16 +100,16 @@ function reconGraph(): StarterWorkflow['graph'] {
 /**
  * The workflows a fresh install starts with, so the list is not empty on day
  * one. All are built from bundled nodes that write their own targets and
- * facts. Two are on_create workflows; arming one is a schedule in the
- * engagement, which the trigger prefills. The third is a full recon pass run by
- * hand. Ids are stable so a re-seed (two engines opening at once) can never
- * write a second copy.
+ * facts, and begin at a plain start node: when one runs is an action's
+ * business (the shipped default action runs Domain recon on every new in-scope
+ * domain, once switched on). Ids are stable so a re-seed (two engines opening
+ * at once) can never write a second copy.
  */
 export const STARTER_WORKFLOWS: readonly StarterWorkflow[] = [
   {
     id: 'starter-domain-recon',
     name: 'Domain recon',
-    graph: fanOut({ id: 'trigger', type: 'on_create', data: { target_kind: 'domain' } }, [
+    graph: fanOut({ id: 'trigger', type: 'manual', data: {} }, [
       { id: 'whois', type: 'whois' },
       { id: 'dns_a', type: 'dig', data: { record_type: 'A' } },
       { id: 'subdomains', type: 'subfinder' },
@@ -119,7 +119,7 @@ export const STARTER_WORKFLOWS: readonly StarterWorkflow[] = [
   {
     id: 'starter-host-scan',
     name: 'Host scan',
-    graph: fanOut({ id: 'trigger', type: 'on_create', data: { target_kind: 'ip' } }, [
+    graph: fanOut({ id: 'trigger', type: 'manual', data: {} }, [
       { id: 'whois', type: 'whois' },
       { id: 'ports', type: 'nmap', data: { ports: '1-1000', scan_type: '-sV', timing: '-T4' } },
     ]),

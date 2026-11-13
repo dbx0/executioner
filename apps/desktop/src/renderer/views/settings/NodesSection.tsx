@@ -29,8 +29,6 @@ function paramTypeLabel(p: ParamSpec): string {
  *  capability nodes — hide them here (they still live in the canvas palette). */
 const EXCLUDE_KINDS = new Set([
   'manual',
-  'schedule',
-  'on_create',
   'if',
   'loop',
   'stop',

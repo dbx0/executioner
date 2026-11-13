@@ -15,13 +15,11 @@ import {
   LOCAL_BACKEND,
   scopeOf,
   sentenceFor,
-  splitInterval,
   TARGET_KINDS,
   type ActionForm,
   type IntervalUnit,
 } from '../../lib/actions.js'
 import type { ParamSpec } from '../../lib/param-specs.js'
-import type { ScheduleDefaults } from '../../lib/schedule-defaults.js'
 import { cn } from '../../lib/utils.js'
 import { ParamDrawer } from '../canvas/ParamDrawer.js'
 import { Button } from '../ui/button.js'
@@ -117,7 +115,6 @@ export function NewActionPanel({
   backends,
   engagementName,
   initial,
-  triggerOf,
   onCreate,
   onClose,
 }: {
@@ -128,8 +125,6 @@ export function NewActionPanel({
   engagementName: string
   /** Where the form starts, when the panel was opened from a suggestion. */
   initial?: Partial<ActionForm>
-  /** What a workflow's own trigger node says about when it should run, if it has one. */
-  triggerOf: (workflowId: string) => Promise<ScheduleDefaults | undefined>
   /** Saves the action; rejects with the reason it could not be saved. */
   onCreate: (input: ActionInput) => Promise<void>
   onClose: () => void
@@ -139,19 +134,6 @@ export function NewActionPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const set = (patch: Partial<ActionForm>): void => setForm((f) => ({ ...f, ...patch }))
-
-  // Picking a workflow prefills the trigger from its Schedule / On Create
-  // Trigger node, so what the canvas says is what gets armed here.
-  const pickWorkflow = (workflowId: string): void => {
-    set({ workflowId })
-    void triggerOf(workflowId)
-      .then((defaults) => {
-        if (defaults === undefined) return
-        if (defaults.kind === 'interval') set({ trigger: 'interval', ...splitInterval(defaults.intervalSeconds) })
-        else set({ trigger: 'on_create', targetKind: defaults.targetKind })
-      })
-      .catch(() => {})
-  }
 
   const tool = tools.find((t) => t.type === form.nodeType)
   const problem = formProblem(form)
@@ -295,7 +277,7 @@ export function NewActionPanel({
                 <Select
                   ariaLabel="Workflow"
                   value={form.workflowId}
-                  onValueChange={pickWorkflow}
+                  onValueChange={(workflowId) => set({ workflowId })}
                   placeholder={workflows.length === 0 ? 'No workflows yet' : 'Pick a workflow'}
                   options={workflows.map((w) => ({ value: w.id, label: w.name }))}
                 />

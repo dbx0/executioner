@@ -137,6 +137,8 @@ export class GraphExecutor {
       // schedule, or a target being created). They do no work themselves — they
       // emit the running/succeeded lifecycle and pass control to downstream
       // nodes, so a workflow that begins with a trigger runs normally.
+      // `schedule` and `on_create` are the retired trigger types: a graph stored
+      // or imported from before still starts from one, and must still run.
       if (node.type === 'manual' || node.type === 'schedule' || node.type === 'on_create') {
         store.startNode({ executionId: exec.id, nodeId })
         runTrigger(this.deps, node, exec.id, nodeOutputs)

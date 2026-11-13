@@ -27,6 +27,7 @@ import { graphNodeTypes, NewNodeIdsContext, type GraphNodeData } from '../compon
 import { CanvasContext } from '../components/canvas/CanvasContext.js'
 import { Palette } from '../components/canvas/Palette.js'
 import { layoutGraph } from '../lib/autolayout.js'
+import { unifyStartNodes } from '@exe/graph'
 import { toReactFlow } from '../components/canvas/convert.js'
 import { AssistantPanel } from '../components/canvas/AssistantPanel.js'
 import type { AssistantProposal } from '../api/assistant.js'
@@ -531,7 +532,9 @@ export function WorkflowEditor({
   // by loadWorkflow and file import.
   const hydrateGraph = useCallback(
     (graph: Graph): { nodes: Node<GraphNodeData>[]; edges: Edge[] } => {
-      const flow = toReactFlow(graph)
+      // A file exported before the schedule and on_create triggers were retired
+      // still names them; they read as the Start node.
+      const flow = toReactFlow(unifyStartNodes(graph as Parameters<typeof unifyStartNodes>[0]) as Graph)
       const rebuilt: Node<GraphNodeData>[] = flow.nodes.map((n) => {
         const entry = catalog.find((e) => e.type === n.type)
         const kind = entry?.kind ?? 'tool'

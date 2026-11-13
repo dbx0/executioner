@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { graphSchema, validateGraph } from '@exe/graph'
+import { graphSchema, validateGraph, unifyStartNodes } from '@exe/graph'
 import type { Project } from '@exe/project'
 import type { WorkflowSummary } from '@exe/db'
 
@@ -27,14 +27,19 @@ export function workflowRoutes(project: Project): Hono {
     const validation = validateGraph(parsed.data.graph)
     if (!validation.ok) return c.json({ error: 'invalid graph', detail: validation.errors }, 400)
 
-    const created = project.workflows.create(parsed.data.name, JSON.stringify(parsed.data.graph))
+    const created = project.workflows.create(parsed.data.name, JSON.stringify(unifyStartNodes(parsed.data.graph)))
     return c.json({ id: created.id, name: created.name }, 201)
   })
 
   app.get('/workflows/:id', (c) => {
     const workflow = project.workflows.get(c.req.param('id'))
     if (workflow === undefined) return c.json({ error: 'not found' }, 404)
-    return c.json({ id: workflow.id, name: workflow.name, graph: JSON.parse(workflow.graph) })
+    // A workflow saved before the schedule and on_create trigger nodes were
+    // retired still has them on disk; it is read as starting from a plain start
+    // node, and is stored that way the next time it is saved.
+    const stored = graphSchema.safeParse(JSON.parse(workflow.graph))
+    const graph = stored.success ? unifyStartNodes(stored.data) : (JSON.parse(workflow.graph) as unknown)
+    return c.json({ id: workflow.id, name: workflow.name, graph })
   })
 
   app.put('/workflows/:id', async (c) => {
@@ -46,7 +51,7 @@ export function workflowRoutes(project: Project): Hono {
     const validation = validateGraph(parsed.data.graph)
     if (!validation.ok) return c.json({ error: 'invalid graph', detail: validation.errors }, 400)
 
-    const updated = project.workflows.update(id, parsed.data.name, JSON.stringify(parsed.data.graph))
+    const updated = project.workflows.update(id, parsed.data.name, JSON.stringify(unifyStartNodes(parsed.data.graph)))
     if (updated === undefined) return c.json({ error: 'not found' }, 404)
     return c.json({ id: updated.id, name: updated.name })
   })

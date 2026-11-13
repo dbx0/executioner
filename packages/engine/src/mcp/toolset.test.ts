@@ -300,6 +300,38 @@ describe('ProjectToolset', () => {
     await expect(toolset.call('run_command', { command: 'ls', backend: 'ghost' })).rejects.toThrow(/unknown backend/)
   })
 
+  it('adds the start node a proposal left out, wired to its first nodes', async () => {
+    const sink = vi.fn()
+    const sessions = new AgentSessionSinks()
+    sessions.bind('turn-1', { proposal: sink })
+    const toolset = new ProjectToolset({ project, runWorkflow: vi.fn(), sessions })
+    // What the assistant tends to send: the tools, and nothing saying where it begins.
+    const graph = {
+      nodes: [{ id: 'subs', type: 'subfinder', data: {} }, { id: 'probe', type: 'httpx', data: {} }],
+      edges: [{ id: 'e1', source: 'subs', target: 'probe' }],
+    }
+    const result = await toolset.call('propose_workflow', { graph, summary: 'recon' }, { profile: 'assistant', sessionId: 'turn-1' })
+    expect(result).toEqual({ ok: true })
+
+    const proposed = (sink.mock.calls[0]?.[0] as { graph: { nodes: Array<{ id: string; type: string }>; edges: Array<{ source: string; target: string }> } }).graph
+    expect(proposed.nodes.map((n) => n.type)).toEqual(['manual', 'subfinder', 'httpx'])
+    expect(proposed.edges.filter((e) => e.source === proposed.nodes[0]?.id).map((e) => e.target)).toEqual(['subs'])
+  })
+
+  it('reads an old trigger node in a proposal as the start node', async () => {
+    const sink = vi.fn()
+    const sessions = new AgentSessionSinks()
+    sessions.bind('turn-1', { proposal: sink })
+    const toolset = new ProjectToolset({ project, runWorkflow: vi.fn(), sessions })
+    const graph = {
+      nodes: [{ id: 't', type: 'on_create', data: { target_kind: 'domain' } }, { id: 'a', type: 'whois', data: {} }],
+      edges: [{ id: 'e1', source: 't', target: 'a' }],
+    }
+    await toolset.call('propose_workflow', { graph, summary: 'x' }, { profile: 'assistant', sessionId: 'turn-1' })
+    const proposed = (sink.mock.calls[0]?.[0] as { graph: { nodes: Array<{ id: string; type: string; data: unknown }> } }).graph
+    expect(proposed.nodes).toMatchObject([{ id: 't', type: 'manual', data: {} }, { id: 'a', type: 'whois' }])
+  })
+
   it('rejects an invalid graph proposal without calling the sink', async () => {
     const sink = vi.fn()
     const sessions = new AgentSessionSinks()

@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { createContext, useContext, useState } from 'react'
 import { Handle, NodeToolbar, Position, useUpdateNodeInternals, type NodeProps } from 'reactflow'
-import { GitBranch, Repeat, OctagonX, Bot, Wrench, Braces, GitMerge, Database, ShieldAlert, Globe, Bell, MapPin, Radar, ScanSearch, Lock, ListTree, Network, Cloud, Camera, FileCode, MousePointerClick, Clock, Sparkles, Copy, Trash2, Play, Plus } from 'lucide-react'
+import { GitBranch, Repeat, OctagonX, Bot, Wrench, Braces, GitMerge, Database, ShieldAlert, Globe, Bell, MapPin, Radar, ScanSearch, Lock, ListTree, Network, Cloud, Camera, FileCode, MousePointerClick, Copy, Trash2, Play, Plus } from 'lucide-react'
 import { categoryColor, type NodeKind } from '../../lib/node-catalog.js'
 import type { ParamSpec } from './ParamDrawer.js'
 import { cn } from '../../lib/utils.js'
@@ -223,8 +223,6 @@ function triggerNode(icon: JSX.Element) {
 }
 
 export const ManualTriggerNode = triggerNode(<MousePointerClick className="size-4" strokeWidth={1.75} />)
-export const ScheduleTriggerNode = triggerNode(<Clock className="size-4" strokeWidth={1.75} />)
-export const OnCreateTriggerNode = triggerNode(<Sparkles className="size-4" strokeWidth={1.75} />)
 
 /** A simple in/out node whose only variation is its icon (data-flow + integration). */
 function flowNode(icon: JSX.Element) {
@@ -259,8 +257,6 @@ export const graphNodeTypes = {
   tool: ToolNode,
   agent: AgentNode,
   manual: ManualTriggerNode,
-  schedule: ScheduleTriggerNode,
-  on_create: OnCreateTriggerNode,
   if: IfNode,
   loop: LoopNode,
   stop: StopNode,

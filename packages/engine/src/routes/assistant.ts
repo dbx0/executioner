@@ -29,7 +29,8 @@ const GRAPH_SPEC = [
   'A workflow graph is JSON: { "nodes": [...], "edges": [...] }.',
   'Each node: { "id": "<unique string>", "type": "<node type>", "data": { <params keyed by param name> } }.',
   'Each edge: { "id": "<unique>", "source": "<node id>", "target": "<node id>", "sourceHandle": <null | "true" | "false"> }.',
-  'Every workflow starts with a trigger node (usually "manual"). Use "true"/"false" sourceHandle only on edges leaving an "if" node.',
+  'Every workflow begins with exactly one "manual" node, the Start node, wired to the first nodes. It has no settings. Do not try to express when the workflow runs inside the graph: a schedule, or running when a target is added, is an action the user sets up on the Actions page. Say so in your reply if they asked for one.',
+  'Use "true"/"false" sourceHandle only on edges leaving an "if" node.',
 ].join('\n')
 
 /**

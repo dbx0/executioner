@@ -105,6 +105,23 @@ describe('workflows CRUD', () => {
     expect(body.graph.nodes).toHaveLength(1)
   })
 
+  it('reads a workflow saved with a retired trigger node as starting from a plain start node', async () => {
+    // Written straight to the store, as a build from before the triggers were retired left it.
+    const legacy = { nodes: [{ id: 't', type: 'schedule', data: { interval_seconds: 3600 } }, { id: 'a', type: 'whois', data: {} }], edges: [{ id: 'e', source: 't', target: 'a', sourceHandle: null }] }
+    const stored = project.workflows.create('old', JSON.stringify(legacy))
+    const body = await readJson<{ graph: { nodes: Array<{ id: string; type: string; data: unknown }> } }>(await app.request(`/api/workflows/${stored.id}`, auth))
+    expect(body.graph.nodes).toMatchObject([{ id: 't', type: 'manual', data: {} }, { id: 'a', type: 'whois' }])
+  })
+
+  it('stores a workflow imported with a retired trigger node as a plain start node', async () => {
+    const graph = { nodes: [{ id: 't', type: 'on_create', data: { target_kind: 'ip' } }], edges: [] }
+    const created = await readJson<WorkflowId>(
+      await app.request('/api/workflows', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'imported', graph }) }),
+    )
+    const onDisk = JSON.parse(project.workflows.get(created.id)?.graph ?? '{}') as { nodes: Array<{ type: string; data: unknown }> }
+    expect(onDisk.nodes).toMatchObject([{ type: 'manual', data: {} }])
+  })
+
   it('updates a workflow graph', async () => {
     const created = await readJson<WorkflowId>(
       await app.request('/api/workflows', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name: 'r', graph: validGraph }) })
