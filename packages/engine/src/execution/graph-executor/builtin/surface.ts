@@ -2,7 +2,7 @@ import { isIP } from 'node:net'
 import type { Target } from '@exe/protocol'
 import type { LoopContext, NodeOutput } from '../../../infra/template-scope.js'
 import { resolveNodeTarget, scopeFor, writeBuiltinEvidence } from '../helpers.js'
-import { finishBuiltin, type BuiltinNodeDeps } from './shared.js'
+import { cleanName, finishBuiltin, hostOf, hostTarget, savesResults, type BuiltinNodeDeps } from './shared.js'
 import {
   bucketCandidates,
   DNS_RECORD_TYPES,
@@ -13,42 +13,6 @@ import {
 
 type Row = Record<string, unknown>
 type Node = { id: string; data: Record<string, unknown> }
-
-/** Hostnames compare case-insensitively and a trailing dot is the same name. */
-const cleanName = (name: string): string => name.trim().toLowerCase().replace(/\.$/, '')
-
-/** The host (and port, when one was written) inside a url, a `host:port` or a bare host. */
-function hostOf(value: string): { host: string; port: number | null } {
-  if (value.includes('://')) {
-    try {
-      const url = new URL(value)
-      return {
-        host: cleanName(url.hostname.replace(/^\[|\]$/g, '')),
-        port: url.port === '' ? null : Number(url.port),
-      }
-    } catch {
-      return { host: '', port: null }
-    }
-  }
-  const withPort = isIP(value) === 0 ? /^(.+):(\d+)$/.exec(value) : null
-  if (withPort !== null) return { host: cleanName(withPort[1] ?? ''), port: Number(withPort[2]) }
-  return { host: cleanName(value), port: null }
-}
-
-/**
- * The target a host's facts belong on. The run target when that is the host;
- * otherwise the host's own row, created if it is new. No parent is passed: the
- * tree derives one from the value, and handing it the run target could hang a
- * host under its own url. Undefined when the value is not a storable asset.
- */
-function hostTarget(deps: BuiltinNodeDeps, runTarget: Target | undefined, host: string, nodeId: string): Target | undefined {
-  if (runTarget !== undefined && runTarget.value === host) return runTarget
-  try {
-    return deps.project.targets.upsert({ kind: isIP(host) === 0 ? 'domain' : 'ip', value: host, source: nodeId })
-  } catch {
-    return undefined
-  }
-}
 
 /** Files a discovered asset, ignoring a value the tree refuses (a wildcard, a malformed name). */
 function fileTarget(deps: BuiltinNodeDeps, input: Parameters<BuiltinNodeDeps['project']['targets']['upsert']>[0]): Target | undefined {
@@ -87,7 +51,7 @@ export async function runTlsCert(
   try {
     const info = await (deps.probeTls ?? tlsProbe)(host, port, timeoutMs)
     const data = { host, port, ...info }
-    const owner = hostTarget(deps, target, host, node.id)
+    const owner = savesResults(node) ? hostTarget(deps, target, host, node.id) : undefined
     if (owner !== undefined) {
       deps.project.facts.record({ targetId: owner.id, kind: 'certificate', executionId, nodeId: node.id, data })
     }
@@ -136,7 +100,8 @@ export async function runDnsRecords(
     return
   }
   const lookup = deps.dnsLookup ?? systemDns
-  const owner = hostTarget(deps, target, host, node.id)
+  const saves = savesResults(node)
+  const owner = saves ? hostTarget(deps, target, host, node.id) : undefined
   const rows: Row[] = []
   const errors: string[] = []
   const record = (type: string, values: string[]): void => {
@@ -157,7 +122,7 @@ export async function runDnsRecords(
     try {
       const names = [...new Set((await lookup.reverse(host)).map(cleanName))].filter((n) => n !== '')
       record('PTR', names)
-      for (const name of names) fileTarget(deps, { kind: 'domain', value: name, source: node.id })
+      if (saves) for (const name of names) fileTarget(deps, { kind: 'domain', value: name, source: node.id })
     } catch (e) {
       errors.push(`PTR: ${(e as Error).message}`)
     }
@@ -177,7 +142,7 @@ export async function runDnsRecords(
       // changes when the answer does. MX keeps its order: that is the priority.
       if (type !== 'MX') values.sort()
       record(type, values)
-      if (type === 'A' || type === 'AAAA') {
+      if (saves && (type === 'A' || type === 'AAAA')) {
         for (const ip of values) fileTarget(deps, { kind: 'ip', value: ip, source: node.id, parentId: owner?.id ?? null })
       }
     })
@@ -256,7 +221,7 @@ export async function runAsn(
       .filter((prefix) => includeV6 || !prefix.includes(':'))
     const rows: Row[] = prefixes.map((prefix) => ({ asn, holder, prefix }))
 
-    const saved = prefixes.length <= maxPrefixes
+    const saved = savesResults(node) && prefixes.length <= maxPrefixes
     if (saved) for (const prefix of prefixes) fileTarget(deps, { kind: 'cidr', value: prefix, source: node.id })
     const text = JSON.stringify(
       {
@@ -264,7 +229,9 @@ export async function runAsn(
         holder,
         prefixes: prefixes.length,
         saved_as_targets: saved,
-        ...(saved ? {} : { note: `more than max_prefixes (${String(maxPrefixes)}) ranges, so none were saved as targets` }),
+        ...(prefixes.length > maxPrefixes
+          ? { note: `more than max_prefixes (${String(maxPrefixes)}) ranges, so none were saved as targets` }
+          : {}),
         ranges: prefixes,
       },
       null,
@@ -380,7 +347,7 @@ export async function runCloudBuckets(
   await Promise.all(Array.from({ length: BUCKET_CONCURRENCY }, worker))
 
   const rows = found.filter((row): row is Row => row !== null)
-  for (const row of rows) {
+  for (const row of savesResults(node) ? rows : []) {
     const probe = probes.find((p) => p.url === row.url) as BucketProbe
     const filed = fileTarget(deps, { kind: 'url', value: probe.url, source: node.id })
     if (filed === undefined) continue

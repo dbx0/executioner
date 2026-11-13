@@ -54,6 +54,32 @@ describe('geoip node', () => {
     expect(project.facts.forTarget(target.id, 'geolocation')).toHaveLength(1)
   })
 
+  it('files the fact on the address it looked up when the node names its own target', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ status: 'success', country: 'US' }), { status: 200 })),
+    )
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    const graph = graphSchema.parse({ nodes: [{ id: 'g', type: 'geoip', data: { target: '8.8.8.8' } }], edges: [] })
+    await newExecutor().run({ graph, workflowId: null, targetId: target.id, testMode: false })
+    const ip = must(project.targets.findByValue('ip', '8.8.8.8'))
+    expect(project.facts.forTarget(ip.id, 'geolocation')).toHaveLength(1)
+    expect(project.facts.forTarget(target.id, 'geolocation')).toHaveLength(0)
+  })
+
+  it('returns the lookup but records no fact when "Save results to target" is off', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ status: 'success', country: 'US', city: 'NYC' }), { status: 200 })),
+    )
+    const target = project.targets.upsert({ kind: 'ip', value: '1.1.1.1', source: 'manual' })
+    const graph = graphSchema.parse({ nodes: [{ id: 'g', type: 'geoip', data: { __no_save: true } }], edges: [] })
+    const exec = newExecutor()
+    const result = await exec.run({ graph, workflowId: null, targetId: target.id, testMode: false })
+    expect(result.status).toBe('succeeded')
+    expect(project.facts.forTarget(target.id, 'geolocation')).toHaveLength(0)
+  })
+
   it('fails cleanly when the API reports status=fail', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ status: 'fail', message: 'private range' }), { status: 200 })))
     const target = project.targets.upsert({ kind: 'ip', value: '10.0.0.1', source: 'manual' })
@@ -185,6 +211,30 @@ describe('screenshot node', () => {
   function executorWithDriver(driver: (req: ScreenshotRequest) => Promise<Buffer>): GraphExecutor {
     return new GraphExecutor({ project, bus: new EventBus(), manifests, store: project.runs, captureScreenshot: driver })
   }
+
+  it('files the screenshot on the host it captured when the node names its own target', async () => {
+    // In a loop the node's target is the item, not the run's target: a
+    // subdomain's screenshot belongs on the subdomain.
+    const exec = executorWithDriver(async () => Buffer.from('PNG-BYTES'))
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    const graph = graphSchema.parse({
+      nodes: [{ id: 'sc', type: 'screenshot', data: { target: 'shop.example.com' } }],
+      edges: [],
+    })
+    await exec.run({ graph, workflowId: null, targetId: target.id, testMode: false })
+    const shop = must(project.targets.findByValue('subdomain', 'shop.example.com'))
+    expect(project.facts.forTarget(shop.id, 'screenshot')).toHaveLength(1)
+    expect(project.facts.forTarget(target.id, 'screenshot')).toHaveLength(0)
+  })
+
+  it('captures the page but records no fact when "Save results to target" is off', async () => {
+    const exec = executorWithDriver(async () => Buffer.from('PNG-BYTES'))
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    const graph = graphSchema.parse({ nodes: [{ id: 'sc', type: 'screenshot', data: { __no_save: true } }], edges: [] })
+    const result = await exec.run({ graph, workflowId: null, targetId: target.id, testMode: false })
+    expect(nodeStatus(exec, result.executionId, 'sc')).toBe('succeeded')
+    expect(project.facts.forTarget(target.id, 'screenshot')).toHaveLength(0)
+  })
 
   it('hands the driver templated headers and full_page, then records the PNG it returns', async () => {
     const seen: ScreenshotRequest[] = []

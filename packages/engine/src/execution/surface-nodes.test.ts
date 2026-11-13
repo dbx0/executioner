@@ -314,6 +314,49 @@ describe('bucketCandidates', () => {
   })
 })
 
+describe('the "Save results to target" toggle on the surface nodes', () => {
+  it('tls_cert still returns the certificate but records no fact when saving is off', async () => {
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    const { status, rows } = await runNode('tls_cert', { __no_save: true }, target.id, { probeTls: async () => CERT })
+    expect(status).toBe('succeeded')
+    expect(rows).toHaveLength(1)
+    expect(project.facts.forTarget(target.id, 'certificate')).toHaveLength(0)
+  })
+
+  it('dns_records returns the answers but files no fact and no address target when saving is off', async () => {
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    const { rows } = await runNode('dns_records', { __no_save: true }, target.id, {
+      dnsLookup: dnsOf({ 'example.com A': ['93.184.216.34'] }),
+    })
+    expect(rows).toEqual([{ name: 'example.com', type: 'A', value: '93.184.216.34' }])
+    expect(project.facts.forTarget(target.id, 'dns_record')).toHaveLength(0)
+    expect(project.targets.findByValue('ip', '93.184.216.34')).toBeUndefined()
+  })
+
+  it('asn returns the ranges but files none as targets when saving is off', async () => {
+    stubRipe(['203.0.113.0/24'])
+    const target = project.targets.upsert({ kind: 'ip', value: '203.0.113.7', source: 'manual' })
+    const { rows } = await runNode('asn', { __no_save: 'true' }, target.id)
+    expect(rows).toHaveLength(1)
+    expect(project.targets.findByValue('cidr', '203.0.113.0/24')).toBeUndefined()
+  })
+
+  it('cloud_buckets returns what it found but files no target when saving is off', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: Parameters<typeof fetch>[0]) => {
+        const url = String(input)
+        if (url.includes('.blob.core.windows.net')) throw new TypeError('fetch failed')
+        return new Response('', { status: url === 'https://example.s3.amazonaws.com/' ? 200 : 404 })
+      }),
+    )
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    const { rows } = await runNode('cloud_buckets', { __no_save: true }, target.id)
+    expect(rows).toHaveLength(1)
+    expect(project.targets.findByValue('url', 'https://example.s3.amazonaws.com/')).toBeUndefined()
+  })
+})
+
 describe('cloud_buckets node', () => {
   const statusByUrl: Record<string, number> = {
     'https://example-dev.s3.amazonaws.com/': 403,
