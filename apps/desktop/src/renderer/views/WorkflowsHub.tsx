@@ -6,7 +6,6 @@ import { savedAgentsApi, isTeamSavedAgent, type SavedAgent } from '../api/saved-
 import { WorkflowPreviewModal } from '../components/modals/WorkflowPreviewModal.js'
 import { RunWorkflowModal } from '../components/modals/RunWorkflowModal.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
-import { SchedulesDialog } from '../components/modals/SchedulesDialog.js'
 import { SavedAgentModal } from '../components/modals/SavedAgentModal.js'
 import { HubHeader } from './workflows-hub/HubHeader.js'
 import { WorkflowsPanel } from './workflows-hub/WorkflowsPanel.js'
@@ -34,7 +33,7 @@ export function WorkflowsHub({
   const [preview, setPreview] = useState<{ id: string; name: string } | null>(null)
   const [runFor, setRunFor] = useState<{ id: string; name: string } | null>(null)
   const [deleteFor, setDeleteFor] = useState<{ id: string; name: string } | null>(null)
-  const [showSchedules, setShowSchedules] = useState(false)
+  const setActiveView = useApp((s) => s.setActiveView)
   const tab = useApp((s) => s.hubTab)
 
   const agentsApi = useMemo(() => savedAgentsApi(client), [client])
@@ -86,7 +85,7 @@ export function WorkflowsHub({
       <HubHeader
         tab={tab}
         onCreateWorkflow={onCreate}
-        onShowSchedules={() => setShowSchedules(true)}
+        onOpenActions={() => setActiveView('actions')}
         onAddTeam={() => setAgentModal({ agent: null, kind: 'team' })}
         onAddAgent={() => setAgentModal({ agent: null, kind: 'agent' })}
       />
@@ -137,8 +136,6 @@ export function WorkflowsHub({
           onClose={() => setRunFor(null)}
         />
       )}
-
-      {showSchedules && <SchedulesDialog client={client} onClose={() => setShowSchedules(false)} />}
 
       {deleteFor !== null && (
         <ConfirmModal

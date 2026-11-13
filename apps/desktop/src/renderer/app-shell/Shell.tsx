@@ -28,6 +28,7 @@ import { useBrowserOcclusion } from '../lib/browser-occlusion.js'
 import { useBrowserEvents, useBrowserPageTracking } from '../lib/browser-events.js'
 import { ATTENTION_TOASTER } from '../lib/toast.js'
 import { TerminalsView } from '../views/TerminalsView.js'
+import { ActionsView } from '../views/ActionsView.js'
 import { SettingsView } from '../views/SettingsView.js'
 import { isMacPlatform, workspaceShortcut } from '../lib/shortcuts.js'
 import { errorFields, rlog } from '../lib/log.js'
@@ -44,6 +45,8 @@ function NonTerminalView({ view }: { view: ViewId }): JSX.Element | null {
       return <FindingsView />
     case 'workflows':
       return <WorkflowsView />
+    case 'actions':
+      return <ActionsView />
     case 'tools':
       return <ToolsView />
     case 'settings':

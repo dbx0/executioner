@@ -100,7 +100,7 @@ export const TOURS: Record<TourId, readonly TourStep[]> = {
     {
       target: 'workflows-schedules',
       title: 'Run them automatically',
-      body: 'A schedule runs a workflow on an interval, or whenever a target of a given kind is created. Schedules belong to this engagement.',
+      body: 'An action runs a workflow or a tool on a schedule, or whenever a target of a given kind is added. Set them up on the Actions page.',
     },
     {
       target: 'workflows-runs',
@@ -160,6 +160,7 @@ export const TOURS: Record<TourId, readonly TourStep[]> = {
  *  view, told apart by the hub tab. */
 export function tourIdFor(view: ViewId, hubTab: HubTab): TourId | null {
   if (view === 'workflows') return hubTab
-  if (view === 'terminals') return null
+  // Terminals and Actions have no tour of their own.
+  if (view === 'terminals' || view === 'actions') return null
   return view
 }

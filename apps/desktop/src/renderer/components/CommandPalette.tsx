@@ -15,7 +15,7 @@ import {
   SunMoon,
   Target,
   MessageSquare,
-} from 'lucide-react'
+ Zap } from 'lucide-react'
 import { useApp } from '../store.js'
 import { AgentIcon } from './brand/AgentIcon.js'
 import { targetsApi, type TargetSummary } from '../api/targets.js'
@@ -94,6 +94,10 @@ export function CommandPalette(): JSX.Element {
                 <Command.Item value="go Targets" disabled={!hasEngagement} onSelect={() => go(() => setActiveView('targets'))} className={itemClass}>
                   <Crosshair className="size-4 text-muted-foreground" strokeWidth={1.75} />
                   Targets
+                </Command.Item>
+                <Command.Item value="go Actions" disabled={!hasEngagement} onSelect={() => go(() => setActiveView('actions'))} className={itemClass}>
+                  <Zap className="size-4 text-muted-foreground" strokeWidth={1.75} />
+                  Actions
                 </Command.Item>
                 <Command.Item value="go Workflows" disabled={!hasEngagement} onSelect={() => go(() => openHub('workflows'))} className={itemClass}>
                   <Workflow className="size-4 text-muted-foreground" strokeWidth={1.75} />

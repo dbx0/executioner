@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { CalendarClock, Plus, Users, Workflow } from 'lucide-react'
+import { Zap, Plus, Users, Workflow } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
 import type { useApp } from '../../store.js'
 
@@ -9,13 +9,13 @@ export type HubTab = ReturnType<typeof useApp.getState>['hubTab']
 export function HubHeader({
   tab,
   onCreateWorkflow,
-  onShowSchedules,
+  onOpenActions,
   onAddTeam,
   onAddAgent,
 }: {
   tab: HubTab
   onCreateWorkflow: () => void
-  onShowSchedules: () => void
+  onOpenActions: () => void
   onAddTeam: () => void
   onAddAgent: () => void
 }): JSX.Element {
@@ -25,9 +25,9 @@ export function HubHeader({
       <span className="text-sm font-medium capitalize">{tab}</span>
       {tab === 'workflows' ? (
         <>
-          <Button variant="outline" size="sm" className="ml-auto" data-tour="workflows-schedules" onClick={onShowSchedules}>
-            <CalendarClock className="size-4" strokeWidth={1.75} />
-            Schedules
+          <Button variant="outline" size="sm" className="ml-auto" data-tour="workflows-schedules" onClick={onOpenActions}>
+            <Zap className="size-4" strokeWidth={1.75} />
+            Actions
           </Button>
           <Button size="sm" data-tour="workflows-create" onClick={onCreateWorkflow}>
             <Plus className="size-4" strokeWidth={2} />

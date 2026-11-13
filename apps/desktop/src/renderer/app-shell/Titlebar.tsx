@@ -10,6 +10,7 @@ const VIEW_TITLES: Record<ViewId, string> = {
   targets: 'Targets',
   findings: 'Findings',
   workflows: 'Workflows',
+  actions: 'Actions',
   tools: 'Tools',
   terminals: 'Terminals',
   settings: 'Settings',

@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { Crosshair, Info, ShieldAlert, ShieldCheck, Workflow, Wrench, Bot } from 'lucide-react'
+import { Crosshair, Info, ShieldAlert, ShieldCheck, Workflow, Wrench, Bot, Zap } from 'lucide-react'
 import { useApp, type ViewId, type HubTab } from '../../store.js'
 import { cn } from '../../lib/utils.js'
 
@@ -12,7 +12,7 @@ import { cn } from '../../lib/utils.js'
 /**
  * One nav row. A `view` row switches the whole view; a `hub` row opens the
  * shared workflows view on its own tab. Both shapes live in the same list so a
- * section can mix them — Automation holds two hub rows, Engagement three views.
+ * section can mix them — Automation holds two hub rows and two views, Engagement four views.
  */
 export type NavItem =
   | { kind: 'view'; id: ViewId; label: string; icon: LucideIcon }
@@ -39,6 +39,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Automation',
     items: [
+      { kind: 'view', id: 'actions', label: 'Actions', icon: Zap },
       { kind: 'hub', tab: 'workflows', label: 'Workflows', icon: Workflow },
       { kind: 'view', id: 'tools', label: 'Tools', icon: Wrench },
       { kind: 'hub', tab: 'agents', label: 'Agents', icon: Bot },

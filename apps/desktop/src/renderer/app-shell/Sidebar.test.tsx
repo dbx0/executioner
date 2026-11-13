@@ -32,7 +32,7 @@ describe('Sidebar nav groups', () => {
 
   it('groups the automation views under their own heading', () => {
     render(<Sidebar />)
-    expect(rowsUnder('Automation')).toEqual(['Workflows', 'Tools', 'Agents'])
+    expect(rowsUnder('Automation')).toEqual(['Actions', 'Workflows', 'Tools', 'Agents'])
   })
 
   it('renders engagement above automation', () => {

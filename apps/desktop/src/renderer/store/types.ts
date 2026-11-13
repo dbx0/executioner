@@ -34,7 +34,7 @@ export interface CreateEngagementInput {
 /** Which tab of the New-engagement modal is shown. */
 export type NewEngagementTab = 'ai' | 'manual' | 'open'
 
-export type ViewId = 'about' | 'scope' | 'targets' | 'findings' | 'workflows' | 'tools' | 'terminals' | 'settings'
+export type ViewId = 'about' | 'scope' | 'targets' | 'findings' | 'workflows' | 'actions' | 'tools' | 'terminals' | 'settings'
 
 /** Which tab the workflows/agents hub shows (both are the same `workflows` view). */
 export type HubTab = 'workflows' | 'agents'
