@@ -53,3 +53,32 @@ describe('whatweb pacing', () => {
     expect(args[args.indexOf('--max-threads') + 1]).toBe('5')
   })
 })
+
+// A bug bounty programme commonly requires an identifying request header and a
+// request rate cap. Both have to be settable on the node, or the operator is
+// pushed back to a script to stay inside the rules.
+describe.each(['httpx', 'nuclei'])('%s programme rules', (id) => {
+  it('sends nothing extra by default', () => {
+    const args = argvFor(id, {})
+    expect(args).not.toContain('-H')
+    expect(args).not.toContain('-rl')
+  })
+
+  it('passes -H with the header as one argument', () => {
+    const args = argvFor(id, { header: 'X-Bug-Hunter: alice' })
+    expect(args[args.indexOf('-H') + 1]).toBe('X-Bug-Hunter: alice')
+  })
+
+  it('passes -rl <n> when a rate_limit is set', () => {
+    const args = argvFor(id, { rate_limit: 1 })
+    expect(args[args.indexOf('-rl') + 1]).toBe('1')
+  })
+})
+
+describe('whatweb request header', () => {
+  it('omits --header by default and passes it when set', () => {
+    expect(argvFor('whatweb', {})).not.toContain('--header')
+    const args = argvFor('whatweb', { header: 'X-Bug-Hunter:alice' })
+    expect(args[args.indexOf('--header') + 1]).toBe('X-Bug-Hunter:alice')
+  })
+})

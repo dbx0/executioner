@@ -4,9 +4,13 @@ description = "HTTP toolkit for probing web servers — extracts status, title, 
 category = "web"
 accepts = ["url", "domain", "subdomain"]
 
+[params]
+header = { type = "string", default = "", placeholder = "X-Bug-Hunter: yourname", label = "Request header", description = "One extra header sent with every request, as Name: value. Use it for the identifying header a programme asks for" }
+rate_limit = { type = "number", default = 0, placeholder = "1", label = "Rate limit", description = "Max requests per second (httpx -rl). 0 leaves the httpx default" }
+
 [command]
 program = "httpx"
-args = ["-u", "{{ target.value }}", "-json", "-silent", "-nc", "-tls-grab"]
+args = ["-u", "{{ target.value }}", "-json", "-silent", "-nc", "-tls-grab", "{{ params.header | -H }}", "{{ params.header? }}", "{{ params.rate_limit | -rl }}", "{{ params.rate_limit? }}"]
 timeout_ms = 120000
 
 [emit]
