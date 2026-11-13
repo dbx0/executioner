@@ -5,6 +5,7 @@ import { ClaudeLogo } from '../components/brand/ClaudeLogo.js'
 import { usageLimitsApi, type ProviderLimits, type UsageLimits } from '../api/usage-limits.js'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../components/ui/dropdown-menu.js'
 import { clampPercent, formatResetDuration, meterFillColor, providerMaxPercent, UsagePanel } from './UsagePanel.js'
+import { openWhatsNew } from '../lib/whats-new.js'
 
 /** Poll cadence for account rate limits, in ms. Limits move slowly. */
 const POLL_MS = 60_000
@@ -130,15 +131,14 @@ export function StatusBar(): JSX.Element {
             Verbose logging
           </span>
         )}
-        <a
-          href={`https://github.com/dbx0/executioner/releases/tag/v${__APP_VERSION__}`}
-          target="_blank"
-          rel="noreferrer"
+        <button
+          type="button"
+          onClick={openWhatsNew}
           className="flex h-full shrink-0 items-center px-3 tabular-nums text-tertiary-foreground hover:bg-surface-1 hover:text-foreground"
-          title="Release notes for this version"
+          title="What's new in this version"
         >
           v{__APP_VERSION__}
-        </a>
+        </button>
       </div>
     </footer>
   )
