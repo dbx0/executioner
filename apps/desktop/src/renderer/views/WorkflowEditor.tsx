@@ -75,6 +75,10 @@ export function WorkflowEditor({
   const exApi = useMemo(() => executionsApi(client), [client])
 
   const [listings, setListings] = useState<NodeListing[]>([])
+  // False until the engine has answered (or failed to answer) for its tool
+  // list. The built-in nodes are known from the start, so the catalog is never
+  // empty and cannot say whether the tools have arrived yet.
+  const [listingsLoaded, setListingsLoaded] = useState(false)
   // The list is refreshed after create/delete/import so callers relying on the
   // engine stay in sync; the in-toolbar switcher was removed, so it isn't read.
   const [, setWorkflows] = useState<WorkflowSummary[]>([])
@@ -159,7 +163,11 @@ export function WorkflowEditor({
   const outputsByNode = useMemo(() => reduceNodeOutputs(events, runSeq), [events, runSeq])
 
   useEffect(() => {
-    void nodesApi(client).list().then(setListings).catch(() => setListings([]))
+    void nodesApi(client)
+      .list()
+      .then(setListings)
+      .catch(() => setListings([]))
+      .finally(() => setListingsLoaded(true))
     void wfApi.list().then(setWorkflows).catch(() => setWorkflows([]))
     void backendsApi(client)
       .list()
@@ -573,10 +581,12 @@ export function WorkflowEditor({
       saveLastWorkflow(activeRoot, null)
       return
     }
-    if (catalog.length === 0) return
+    // Hydrating before the tool list lands leaves every tool node without its
+    // category and its parameter form, since nothing re-hydrates it afterwards.
+    if (!listingsLoaded) return
     initialLoaded.current = true
     void loadWorkflow(initialWorkflowId)
-  }, [initialWorkflowId, catalog, activeRoot, loadWorkflow, nextCanvas])
+  }, [initialWorkflowId, listingsLoaded, activeRoot, loadWorkflow, nextCanvas])
 
   // Serialize the current canvas to the engine graph shape. The engine reads a
   // node's params as top-level `data` keys, so emit only user params as `data`.
