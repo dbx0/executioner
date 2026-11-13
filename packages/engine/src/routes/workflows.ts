@@ -61,6 +61,8 @@ export function workflowRoutes(project: Project): Hono {
     // Runs recorded in other engagements keep the id and show it unresolved.
     project.runs.releaseWorkflow(id, c.req.query('keepHistory') === 'true')
     project.schedules.removeForWorkflow(id)
+    // A default action is user-level, as the workflow is: it goes with it too.
+    project.defaultActions.removeForWorkflow(id)
     project.workflows.remove(id)
     return c.json({ ok: true })
   })

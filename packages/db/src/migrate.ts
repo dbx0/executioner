@@ -34,6 +34,12 @@ export function migrate(raw: Database): void {
   // The backend a schedule runs its workflow on. Additive and nullable, so an
   // older project gains it on next open without a schema-version bump.
   addColumnIfMissing(raw, 'schedules', 'backend_profile_id', 'TEXT')
+  // What an action runs when it is one node rather than a workflow, and whether
+  // it is limited to in-scope targets. Additive, so older projects gain them on
+  // next open.
+  addColumnIfMissing(raw, 'schedules', 'node_type', 'TEXT')
+  addColumnIfMissing(raw, 'schedules', 'node_params', 'TEXT')
+  addColumnIfMissing(raw, 'schedules', 'in_scope_only', 'INTEGER NOT NULL DEFAULT 0')
   dropWorkflowForeignKeys(raw)
 
   const row = raw.prepare('SELECT version FROM schema_version').get() as

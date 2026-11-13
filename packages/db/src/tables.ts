@@ -177,11 +177,31 @@ export const schedules = sqliteTable(
     // A saved backend profile id to run this schedule's workflow on. NULL means
     // the engagement default (or local when that is unset too).
     backendProfileId: text('backend_profile_id'),
+    // Set when the action runs one node rather than a workflow; see schema.ts.
+    nodeType: text('node_type'),
+    nodeParams: text('node_params'),
+    inScopeOnly: integer('in_scope_only', { mode: 'boolean' }).notNull().default(false),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
     createdAt: text('created_at').notNull(),
   },
   (t) => [index('ix_schedules_workflow').on(t.workflowId), index('ix_schedules_kind').on(t.kind)],
 )
+
+/** The user-level twin of `schedules`: actions every engagement runs. */
+export const defaultActions = sqliteTable('default_actions', {
+  id: text('id').primaryKey(),
+  workflowId: text('workflow_id').notNull(),
+  targetId: text('target_id'),
+  kind: text('kind').notNull(),
+  intervalSeconds: integer('interval_seconds'),
+  targetKind: text('target_kind'),
+  backendProfileId: text('backend_profile_id'),
+  nodeType: text('node_type'),
+  nodeParams: text('node_params'),
+  inScopeOnly: integer('in_scope_only', { mode: 'boolean' }).notNull().default(false),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull(),
+})
 
 export const savedAgents = sqliteTable('saved_agents', {
   id: text('id').primaryKey(),

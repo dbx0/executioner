@@ -204,4 +204,83 @@ describe('Scheduler', () => {
     const target = project.targets.upsert({ kind: 'domain', value: 'a.com', source: 'manual' })
     await expect(scheduler.onTargetCreated(target)).resolves.toBeUndefined()
   })
+
+  it('runs a single tool, with its options, when the action names a node instead of a workflow', async () => {
+    const runWorkflow = vi.fn(async () => undefined)
+    const runNode = vi.fn(async () => undefined)
+    project.schedules.create({ nodeType: 'httpx', nodeParams: { rate_limit: 1 }, kind: 'on_create', targetKind: 'domain', backendProfileId: 'kali' })
+    const scheduler = new Scheduler({ project, runWorkflow, runNode })
+
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    await scheduler.onTargetCreated(target)
+
+    expect(runNode).toHaveBeenCalledWith('httpx', { rate_limit: 1 }, target.id, 'kali')
+    expect(runWorkflow).not.toHaveBeenCalled()
+  })
+
+  it('fires an in-scope-only action for an in-scope target and for nothing else', async () => {
+    const runWorkflow = vi.fn(async () => undefined)
+    project.scopeRules.add({ effect: 'include', pattern: '*.example.com', note: '', source: 'manual' })
+    project.schedules.create({ workflowId: 'wf-1', kind: 'on_create', targetKind: 'subdomain', inScopeOnly: true })
+    const scheduler = new Scheduler({ project, runWorkflow })
+
+    const inside = project.targets.upsert({ kind: 'subdomain', value: 'shop.example.com', source: 'manual' })
+    // No rule mentions this one: unknown is not "in scope".
+    const unknown = project.targets.upsert({ kind: 'subdomain', value: 'cdn.other.net', source: 'manual' })
+    await scheduler.onTargetCreated(inside)
+    await scheduler.onTargetCreated(unknown)
+
+    expect(runWorkflow).toHaveBeenCalledTimes(1)
+    expect(runWorkflow).toHaveBeenCalledWith('wf-1', inside.id, null)
+  })
+
+  it('fires a default action, shared by every engagement, when a matching target is created here', async () => {
+    const runWorkflow = vi.fn(async () => undefined)
+    project.defaultActions.create({ workflowId: 'wf-1', kind: 'on_create', targetKind: 'domain' })
+    const scheduler = new Scheduler({ project, runWorkflow })
+
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    await scheduler.onTargetCreated(target)
+
+    expect(runWorkflow).toHaveBeenCalledWith('wf-1', target.id, null)
+  })
+
+  it('does not fire a default action this engagement switched off', async () => {
+    const runWorkflow = vi.fn(async () => undefined)
+    const action = project.defaultActions.create({ workflowId: 'wf-1', kind: 'on_create', targetKind: 'domain' })
+    project.defaultOverrides.set(action.id, false)
+    const scheduler = new Scheduler({ project, runWorkflow })
+
+    await scheduler.onTargetCreated(project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' }))
+
+    expect(runWorkflow).not.toHaveBeenCalled()
+  })
+
+  it('runs a tool on a timer against the target the action names', async () => {
+    vi.useFakeTimers()
+    const runNode = vi.fn(async () => undefined)
+    const target = project.targets.upsert({ kind: 'domain', value: 'example.com', source: 'manual' })
+    project.schedules.create({ nodeType: 'tls_cert', kind: 'interval', intervalSeconds: 60, targetId: target.id })
+    const scheduler = new Scheduler({ project, runWorkflow: vi.fn(async () => undefined), runNode })
+
+    scheduler.start()
+    await vi.advanceTimersByTimeAsync(60_000)
+    scheduler.stop()
+
+    expect(runNode).toHaveBeenCalledWith('tls_cert', {}, target.id, null)
+  })
+
+  it('leaves a default that ships switched off alone until this engagement turns it on', async () => {
+    const runWorkflow = vi.fn(async () => undefined)
+    const action = project.defaultActions.create({ workflowId: 'wf-1', kind: 'on_create', targetKind: 'domain', enabled: false })
+    const scheduler = new Scheduler({ project, runWorkflow })
+
+    await scheduler.onTargetCreated(project.targets.upsert({ kind: 'domain', value: 'one.example', source: 'manual' }))
+    expect(runWorkflow).not.toHaveBeenCalled()
+
+    project.defaultOverrides.set(action.id, true)
+    const target = project.targets.upsert({ kind: 'domain', value: 'two.example', source: 'manual' })
+    await scheduler.onTargetCreated(target)
+    expect(runWorkflow).toHaveBeenCalledWith('wf-1', target.id, null)
+  })
 })

@@ -46,6 +46,7 @@ import { collectMasks, engineLog, errorFields } from '../infra/log.js'
 import { requestLog } from './request-log.js'
 import { routePath } from 'hono/route'
 import { scheduleRoutes } from '../routes/schedules.js'
+import { actionRoutes, STANDALONE_BUILTIN_NODES } from '../routes/actions.js'
 import { savedAgentRoutes } from '../routes/saved-agents.js'
 import { SavedAgentsStore } from '../agents/saved-agents-store.js'
 import { Scheduler } from '../execution/scheduler.js'
@@ -241,9 +242,34 @@ export function createApp(options: AppOptions): EngineApp {
   // same GraphExecutor path as the /mcp run tool and the run route. The caller
   // (serve) calls scheduler.start() after the http server binds; on_create is
   // driven live by the project.targets.upsert wrap below.
+  /**
+   * Run one node on its own, as an action that names a tool does. It goes
+   * through the same GraphExecutor as a workflow, as a graph of that single
+   * node, so a tool and a built-in recon node behave exactly as on a canvas.
+   */
+  const runSingleNode = async (
+    nodeType: string,
+    params: Record<string, unknown>,
+    targetId: string | null,
+    backendProfileId?: string | null,
+  ) => {
+    const graph = graphSchema.parse({ nodes: [{ id: nodeType, type: nodeType, data: params }], edges: [] })
+    const backendProfile = resolveRunBackend(options.project, backendProfileId)
+    const executor = new GraphExecutor({
+      project: options.project,
+      bus: options.bus,
+      manifests: buildManifestMap(options.registry, options.project),
+      store: mcpStore,
+      runs,
+      ...(enginePort !== undefined ? { enginePort } : {}),
+    })
+    return executor.run({ graph, workflowId: null, targetId, testMode: false, ...(backendProfile !== undefined ? { backendProfile } : {}) })
+  }
+
   const scheduler = new Scheduler({
     project: options.project,
     runWorkflow: runGraphWorkflow,
+    runNode: runSingleNode,
   })
 
   // Publish coalesced `change` events so the renderer refetches live. Installed
@@ -697,6 +723,14 @@ export function createApp(options: AppOptions): EngineApp {
   api.route('/', findingRoutes(options.project))
   api.route('/', logLevelRoutes())
   api.route('/', scheduleRoutes(options.project, () => scheduler.start()))
+  api.route(
+    '/',
+    actionRoutes({
+      project: options.project,
+      nodeTypes: () => new Set([...buildManifestMap(options.registry, options.project).keys(), ...STANDALONE_BUILTIN_NODES]),
+      onChange: () => scheduler.start(),
+    }),
+  )
   api.route('/', savedAgentRoutes(options.project, savedAgentsStore))
   api.route(
     '/',

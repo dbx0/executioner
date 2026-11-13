@@ -93,6 +93,28 @@ export const SECRETS_DDL = `CREATE TABLE IF NOT EXISTS secrets (
 );
 `
 
+/**
+ * Actions that apply in every engagement: "whenever a domain is added, run
+ * Domain recon". Same columns as an engagement's own `schedules`, so one
+ * repository drives both. `target_id` is always NULL here, and is a plain
+ * column rather than a reference: the user-level database has no targets.
+ */
+export const DEFAULT_ACTIONS_DDL = `CREATE TABLE IF NOT EXISTS default_actions (
+  id               TEXT PRIMARY KEY,
+  workflow_id      TEXT NOT NULL,
+  target_id        TEXT,
+  kind             TEXT NOT NULL,
+  interval_seconds INTEGER,
+  target_kind      TEXT,
+  backend_profile_id TEXT,
+  node_type        TEXT,
+  node_params      TEXT,
+  in_scope_only    INTEGER NOT NULL DEFAULT 0,
+  enabled          INTEGER NOT NULL DEFAULT 1,
+  created_at       TEXT NOT NULL
+);
+`
+
 /** Key/value markers: one-time migrations and seeds record that they ran. */
 const META_DDL = `
 CREATE TABLE IF NOT EXISTS meta (
@@ -108,6 +130,7 @@ ${WORKFLOWS_DDL}
 ${CUSTOM_NODES_DDL}
 ${BACKEND_PROFILES_DDL}
 ${SECRETS_DDL}
+${DEFAULT_ACTIONS_DDL}
 `
 
 export const SCHEMA_SQL = `
@@ -203,6 +226,13 @@ CREATE TABLE IF NOT EXISTS schedules (
   interval_seconds INTEGER,
   target_kind      TEXT,
   backend_profile_id TEXT,
+  -- An action runs either a workflow or one node. For a single node these hold
+  -- its type and its params (JSON) and workflow_id is the empty string, since
+  -- the column was declared NOT NULL long before a tool could be scheduled.
+  node_type        TEXT,
+  node_params      TEXT,
+  -- An on_create action that fires only for targets the scope rules include.
+  in_scope_only    INTEGER NOT NULL DEFAULT 0,
   enabled          INTEGER NOT NULL DEFAULT 1,
   created_at       TEXT NOT NULL
 );

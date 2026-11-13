@@ -14,6 +14,9 @@ import {
   SecretRepository,
   CustomNodeRepository,
   ScheduleRepository,
+  DefaultActionRepository,
+  DefaultOverrides,
+  seedDefaultActions,
   SavedAgentRepository,
   AssistantRepository,
   adoptProjectGlobals,
@@ -49,6 +52,10 @@ export interface Project {
   /** Custom nodes. USER-level, so a shared workflow can name them anywhere. */
   customNodes: CustomNodeRepository
   schedules: ScheduleRepository
+  /** Actions every engagement runs, kept in the user-level database. */
+  defaultActions: DefaultActionRepository
+  /** This engagement's own on/off choice for each default action. */
+  defaultOverrides: DefaultOverrides
   savedAgents: SavedAgentRepository
   assistant: AssistantRepository
   /** Creates the directory if needed and returns its absolute path. */
@@ -94,6 +101,8 @@ function attach(root: string, config: ProjectConfig): Project {
   const globalDb = openGlobalDatabase(globalLayout.database())
   adoptProjectGlobals(db, globalDb)
   seedStarterWorkflows(globalDb)
+  // After the starters: the shipped default action runs one of them.
+  seedDefaultActions(globalDb)
   return {
     root,
     config,
@@ -111,6 +120,8 @@ function attach(root: string, config: ProjectConfig): Project {
     secrets: new SecretRepository(globalDb),
     customNodes: new CustomNodeRepository(globalDb),
     schedules: new ScheduleRepository(db),
+    defaultActions: new DefaultActionRepository(globalDb),
+    defaultOverrides: new DefaultOverrides(db),
     savedAgents: new SavedAgentRepository(db),
     assistant: new AssistantRepository(db),
     evidenceDir: (executionId: string) => {
