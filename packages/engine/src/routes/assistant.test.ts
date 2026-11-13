@@ -93,6 +93,35 @@ describe('assistant routes', () => {
     expect(secondArg.prompt).not.toMatch(/list_node_types/)
   })
 
+  it('steers the assistant to nodes and their own settings, with a script as the last resort', async () => {
+    const run = vi.fn(async (_input: AssistantRunInput): Promise<AssistantRunResult> => ({ reply: 'ok', sessionId: 's' }))
+    const app = buildApp({ run })
+    const conv = project.assistant.getOrCreateForWorkflow('wf-1', 'claude')
+    const send = (text: string): Promise<Response> =>
+      Promise.resolve(
+        app.request(`/assistant/conversation/${conv.id}/message`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ text, graph }),
+        }),
+      )
+
+    await send('first')
+    const first = run.mock.calls[0]![0].prompt
+    // The mechanisms that make a script unnecessary are named, so they get used.
+    expect(first).toContain('{{ nodes.<nodeId>.rows }}')
+    expect(first).toContain('{{ loop.item.<field> }}')
+    expect(first).toContain('"__no_save": true')
+    expect(first).toMatch(/python_script[^.]*last resort/i)
+    // And nothing presents a script as an ordinary building block any more.
+    expect(first).not.toMatch(/with python_script nodes for/i)
+
+    await send('second')
+    const second = run.mock.calls[1]![0].prompt
+    expect(second).not.toMatch(/tool nodes \+ python_script/)
+    expect(second).toMatch(/last resort/i)
+  })
+
   it('only tells the assistant about tools of its own profile', async () => {
     const run = vi.fn(async (_input: AssistantRunInput): Promise<AssistantRunResult> => ({ reply: 'ok', sessionId: 's' }))
     const app = buildApp({ run })
