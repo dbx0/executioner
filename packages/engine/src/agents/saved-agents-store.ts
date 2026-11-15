@@ -70,6 +70,8 @@ const SHIPPED_ROSTERS: Readonly<Record<string, readonly string[]>> = {
   'recon-strike': ['9190164bb422120f', 'e6248457e8da4dc7'],
   'web-appsec': ['690ffb975497fd81', '4d898ad37d299d81'],
   'code-audit': ['2b1add72463bc4f9', '2d7d21c0792186a4'],
+  // Initial roster (access, operator, reporter).
+  'red-team-ops': ['c492a58871f3018e'],
 }
 
 /** The built-in team id encoded in a `claude-team:<id>` agent string, if any. */
