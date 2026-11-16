@@ -1,4 +1,5 @@
 import type { JSX } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   addEdge,
@@ -22,6 +23,7 @@ import { backendsApi, type BackendProfile } from '../api/backends.js'
 import { targetsApi, type TargetNode } from '../api/targets.js'
 import { AddBackendModal } from '../components/modals/BackendsDialog.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
+import { Button } from '../components/ui/button.js'
 import { buildCatalog, categoryColor } from '../lib/node-catalog.js'
 import { graphNodeTypes, NewNodeIdsContext, type GraphNodeData } from '../components/canvas/GraphNodes.js'
 import { CanvasContext } from '../components/canvas/CanvasContext.js'
@@ -51,6 +53,8 @@ import { ValidationPanel } from './workflow-editor/ValidationPanel.js'
 import { RunPanel } from './workflow-editor/RunPanel.js'
 import { StepControlBar } from './workflow-editor/StepControlBar.js'
 import { NodeInspector } from './workflow-editor/NodeInspector.js'
+
+type ImportedWorkflow = NonNullable<ReturnType<typeof parseWorkflowFile>>
 
 let counter = 0
 
@@ -102,6 +106,7 @@ export function WorkflowEditor({
   const [profiles, setProfiles] = useState<BackendProfile[]>([])
   const [backendsOpen, setBackendsOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [pendingPaste, setPendingPaste] = useState<ImportedWorkflow | null>(null)
   const [runSeq, setRunSeq] = useState(0)
   const [showValidation, setShowValidation] = useState(false)
   const [stepMode, setStepMode] = useState(false)
@@ -118,6 +123,7 @@ export function WorkflowEditor({
 
   const rfRef = useRef<ReactFlowInstance | null>(null)
   const importRef = useRef<HTMLInputElement | null>(null)
+  const pasteTriggerRef = useRef<HTMLElement | null>(null)
   /** Guards the one-shot initial workflow load handed down from the hub. */
   const initialLoaded = useRef(false)
   // Set true just before applying an undo/redo/reset snapshot so the history
@@ -664,9 +670,7 @@ export function WorkflowEditor({
     downloadJson(`${slug === '' ? 'workflow' : slug}.json`, { name, graph: buildGraph() })
   }
 
-  const applyWorkflowImport = (text: string): number | null => {
-    const parsed = parseWorkflowFile(text)
-    if (parsed === null) return null
+  const applyWorkflowImport = (parsed: ImportedWorkflow): void => {
     const hydrated = hydrateGraph(parsed.graph)
     setWorkflowId(undefined)
     setName(parsed.name ?? 'Imported workflow')
@@ -676,7 +680,6 @@ export function WorkflowEditor({
     nextCanvas()
     history.reset(hydrated.nodes, hydrated.edges)
     setSelectedId(undefined)
-    return hydrated.nodes.length
   }
 
   const onImportFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
@@ -684,25 +687,44 @@ export function WorkflowEditor({
     e.target.value = ''
     if (file === undefined) return
     try {
-      if (applyWorkflowImport(await file.text()) === null) {
+      const parsed = parseWorkflowFile(await file.text())
+      if (parsed === null) {
         notify.error('Import failed. Not a valid workflow file.')
+        return
       }
+      applyWorkflowImport(parsed)
     } catch {
       notify.error('Import failed. Could not read the file.')
     }
   }
 
+  const importPastedWorkflow = (workflow: ImportedWorkflow): void => {
+    try {
+      applyWorkflowImport(workflow)
+      notify.success('Workflow imported. Save to keep it.')
+    } catch {
+      notify.error('Import failed. Could not import workflow JSON from the clipboard.')
+    }
+  }
+
   const onPasteImport = async (): Promise<void> => {
+    pasteTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     try {
       const text = window.executioner?.clipboardRead !== undefined
         ? await window.executioner.clipboardRead()
         : await navigator.clipboard.readText()
-      const nodeCount = applyWorkflowImport(text.replace(/^\uFEFF/, ''))
-      if (nodeCount === null) {
+      const parsed = parseWorkflowFile(text.replace(/^\uFEFF/, ''))
+      if (parsed === null) {
         notify.error('Import failed. Expected workflow JSON with graph.nodes and graph.edges arrays.')
         return
       }
-      notify.success(`Imported ${nodeCount} nodes. Save to keep this workflow.`)
+      const canvasNodes = rfRef.current?.getNodes() ?? nodes
+      const canvasEdges = rfRef.current?.getEdges() ?? edges
+      if (canvasNodes.length > 0 || canvasEdges.length > 0) {
+        setPendingPaste(parsed)
+        return
+      }
+      importPastedWorkflow(parsed)
     } catch {
       notify.error('Import failed. Could not import workflow JSON from the clipboard.')
     }
@@ -912,6 +934,42 @@ export function WorkflowEditor({
               }}
             />
           )}
+
+          <Dialog.Root open={pendingPaste !== null} onOpenChange={(open) => { if (!open) setPendingPaste(null) }}>
+            <Dialog.Portal>
+              <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/40" />
+              <Dialog.Content
+                className="fixed left-1/2 top-1/2 z-[61] w-[420px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-popover shadow-floating"
+                onCloseAutoFocus={(event) => {
+                  event.preventDefault()
+                  pasteTriggerRef.current?.focus()
+                }}
+              >
+                <Dialog.Title className="border-b border-border px-4 py-3 text-[14px] font-medium">
+                  Replace current workflow?
+                </Dialog.Title>
+                <Dialog.Description className="px-4 py-4 text-[13px] text-muted-foreground">
+                  Pasting replaces the open canvas. Unsaved changes will be lost. This cannot be undone.
+                </Dialog.Description>
+                <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+                  <Dialog.Close asChild>
+                    <Button variant="ghost" size="sm">Cancel</Button>
+                  </Dialog.Close>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      if (pendingPaste === null) return
+                      importPastedWorkflow(pendingPaste)
+                      setPendingPaste(null)
+                    }}
+                  >
+                    Replace workflow
+                  </Button>
+                </div>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog.Root>
 
           {/* Step-through control bar */}
           {stepExec !== null && (
