@@ -26,10 +26,13 @@ describe('BUILTIN_AGENTS', () => {
 
   it('carry the shared house rules, and the exploit specialists carry the impact gate', () => {
     for (const a of BUILTIN_AGENTS) expect(a.prompt).toContain(ENGAGEMENT_RULES)
-    // The mappers/validators (recon-scout maps the surface, detection-tester
-    // reports coverage) omit the gate; the specialists that claim a crossed
-    // boundary all carry it.
-    expect(BUILTIN_AGENTS.filter((a) => a.prompt.includes(IMPACT_GATE)).map((a) => a.id)).toEqual([
+    // `claimsImpact` is the single source of truth: the prompt is assembled from
+    // it, so the gate text is present in a prompt exactly when the flag is set
+    // and the two can never drift. The mappers/validators (recon-scout maps the
+    // surface, detection-tester reports coverage) leave it false; the
+    // specialists that claim a crossed boundary set it.
+    for (const a of BUILTIN_AGENTS) expect(a.prompt.includes(IMPACT_GATE)).toBe(a.claimsImpact)
+    expect(BUILTIN_AGENTS.filter((a) => a.claimsImpact).map((a) => a.id)).toEqual([
       'web-hunter',
       'api-hunter',
       'mobile-recon',
