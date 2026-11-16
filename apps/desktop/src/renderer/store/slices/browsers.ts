@@ -51,7 +51,7 @@ function withOwner(e: OpenEngagement, id: string, owner: string | null): OpenEng
 /** Embedded browsers: open, close, hand over, and follow what the engine reports. */
 export function createBrowsersSlice(
   ctx: SliceCtx,
-): Pick<AppState, 'openBrowser' | 'closeBrowser' | 'setBrowserOwner' | 'handleBrowserEvent' | 'showBrowser' | 'syncBrowsers' | 'answerBrowserAsk' | 'trackBrowserPage'> {
+): Pick<AppState, 'openBrowser' | 'closeBrowser' | 'setBrowserOwner' | 'handleBrowserEvent' | 'showBrowser' | 'openBrowserAsk' | 'setBrowserAskExpanded' | 'syncBrowsers' | 'answerBrowserAsk' | 'trackBrowserPage'> {
   const { set, get, persistBrowsers, persistTabMeta } = ctx
 
   /** Patch one engagement by root, so a reply that lands after a switch never touches the active one. */
@@ -84,6 +84,7 @@ export function createBrowsersSlice(
         break
       case 'closed':
         patchRoot(root, (e) => withoutBrowser(e, item.id))
+        if (get().expandedBrowserAsk === item.id) set({ expandedBrowserAsk: null })
         persistTabMeta(root)
         break
       case 'activity':
@@ -105,13 +106,15 @@ export function createBrowsersSlice(
         // An ask from an engagement in the background names it, since its rail badge is all that shows.
         const where = root === get().activeRoot || engagement === undefined ? '' : ` in ${engagement.name}`
         const title = `${label} needs you in the browser${where}`
-        const show = (): void => get().showBrowser(root, item.id)
-        notify.attention({ who: label, text: `is waiting on you in the browser${where}`, description: message, action: { label: 'Show', onClick: show } })
-        if (!document.hasFocus()) notifyUser(title, message, show)
+        // Take the operator straight to the ask: its tab, and the dialog that holds the full message.
+        const respond = (): void => get().openBrowserAsk(root, item.id)
+        notify.attention({ who: label, text: `is waiting on you in the browser${where}`, description: message, action: { label: 'Respond', onClick: respond } })
+        if (!document.hasFocus()) notifyUser(title, message, respond)
         break
       }
       case 'answered':
         patchRoot(root, (e) => withoutAsk(e, item.id))
+        if (get().expandedBrowserAsk === item.id) set({ expandedBrowserAsk: null })
         break
     }
     persistBrowsers(root)
@@ -173,6 +176,16 @@ export function createBrowsersSlice(
       get().setActiveTab({ kind: 'browser', id })
     },
 
+    openBrowserAsk: (root, id) => {
+      get().showBrowser(root, id)
+      // Only open the dialog for a browser that is actually on screen now.
+      if (get().open.find((x) => x.root === root)?.browsers.some((b) => b.id === id) === true) {
+        set({ expandedBrowserAsk: id })
+      }
+    },
+
+    setBrowserAskExpanded: (id) => set({ expandedBrowserAsk: id }),
+
     trackBrowserPage: (id, url, title) => {
       // The blank page a new or rebuilt view starts on is not a place to come back to.
       if (url === '' || url === 'about:blank') return
@@ -197,6 +210,7 @@ export function createBrowsersSlice(
         }
       }
       patchRoot(root, (e) => withoutAsk(e, id))
+      if (get().expandedBrowserAsk === id) set({ expandedBrowserAsk: null })
     },
 
     syncBrowsers: async () => {

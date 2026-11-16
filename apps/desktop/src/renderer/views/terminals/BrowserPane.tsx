@@ -7,6 +7,7 @@ import type { BrowserTab } from '../../store/types.js'
 import { Button } from '../../components/ui/button.js'
 import { cn } from '../../lib/utils.js'
 import { TabMenuItem } from './TabMenu.js'
+import { BrowserAskModal } from './BrowserAskModal.js'
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i
 
@@ -59,42 +60,45 @@ export function BrowserHandoffItems({ id, close }: { id: string; close: () => vo
 }
 
 /**
- * What the agent asked the operator for. Only Done answers it: the agent's
- * browser_ask_operator call stays blocked until then, and gets the reply.
+ * The amber trigger bar for what an agent asked the operator for. It only truncates the ask
+ * and opens the modal, where the full message and the reply box live: an agent's message can
+ * run long, and the inline box was too cramped to read or answer in. The agent's
+ * browser_ask_operator call stays blocked until the modal's Submit answers it.
  */
-function AskBanner({ id, message }: { id: string; message: string }): JSX.Element {
+function AskBanner({ id, who, message }: { id: string; who: string; message: string }): JSX.Element {
   const answerBrowserAsk = useApp((s) => s.answerBrowserAsk)
-  const [reply, setReply] = useState('')
-  const done = (): void => {
-    const text = reply.trim()
-    void answerBrowserAsk(id, text === '' ? undefined : text)
-  }
+  // The open state lives in the store so the attention notch can open this dialog too.
+  const open = useApp((s) => s.expandedBrowserAsk === id)
+  const setExpanded = useApp((s) => s.setBrowserAskExpanded)
   return (
     <div
       role="status"
       data-browser-ask
       className="flex shrink-0 items-center gap-2 border-b border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs text-amber-700 dark:text-amber-300"
     >
-      <span className="min-w-0 flex-1 truncate" title={message}>
-        {message}
-      </span>
-      <input
-        aria-label="Reply to the agent"
-        placeholder="Reply (optional), for example a code"
-        spellCheck={false}
-        value={reply}
-        onChange={(e) => setReply(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            done()
-          }
-        }}
-        className="h-6 w-56 min-w-0 shrink rounded-md border border-border bg-surface-2 px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-border-strong"
-      />
-      <Button variant="outline" size="sm" className="h-6 shrink-0 px-2 text-xs" onClick={done}>
-        Done
+      <button
+        type="button"
+        onClick={() => setExpanded(id)}
+        className="flex min-w-0 flex-1 items-center gap-1.5 text-left outline-none"
+        title={message}
+      >
+        <span className="font-medium">{who} needs you:</span>
+        <span className="min-w-0 flex-1 truncate font-normal opacity-90">{message}</span>
+      </button>
+      <Button variant="outline" size="sm" className="h-6 shrink-0 px-2 text-xs" onClick={() => setExpanded(id)}>
+        Respond
       </Button>
+      {open && (
+        <BrowserAskModal
+          who={who}
+          message={message}
+          onClose={() => setExpanded(null)}
+          onSubmit={(reply) => {
+            setExpanded(null)
+            void answerBrowserAsk(id, reply)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -249,7 +253,7 @@ export function BrowserPane({
         )}
         {state.loading && <div className="absolute inset-x-0 bottom-0 h-px animate-pulse bg-muted-foreground" data-testid="browser-loading" />}
       </div>
-      {ask !== undefined && <AskBanner key={ask} id={id} message={ask} />}
+      {ask !== undefined && <AskBanner key={ask} id={id} who={ownerLabel ?? 'An agent'} message={ask} />}
       <div ref={pageRef} data-browser-page className={cn('relative min-h-0 flex-1')}>
         {crashed && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">

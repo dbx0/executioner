@@ -930,6 +930,7 @@ export function WorkflowEditor({
             client={client}
             workflowId={workflowId}
             buildGraph={buildGraph}
+            ensureSaved={() => (workflowId === undefined ? save() : Promise.resolve(workflowId))}
             onApply={applyProposal}
             onClose={() => setAssistantOpen(false)}
           />

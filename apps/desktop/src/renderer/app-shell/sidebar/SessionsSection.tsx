@@ -47,6 +47,8 @@ function AgentRow({ session }: { session: Session }): JSX.Element {
   const id = session.id
   const isActive = useApp((s) => s.activeSessionId === id)
   const leadState = useApp((s) => s.sessionState[id] ?? 'idle')
+  // This agent is waiting on the operator if a browser it owns has a pending ask.
+  const asking = useApp((s) => s.browsers.some((b) => b.owner === id && b.id in s.browserAsks))
   const subs = useApp((s) => s.subagents[id])
   const setActiveSession = useApp((s) => s.setActiveSession)
   const setActiveView = useApp((s) => s.setActiveView)
@@ -81,7 +83,16 @@ function AgentRow({ session }: { session: Session }): JSX.Element {
         >
           <AgentIcon agent={session.agent} className="size-4 shrink-0 text-muted-foreground" />
           <span className="truncate">{session.title ?? session.label}</span>
-          <AgentStatusDot state={working ? 'working' : 'idle'} className="ml-auto" />
+          <span className="ml-auto flex items-center gap-1.5">
+            {asking && (
+              <span
+                data-session-ask
+                title="Waiting on you in the browser"
+                className="size-2 shrink-0 animate-pulse rounded-full bg-amber-500"
+              />
+            )}
+            <AgentStatusDot state={working ? 'working' : 'idle'} />
+          </span>
         </button>
         {hasSubs && (
           <button
