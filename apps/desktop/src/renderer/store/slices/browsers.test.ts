@@ -229,7 +229,7 @@ describe('browsers in the store', () => {
       who: 't1',
       text: 'is waiting on you in the browser',
       description: 'Solve the captcha',
-      action: { label: 'Show', onClick: expect.any(Function) },
+      action: { label: 'Respond', onClick: expect.any(Function) },
     })
     expect(state().activeTab).toEqual({ kind: 'terminal', id: 't1' })
     expect(state().activeLayoutId).toBe(layoutBefore)
@@ -238,7 +238,7 @@ describe('browsers in the store', () => {
     expect(state().browserAsks).toEqual({})
   })
 
-  it("the toast's Show action takes the operator to the asking browser's pane", () => {
+  it("the toast's Respond action takes the operator to the asking browser's pane and opens the ask", () => {
     seed({ sessions: [session('t1')] })
     state().handleBrowserEvent('opened', opened('b1', 't1'))
     state().setActiveTab({ kind: 'terminal', id: 't1' })
@@ -249,6 +249,7 @@ describe('browsers in the store', () => {
     action.onClick()
     expect(state().activeView).toBe('terminals')
     expect(state().activeTab).toEqual({ kind: 'browser', id: 'b1' })
+    expect(state().expandedBrowserAsk).toBe('b1')
     const layout = active()!
     expect(leaves(layout.root).find((p) => p.id === layout.focusedLeafId)?.item).toEqual({ kind: 'browser', id: 'b1' })
   })
