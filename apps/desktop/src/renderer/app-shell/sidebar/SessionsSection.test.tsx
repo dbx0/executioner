@@ -21,7 +21,7 @@ const session = (over: Partial<Session> = {}): Session => ({
 
 describe('SessionsSection', () => {
   beforeEach(() => {
-    useApp.setState({ sessions: [], files: [], sessionState: {}, subagents: {}, activeSessionId: null })
+    useApp.setState({ sessions: [], files: [], sessionState: {}, subagents: {}, activeSessionId: null, browsers: [], browserAsks: {} })
   })
 
   it('lists agents and terminals under one Sessions heading', () => {
@@ -86,6 +86,20 @@ describe('SessionsSection', () => {
     render(<SessionsSection />)
     expect(screen.queryByLabelText('idle')).toBeNull()
     expect(screen.queryByLabelText('working')).toBeNull()
+  })
+
+  it('marks an agent that owns a browser with a pending ask, and clears it when answered', () => {
+    useApp.setState({
+      sessions: [session({ id: 'a1', agent: 'claude', label: 'claude', title: 'recon' })],
+      browsers: [{ id: 'b1', url: '', title: '', owner: 'a1' }],
+      browserAsks: { b1: 'Solve the captcha' },
+    })
+    const { rerender } = render(<SessionsSection />)
+    expect(screen.getByTitle('Waiting on you in the browser')).toBeTruthy()
+    // A browser the agent does not own leaves it unmarked.
+    useApp.setState({ browsers: [{ id: 'b1', url: '', title: '', owner: 's2' }] })
+    rerender(<SessionsSection />)
+    expect(screen.queryByTitle('Waiting on you in the browser')).toBeNull()
   })
 
   it('clicking a session in the sidebar focuses its pane in a background layout', () => {

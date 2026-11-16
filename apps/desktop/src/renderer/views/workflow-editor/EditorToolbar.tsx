@@ -188,7 +188,8 @@ export function EditorToolbar({
             <Play className="size-4" strokeWidth={2} />
             Run
           </Button>
-          {hasErrors && (
+          {/* An empty canvas already disables Run; its "no nodes" error needs no badge. */}
+          {hasErrors && nodeCount > 0 && (
             <span
               aria-label={`${errorCount} validation errors`}
               className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-error px-1 text-[10px] font-semibold text-white"

@@ -295,6 +295,8 @@ export interface AppState {
   browsers: BrowserTab[]
   browserActivity: Record<string, boolean>
   browserAsks: Record<string, string>
+  /** The browser id whose ask is expanded into the operator dialog, or null when none is open. */
+  expandedBrowserAsk: string | null
   activeTab: ActiveTab | null
   tabMeta: Record<string, TabMeta>
   /** Unsaved buffer per file-tab id. Outlives the editor component. */
@@ -429,6 +431,10 @@ export interface AppState {
   ) => void
   /** Take the operator to a browser's tab: its engagement, the workspace, and the pane that holds it. */
   showBrowser: (root: string, id: string) => void
+  /** Take the operator to a browser's tab and open its ask in the operator dialog. */
+  openBrowserAsk: (root: string, id: string) => void
+  /** Open the operator dialog for a browser's ask, or close it with null. */
+  setBrowserAskExpanded: (id: string | null) => void
   /** The operator is done with what the agent asked: unblock its wait, with an optional reply, and drop the signal. */
   answerBrowserAsk: (id: string, reply?: string) => Promise<void>
   /** Follow the page a browser shows, so a restart reopens it there. */

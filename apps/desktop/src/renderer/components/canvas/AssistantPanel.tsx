@@ -24,13 +24,14 @@ const ALL_AGENT_OPTIONS: SelectOption[] = [
  * is applied to the canvas only when the user clicks "Apply to canvas".
  *
  * Persistence is per workflow: a saved workflow's thread is loaded on open. An
- * unsaved ('new') canvas has no id yet, so the panel asks the user to Save first
- * (the simpler robust option) before chatting.
+ * unsaved ('new') canvas has no id yet, so the first message saves it (through
+ * `ensureSaved`) to get one, then opens the thread on that id.
  */
 export function AssistantPanel({
   client,
   workflowId,
   buildGraph,
+  ensureSaved,
   onApply,
   onClose,
 }: {
@@ -39,6 +40,8 @@ export function AssistantPanel({
   workflowId: string | undefined
   /** Serialize the current canvas to the engine graph shape (sent with each message). */
   buildGraph: () => Graph
+  /** Save the canvas if it has no id yet and return the workflow id. */
+  ensureSaved: () => Promise<string | undefined>
   /** Load a proposed graph onto the canvas. */
   onApply: (proposal: AssistantProposal) => void
   onClose: () => void
@@ -56,6 +59,10 @@ export function AssistantPanel({
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
+  // True while `send` is saving an unsaved canvas and opening its thread itself.
+  // The load effect below fires as soon as the new id arrives and would replace
+  // the message just typed with the (empty) stored thread.
+  const openingThread = useRef(false)
 
   // Load (or create) the conversation for the open workflow. Re-runs when the
   // workflow changes (e.g. after the first Save binds a real id).
@@ -65,6 +72,7 @@ export function AssistantPanel({
       setMessages([])
       return
     }
+    if (openingThread.current) return
     let cancelled = false
     void api
       .conversation(workflowId, agent)
@@ -99,12 +107,12 @@ export function AssistantPanel({
 
   const send = useCallback(async () => {
     const text = draft.trim()
-    if (text === '' || pending || conversationId === undefined) return
+    if (text === '' || pending) return
     setError(null)
     setDraft('')
     const optimistic: AssistantMessage = {
       id: `local-${Date.now()}`,
-      conversationId,
+      conversationId: conversationId ?? '',
       role: 'user',
       content: text,
       proposal: null,
@@ -113,14 +121,32 @@ export function AssistantPanel({
     setMessages((cur) => [...cur, optimistic])
     setPending(true)
     try {
-      const message = await api.send(conversationId, { text, graph: buildGraph(), agent })
+      let convId = conversationId
+      if (convId === undefined) {
+        // Unsaved canvas: save it to get an id, then open its thread.
+        openingThread.current = true
+        try {
+          const savedId = await ensureSaved()
+          if (savedId === undefined) throw new Error('not saved')
+          convId = (await api.conversation(savedId, agent)).conversation.id
+          setConversationId(convId)
+        } catch {
+          setMessages((cur) => cur.filter((m) => m.id !== optimistic.id))
+          setDraft(text)
+          setError('Could not save the workflow to start the conversation. Try again.')
+          return
+        } finally {
+          openingThread.current = false
+        }
+      }
+      const message = await api.send(convId, { text, graph: buildGraph(), agent })
       setMessages((cur) => [...cur, message])
     } catch {
       setError('The agent run failed. Check that the agent CLI is installed and try again.')
     } finally {
       setPending(false)
     }
-  }, [draft, pending, conversationId, api, buildGraph, agent])
+  }, [draft, pending, conversationId, api, buildGraph, ensureSaved, agent])
 
   return (
     <div className="flex h-full w-[360px] shrink-0 flex-col border-l border-border bg-card">
@@ -141,58 +167,48 @@ export function AssistantPanel({
         </div>
       </div>
 
-      {workflowId === undefined ? (
-        <div className="flex flex-1 items-center justify-center p-6 text-center">
-          <p className="text-[13px] text-muted-foreground">
-            Save this workflow first, then chat with the assistant to build or edit it.
+      <div ref={listRef} className="scrollbar-sleek flex-1 space-y-3 overflow-y-auto p-3">
+        {messages.length === 0 && !pending && (
+          <p className="px-1 text-[13px] text-muted-foreground">
+            Ask the assistant to create or edit this workflow. It proposes a graph you review before applying.
           </p>
-        </div>
-      ) : (
-        <>
-          <div ref={listRef} className="scrollbar-sleek flex-1 space-y-3 overflow-y-auto p-3">
-            {messages.length === 0 && !pending && (
-              <p className="px-1 text-[13px] text-muted-foreground">
-                Ask the assistant to create or edit this workflow. It proposes a graph you review before applying.
-              </p>
-            )}
-            {messages.map((m) => (
-              <MessageBubble key={m.id} message={m} onApply={onApply} />
-            ))}
-            {pending && (
-              <div className="flex items-center gap-2 px-1 text-[13px] text-muted-foreground">
-                <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Thinking…
-              </div>
-            )}
-            {error !== null && <p className="px-1 text-[13px] text-status-error">{error}</p>}
+        )}
+        {messages.map((m) => (
+          <MessageBubble key={m.id} message={m} onApply={onApply} />
+        ))}
+        {pending && (
+          <div className="flex items-center gap-2 px-1 text-[13px] text-muted-foreground">
+            <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            Thinking…
           </div>
+        )}
+        {error !== null && <p className="px-1 text-[13px] text-status-error">{error}</p>}
+      </div>
 
-          <div className="border-t border-border p-2">
-            <div className="flex items-end gap-2">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    void send()
-                  }
-                }}
-                rows={2}
-                placeholder="Describe the workflow to build or change…"
-                disabled={pending}
-                className={cn(
-                  'scrollbar-sleek max-h-32 min-h-[2.25rem] flex-1 resize-none rounded-md border border-input bg-transparent px-2.5 py-1.5 text-[13px] outline-none',
-                  'focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50',
-                )}
-              />
-              <Button size="icon-sm" aria-label="Send" disabled={pending || draft.trim() === ''} onClick={() => void send()}>
-                <Send className="size-4" strokeWidth={1.75} />
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
+      <div className="border-t border-border p-2">
+        <div className="flex items-end gap-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                void send()
+              }
+            }}
+            rows={2}
+            placeholder="Describe the workflow to build or change…"
+            disabled={pending}
+            className={cn(
+              'scrollbar-sleek max-h-32 min-h-[2.25rem] flex-1 resize-none rounded-md border border-input bg-transparent px-2.5 py-1.5 text-[13px] outline-none',
+              'focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50',
+            )}
+          />
+          <Button size="icon-sm" aria-label="Send" disabled={pending || draft.trim() === ''} onClick={() => void send()}>
+            <Send className="size-4" strokeWidth={1.75} />
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
