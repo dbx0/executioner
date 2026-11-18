@@ -1,8 +1,6 @@
 import type { JSX } from 'react'
-import { cn } from '../../../lib/utils.js'
-
-const inputClass =
-  'rounded-md border border-input bg-transparent px-2 py-1 text-[13px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
+import { Textarea } from '../../ui/textarea.js'
+import { TemplateChip } from '../surface.js'
 
 /** Loop iteration references the engine exposes to body nodes. */
 const LOOP_CHIPS = ['{{ loop.item }}', '{{ loop.index }}', '{{ loop.count }}']
@@ -29,15 +27,15 @@ export function LoopBuilder({
   }
 
   return (
-    <div className="flex flex-col gap-3 p-4 text-sm">
-      <div className="flex flex-col gap-1">
-        <span>Source</span>
-        <textarea
+    <div className="flex flex-col gap-3 p-3.5 text-[13px]">
+      <div className="flex flex-col gap-1.5">
+        <span className="font-medium">Source</span>
+        <Textarea
           aria-label="source"
           rows={4}
           value={source}
           onChange={(e) => onChange('source', e.target.value)}
-          className={cn(inputClass, 'resize-y font-mono text-[12px]')}
+          className="resize-y font-mono text-[12px]"
         />
         <span className="text-[11px] text-muted-foreground">
           Newline-split into items, or a JSON array. Templates are interpolated before parsing.
@@ -48,14 +46,7 @@ export function LoopBuilder({
         <span className="text-[11px] text-muted-foreground">Iteration references</span>
         <div className="flex flex-wrap gap-1">
           {insertChips.map((chip) => (
-            <button
-              key={chip}
-              type="button"
-              onClick={() => appendToSource(chip)}
-              className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground"
-            >
-              {chip}
-            </button>
+            <TemplateChip key={chip} chip={chip} onInsert={appendToSource} />
           ))}
         </div>
         <span className="text-[11px] text-muted-foreground">

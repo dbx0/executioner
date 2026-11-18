@@ -1,7 +1,9 @@
 import type { JSX } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search } from 'lucide-react'
-import { categoryColor, groupByCategory, type CatalogEntry } from '../../lib/node-catalog.js'
+import { groupByCategory, type CatalogEntry } from '../../lib/node-catalog.js'
+import { POPOVER_SURFACE } from '../ui/surface.js'
+import { cn } from '../../lib/utils.js'
+import { CatalogGroups, CatalogSearch } from './CatalogList.js'
 
 export interface NodePickerProps {
   entries: CatalogEntry[]
@@ -25,7 +27,7 @@ export function NodePicker({ entries, x, y, onPick, onClose }: NodePickerProps):
   }, [])
 
   useEffect(() => {
-    function handleMouseDown(e: MouseEvent) {
+    function handleMouseDown(e: MouseEvent): void {
       const target = e.target as Element | null
       if (!target?.closest('[data-node-picker]')) onClose()
     }
@@ -43,62 +45,37 @@ export function NodePicker({ entries, x, y, onPick, onClose }: NodePickerProps):
     return groupByCategory(filtered)
   }, [entries, query])
 
-  const isEmpty = groups.length === 0
-
   return (
     <div
       data-node-picker
-      style={{ left: x, top: y, position: 'fixed' }}
-      className="z-50 w-52 overflow-hidden rounded-md border border-border bg-popover text-foreground shadow-floating"
+      // The anchor is a point computed from the canvas viewport at open time.
+      style={{ left: x, top: y }}
+      className={cn('fixed z-50 w-56 overflow-hidden', POPOVER_SURFACE)}
     >
-      <div className="border-b border-border p-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.stopPropagation()
-                onClose()
-              }
-            }}
-            placeholder="Search nodes…"
-            className="h-8 w-full rounded-md border border-border bg-transparent pl-7 pr-2 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          />
-        </div>
+      <div className="p-2">
+        <CatalogSearch
+          value={query}
+          onChange={setQuery}
+          inputRef={inputRef}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation()
+              onClose()
+            }
+          }}
+        />
       </div>
-      <div className="max-h-64 overflow-y-auto scrollbar-sleek py-1">
-        {isEmpty ? (
+      <div className="scrollbar-sleek max-h-64 overflow-y-auto px-2 pb-2">
+        {groups.length === 0 ? (
           <div className="px-3 py-4 text-center text-[11px] text-muted-foreground">No nodes match</div>
         ) : (
-          groups.map(([category, catEntries]) => (
-            <div key={category} className="mb-1">
-              <div className="flex items-center gap-1.5 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <span className="size-2 rounded-full" style={{ background: categoryColor(category) }} />
-                {category}
-              </div>
-              <div className="flex flex-col gap-0.5 px-1">
-                {catEntries.map((entry) => (
-                  <button
-                    key={entry.type}
-                    type="button"
-                    title={entry.description}
-                    onClick={() => {
-                      onPick(entry)
-                      onClose()
-                    }}
-                    className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  >
-                    <span className="size-1.5 shrink-0 rounded-full" style={{ background: categoryColor(entry.category) }} />
-                    <span className="truncate">{entry.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))
+          <CatalogGroups
+            groups={groups}
+            onPick={(entry) => {
+              onPick(entry)
+              onClose()
+            }}
+          />
         )}
       </div>
     </div>

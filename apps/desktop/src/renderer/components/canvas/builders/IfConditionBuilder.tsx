@@ -1,8 +1,9 @@
 import type { JSX } from 'react'
 import { useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { cn } from '../../../lib/utils.js'
 import { Button } from '../../ui/button.js'
+import { Input } from '../../ui/input.js'
 import { Select } from '../../ui/select.js'
 import {
   OPERATOR_LABELS,
@@ -15,9 +16,6 @@ import {
 } from '../../../lib/if-expression.js'
 
 const OPERATORS = Object.keys(OPERATOR_LABELS) as IfOperator[]
-
-const inputClass =
-  'rounded-md border border-input bg-transparent px-2 py-1 text-[13px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
 
 function newCondition(): Condition {
   return { field: 'value', operator: 'contains', value: '' }
@@ -67,7 +65,7 @@ export function IfConditionBuilder({
   const hasFields = upstreamFields !== undefined && upstreamFields.length > 0
 
   return (
-    <div className="flex flex-col gap-3 p-4 text-sm">
+    <div className="flex flex-col gap-3 p-3.5 text-[13px]">
       {hasFields && (
         <datalist id={listId}>
           {upstreamFields.map((f) => (
@@ -82,28 +80,28 @@ export function IfConditionBuilder({
           <div key={index} className="flex flex-col gap-2">
             {index > 0 && (
               <div className="flex items-center gap-2">
-                <span className="h-px flex-1 bg-border" />
+                <span className="h-px flex-1 bg-glass-border" />
                 <button
                   type="button"
                   onClick={toggleCombinator}
-                  className="rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase text-muted-foreground hover:text-foreground"
+                  className="rounded-control bg-glass-strong px-2.5 py-0.5 font-mono text-[10px] uppercase text-muted-foreground outline-none transition-colors hover:bg-glass-active hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
                   {model.combinator}
                 </button>
-                <span className="h-px flex-1 bg-border" />
+                <span className="h-px flex-1 bg-glass-border" />
               </div>
             )}
 
             <div className="flex items-start gap-2">
               <div className="flex flex-1 flex-col gap-2">
-                <input
+                <Input
                   aria-label={`condition ${index + 1} field`}
                   type="text"
                   placeholder="field (e.g. value)"
                   value={cond.field}
                   list={hasFields ? listId : undefined}
                   onChange={(e) => updateCondition(index, { field: e.target.value })}
-                  className={inputClass}
+                  className="h-8 text-[13px]"
                 />
                 <Select
                   ariaLabel={`condition ${index + 1} operator`}
@@ -112,13 +110,13 @@ export function IfConditionBuilder({
                   options={OPERATORS.map((op) => ({ value: op, label: OPERATOR_LABELS[op] }))}
                 />
                 {showsValue && (
-                  <input
+                  <Input
                     aria-label={`condition ${index + 1} value`}
                     type="text"
                     placeholder="value"
                     value={cond.value}
                     onChange={(e) => updateCondition(index, { value: e.target.value })}
-                    className={inputClass}
+                    className="h-8 text-[13px]"
                   />
                 )}
               </div>
@@ -139,15 +137,16 @@ export function IfConditionBuilder({
         )
       })}
 
-      <Button type="button" variant="outline" size="sm" onClick={addCondition} className="self-start">
-        + add condition
+      <Button type="button" variant="glass" size="sm" onClick={addCondition} className="self-start">
+        <Plus className="size-3.5" strokeWidth={2} />
+        Add condition
       </Button>
 
       <div className="flex flex-col gap-1">
         <span className="text-[11px] text-muted-foreground">Generated expression</span>
         <code
           className={cn(
-            'rounded-md border border-border bg-transparent px-2 py-1 font-mono text-[11px] text-muted-foreground',
+            'rounded-[12px] border border-glass-border bg-background px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground',
             'break-all',
           )}
         >

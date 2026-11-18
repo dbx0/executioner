@@ -4,7 +4,9 @@ import type { TargetNode } from '../../api/targets.js'
 import { Button } from '../../components/ui/button.js'
 import { Checkbox } from '../../components/ui/checkbox.js'
 import { Select, type SelectOption } from '../../components/ui/select.js'
+import { Spinner } from '../../components/ui/spinner.js'
 import { TargetPicker } from '../../components/canvas/TargetPicker.js'
+import { FloatingPanel, SectionTitle } from '../../components/canvas/surface.js'
 
 /** The floating "Run workflow" panel: target, backend and step-mode choices. */
 export function RunPanel({
@@ -19,6 +21,7 @@ export function RunPanel({
   onManageBackends,
   onCancel,
   onRun,
+  starting = false,
 }: {
   targets: TargetNode[]
   targetId: string | undefined
@@ -31,20 +34,22 @@ export function RunPanel({
   onManageBackends: () => void
   onCancel: () => void
   onRun: () => void
+  /** The run is being saved and launched: the Run button spins and cannot be pressed again. */
+  starting?: boolean
 }): JSX.Element {
   return (
-    <div className="absolute right-3 top-3 z-10 w-64 rounded-lg border border-border bg-popover p-3 shadow-floating">
-      <div className="mb-2 text-[13px] font-medium">Run workflow</div>
-      <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">Target</label>
-      <div className="mb-2">
+    <FloatingPanel className="absolute right-0 top-0 z-10 w-72 overflow-visible p-3.5">
+      <div className="mb-3 text-[13px] font-semibold tracking-[-0.01em]">Run workflow</div>
+      <SectionTitle className="mb-1.5">Target</SectionTitle>
+      <div className="mb-3">
         <TargetPicker targets={targets} value={targetId} onChange={onTargetChange} />
       </div>
-      <div className="mb-1 flex items-center justify-between">
-        <label className="block text-[11px] uppercase tracking-wide text-muted-foreground">Backend</label>
+      <div className="mb-1.5 flex items-center justify-between">
+        <SectionTitle>Backend</SectionTitle>
         <button
           type="button"
           onClick={onManageBackends}
-          className="text-[11px] text-muted-foreground hover:text-foreground"
+          className="rounded-control px-1.5 text-[11px] text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           Manage
         </button>
@@ -63,19 +68,20 @@ export function RunPanel({
       <label className="mb-3 flex cursor-pointer items-center gap-2 text-[13px]">
         <Checkbox
           checked={stepMode}
-          onChange={(e) => onStepModeChange(e.target.checked)}
+          onCheckedChange={onStepModeChange}
           className="size-3.5"
         />
         <span>Step through (pause between nodes)</span>
       </label>
       <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="xs" onClick={onCancel}>
+        <Button variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="xs" disabled={targetId === undefined} onClick={onRun}>
+        <Button size="sm" disabled={targetId === undefined || starting} onClick={onRun}>
+          {starting && <Spinner size="sm" />}
           {stepMode ? 'Start stepping' : 'Run'}
         </Button>
       </div>
-    </div>
+    </FloatingPanel>
   )
 }

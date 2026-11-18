@@ -3,7 +3,11 @@ import { AlertTriangle } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { AgentIcon } from '../brand/AgentIcon.js'
 import { Checkbox } from '../ui/checkbox.js'
+import { Input } from '../ui/input.js'
 import { Select, type SelectOption } from '../ui/select.js'
+import { Textarea } from '../ui/textarea.js'
+import { NumericField } from './NumericField.js'
+import { TemplateChip } from './surface.js'
 import { cn } from '../../lib/utils.js'
 
 // Re-exported from lib/param-specs so components keep importing them from here.
@@ -21,13 +25,13 @@ function FieldShell({
   children: React.ReactNode
 }): JSX.Element {
   return (
-    <div className="flex flex-col gap-1 text-sm">
-      <span className="flex items-center gap-1">
+    <div className="flex flex-col gap-1.5 text-[13px]">
+      <span className="flex items-center gap-1 font-medium">
         {param.label ?? param.name}
         {param.required === true && <span className="text-status-error">*</span>}
       </span>
       {param.warning !== undefined && (
-        <div className="flex items-start gap-1.5 rounded-md border border-status-error/40 bg-status-error/10 px-2 py-1 text-[11px] text-status-error">
+        <div className="flex items-start gap-1.5 rounded-[10px] border border-status-error/40 bg-status-error/10 px-2.5 py-1.5 text-[11px] text-status-error">
           <AlertTriangle className="mt-0.5 size-3 shrink-0" />
           <span>{param.warning}</span>
         </div>
@@ -57,11 +61,8 @@ export function ParamDrawer({
 }): JSX.Element {
   const allChips = chips ?? DEFAULT_CHIPS
   const installedAgents = useApp((s) => s.installedAgents)
-  const inputClass =
-    'rounded-md border border-input bg-transparent px-2 py-1 text-[13px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
-
   return (
-    <div className="flex flex-col gap-3 p-4">
+    <div className="flex flex-col gap-3.5 p-3.5">
       {params.map((param) => {
         const current = values[param.name] ?? param.default ?? ''
         const needed = invalid === param.name
@@ -99,12 +100,12 @@ export function ParamDrawer({
 
         if (param.type === 'boolean') {
           return (
-            <label key={param.name} className="flex items-start gap-2 text-sm">
+            <label key={param.name} className="flex items-start gap-2 text-[13px]">
               <Checkbox
                 aria-label={param.name}
                 className="mt-0.5"
                 checked={Boolean(current)}
-                onChange={(e) => onChange(param.name, e.target.checked)}
+                onCheckedChange={(checked) => onChange(param.name, checked)}
               />
               <span className="flex flex-col gap-0.5">
                 <span>{param.label ?? param.name}</span>
@@ -123,38 +124,41 @@ export function ParamDrawer({
         return (
           <FieldShell key={param.name} param={param}>
             {isTextarea ? (
-              <textarea
+              <Textarea
                 aria-label={param.name}
                 aria-invalid={needed || undefined}
                 rows={param.ui === 'code' ? 8 : 3}
                 value={String(current)}
                 placeholder={param.placeholder}
                 onChange={(e) => onChange(param.name, e.target.value)}
-                className={cn(inputClass, 'resize-y', param.ui === 'code' && 'font-mono text-[12px]', needed && 'border-destructive')}
+                className={cn('resize-y text-[13px]', param.ui === 'code' && 'font-mono text-[12px]', needed && 'border-destructive')}
+              />
+            ) : param.type === 'number' ? (
+              <NumericField
+                aria-label={param.name}
+                value={current === '' ? undefined : Number(current)}
+                // An emptied field has always stored 0 for a number param.
+                emptyAs={0}
+                onChange={(n) => onChange(param.name, n)}
+                className={cn('h-8 text-[13px]', needed && 'border-destructive')}
+                {...(param.placeholder === undefined ? {} : { placeholder: param.placeholder })}
               />
             ) : (
-              <input
+              <Input
                 aria-label={param.name}
                 aria-invalid={needed || undefined}
-                type={param.type === 'number' ? 'number' : 'text'}
+                type="text"
                 value={String(current)}
                 placeholder={param.placeholder}
-                onChange={(e) => onChange(param.name, param.type === 'number' ? Number(e.target.value) : e.target.value)}
-                className={cn(inputClass, needed && 'border-destructive')}
+                onChange={(e) => onChange(param.name, e.target.value)}
+                className={cn('h-8 text-[13px]', needed && 'border-destructive')}
               />
             )}
             {neededHint}
             {param.type === 'string' && allChips.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {allChips.map((chip) => (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => insertChip(chip)}
-                    className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground"
-                  >
-                    {chip}
-                  </button>
+                  <TemplateChip key={chip} chip={chip} onInsert={insertChip} />
                 ))}
               </div>
             )}

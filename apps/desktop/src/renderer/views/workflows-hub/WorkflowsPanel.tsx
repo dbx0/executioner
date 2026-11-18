@@ -6,8 +6,8 @@ import { AddTile, WorkflowCard, WorkflowCardsSkeleton } from './cards.js'
 import { ResizableRows, SectionLabel } from './layout.js'
 
 /**
- * The Workflows tab: a resizable vertical split — the workflow grid on top,
- * recent runs below. Drag the divider to expand either pane.
+ * The Workflows tab: a resizable vertical split with the workflow grid on top
+ * and recent runs below. Drag the divider to expand either pane.
  */
 export function WorkflowsPanel({
   workflows,
@@ -16,6 +16,8 @@ export function WorkflowsPanel({
   onDuplicate,
   onDelete,
   loading,
+  duplicatingId,
+  deletingId,
 }: {
   workflows: WorkflowSummary[]
   onCreate: () => void
@@ -24,21 +26,26 @@ export function WorkflowsPanel({
   onDelete: (w: WorkflowSummary) => void
   /** First load still in flight: show placeholder tiles instead of an empty grid. */
   loading: boolean
+  /** The workflow being duplicated or deleted right now, if any. */
+  duplicatingId: string | null
+  deletingId: string | null
 }): JSX.Element {
   return (
     <ResizableRows
       storageKey="exe.workflowsSplit"
       top={
-        <section data-tour="workflows-list" className="flex min-h-0 flex-1 flex-col gap-2 p-4 pb-2">
+        <section data-tour="workflows-list" className="flex min-h-0 flex-1 flex-col gap-2 px-1 pt-1">
           <SectionLabel>Workflows</SectionLabel>
-          <ScrollArea className="-mx-1 min-h-0 flex-1 px-1">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3 pb-1">
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-panel pb-1">
               <AddTile label="Create workflow" onClick={onCreate} />
               {loading && <WorkflowCardsSkeleton />}
               {workflows.map((w) => (
                 <WorkflowCard
                   key={w.id}
                   workflow={w}
+                  duplicating={duplicatingId === w.id}
+                  deleting={deletingId === w.id}
                   onPreview={() => onPreview(w)}
                   onDuplicate={() => onDuplicate(w.id)}
                   onDelete={() => onDelete(w)}
@@ -49,9 +56,10 @@ export function WorkflowsPanel({
         </section>
       }
       bottom={
-        <section data-tour="workflows-runs" className="flex min-h-0 flex-1 flex-col gap-2 p-4 pt-2">
-          <SectionLabel>Recent runs</SectionLabel>
-          <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card/30">
+        <section data-tour="workflows-runs" className="flex min-h-0 flex-1 flex-col gap-2">
+          <SectionLabel className="px-1">Recent runs</SectionLabel>
+          {/* The embedded runs view lays out its own glass panels. */}
+          <div className="min-h-0 flex-1">
             <ExecutionsView embedded />
           </div>
         </section>

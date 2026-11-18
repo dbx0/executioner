@@ -11,6 +11,7 @@ import { RunAgentModal } from '../components/modals/RunAgentModal.js'
 import { HubHeader } from './workflows-hub/HubHeader.js'
 import { WorkflowsPanel } from './workflows-hub/WorkflowsPanel.js'
 import { AgentsPanel } from './workflows-hub/AgentsPanel.js'
+import { Page } from '../components/ui/page.js'
 
 /**
  * The Workflows/Agents hub: the landing page for the two sidebar sections. It
@@ -39,6 +40,10 @@ export function WorkflowsHub({
 
   const agentsApi = useMemo(() => savedAgentsApi(client), [client])
   const [agents, setAgents] = useState<SavedAgent[]>([])
+  const [agentsLoaded, setAgentsLoaded] = useState(false)
+  // The card whose async action is in flight, so it can show a spinner.
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   // `kind` seeds the modal when creating (Add agent vs Add team).
   const [agentModal, setAgentModal] = useState<{ agent: SavedAgent | null; kind?: 'agent' | 'team' } | null>(null)
   const [runAgentFor, setRunAgentFor] = useState<SavedAgent | null>(null)
@@ -52,6 +57,7 @@ export function WorkflowsHub({
       .list()
       .then(setAgents)
       .catch(() => setAgents([]))
+      .finally(() => setAgentsLoaded(true))
   }, [agentsApi])
 
   const refresh = useCallback(() => {
@@ -68,22 +74,28 @@ export function WorkflowsHub({
   }, [refresh, refreshAgents])
 
   const removeAgent = async (id: string): Promise<void> => {
+    setDeletingId(id)
     await agentsApi.remove(id).catch(() => {})
+    setDeletingId(null)
     refreshAgents()
   }
 
   const remove = async (id: string, keepHistory: boolean): Promise<void> => {
+    setDeletingId(id)
     await api.remove(id, keepHistory).catch(() => {})
+    setDeletingId(null)
     refresh()
   }
 
   const duplicate = async (id: string): Promise<void> => {
+    setDuplicatingId(id)
     await api.duplicate(id).catch(() => {})
+    setDuplicatingId(null)
     refresh()
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <Page>
       <HubHeader
         tab={tab}
         onCreateWorkflow={onCreate}
@@ -95,6 +107,8 @@ export function WorkflowsHub({
       {tab === 'workflows' && (
         <WorkflowsPanel
           loading={!loadedOnce}
+          duplicatingId={duplicatingId}
+          deletingId={deletingId}
           workflows={workflows}
           onCreate={onCreate}
           onPreview={(w) => setPreview({ id: w.id, name: w.name })}
@@ -107,6 +121,8 @@ export function WorkflowsHub({
         <AgentsPanel
           teams={teams}
           singleAgents={singleAgents}
+          loading={!agentsLoaded}
+          deletingId={deletingId}
           onAddTeam={() => setAgentModal({ agent: null, kind: 'team' })}
           onAddAgent={() => setAgentModal({ agent: null, kind: 'agent' })}
           onRun={(a) => setRunAgentFor(a)}
@@ -188,6 +204,6 @@ export function WorkflowsHub({
           }}
         />
       )}
-    </div>
+    </Page>
   )
 }

@@ -1,11 +1,17 @@
 import type { JSX } from 'react'
-import { Zap, Plus, Users, Workflow } from 'lucide-react'
+import { Zap, Plus, Users } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
+import { PageToolbar } from '../../components/ui/page.js'
 import type { useApp } from '../../store.js'
 
 export type HubTab = ReturnType<typeof useApp.getState>['hubTab']
 
-/** The hub's title bar; its actions depend on which tab is showing. */
+const TITLES: Record<HubTab, string> = { workflows: 'Workflows', agents: 'Agents' }
+
+/**
+ * The hub's toolbar row; its actions depend on which tab is showing. The tab
+ * itself is chosen from the sidebar, so the row only names it.
+ */
 export function HubHeader({
   tab,
   onCreateWorkflow,
@@ -20,32 +26,33 @@ export function HubHeader({
   onAddAgent: () => void
 }): JSX.Element {
   return (
-    <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
-      <Workflow className="size-4 text-muted-foreground" strokeWidth={1.75} />
-      <span className="text-sm font-medium capitalize">{tab}</span>
-      {tab === 'workflows' ? (
-        <>
-          <Button variant="outline" size="sm" className="ml-auto" data-tour="workflows-schedules" onClick={onOpenActions}>
-            <Zap className="size-4" strokeWidth={1.75} />
-            Actions
-          </Button>
-          <Button size="sm" data-tour="workflows-create" onClick={onCreateWorkflow}>
-            <Plus className="size-4" strokeWidth={2} />
-            Create workflow
-          </Button>
-        </>
-      ) : (
-        <>
-          <Button variant="outline" size="sm" className="ml-auto" data-tour="agents-add-team" onClick={onAddTeam}>
-            <Users className="size-4" strokeWidth={1.75} />
-            Add team
-          </Button>
-          <Button size="sm" data-tour="agents-add" onClick={onAddAgent}>
-            <Plus className="size-4" strokeWidth={2} />
-            Add agent
-          </Button>
-        </>
-      )}
-    </div>
+    <PageToolbar
+      title={TITLES[tab]}
+      actions={
+        tab === 'workflows' ? (
+          <>
+            <Button variant="glass" size="sm" data-tour="workflows-schedules" onClick={onOpenActions}>
+              <Zap className="size-3.5" strokeWidth={1.75} />
+              Actions
+            </Button>
+            <Button size="sm" data-tour="workflows-create" onClick={onCreateWorkflow}>
+              <Plus className="size-3.5" strokeWidth={2} />
+              Create workflow
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="glass" size="sm" data-tour="agents-add-team" onClick={onAddTeam}>
+              <Users className="size-3.5" strokeWidth={1.75} />
+              Add team
+            </Button>
+            <Button size="sm" data-tour="agents-add" onClick={onAddAgent}>
+              <Plus className="size-3.5" strokeWidth={2} />
+              Add agent
+            </Button>
+          </>
+        )
+      }
+    />
   )
 }
