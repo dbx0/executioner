@@ -11,11 +11,16 @@ contextBridge.exposeInMainWorld('executioner', {
     description?: string
     scope?: string
   }) =>
-    ipcRenderer.invoke('open-project', req) as Promise<{
-      port: number
-      token: string
-      projectRoot: string
-    }>,
+    // The main process answers a failed open with `{ error }` instead of
+    // rejecting (see its handler); rethrow it here so callers still just catch.
+    (
+      ipcRenderer.invoke('open-project', req) as Promise<
+        { port: number; token: string; projectRoot: string } | { error: string }
+      >
+    ).then((result) => {
+      if ('error' in result) throw new Error(result.error)
+      return result
+    }),
   // Closing an engagement tab stops that project's engine; the others keep
   // running, so a background scan is not collateral damage.
   closeProject: (req: { dir: string }): void => ipcRenderer.send('close-project', req),

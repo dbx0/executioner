@@ -553,7 +553,20 @@ handle('pick-folder', () => handlers.pickFolder())
 /** The argument an IPC handler takes, as the renderer sends it. */
 type Req<K extends keyof typeof handlers> = Parameters<(typeof handlers)[K]>[0]
 
-handle('open-project', (req: Req<'openProject'>) => handlers.openProject(req))
+// A folder that will not open is an ordinary answer, not a crash: the commonest
+// cause is a folder that was never set up as an engagement. A rejected handler
+// makes Electron print the whole stack to the terminal and prefix the message
+// with "Error invoking remote method", so the failure travels as a value and the
+// preload turns it back into a plain Error for the renderer.
+handle('open-project', async (req: Req<'openProject'>) => {
+  try {
+    return await handlers.openProject(req)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.warn('main', 'Could not open the project', { dir: req.dir, reason: message })
+    return { error: message }
+  }
+})
 listen('close-project', (req: { dir: string }) => handlers.closeProject(req))
 handle('check-agents', () => handlers.checkAgents())
 handle('test-backend', (req: Req<'testBackend'>) => handlers.testBackend(req))
