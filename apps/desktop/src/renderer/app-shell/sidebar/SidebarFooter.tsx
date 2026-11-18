@@ -3,15 +3,14 @@ import { Settings } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { cn } from '../../lib/utils.js'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../components/ui/tooltip.js'
-import { openWhatsNew } from '../../lib/whats-new.js'
 import { UsageMeter } from './UsageMeter.js'
 import { useVerboseLogging } from './useVerboseLogging.js'
 
 /**
  * The sidebar footer, a dark inset card that took over what the bottom status
  * strip carried: the account usage meter (only with an engine to ask) beside
- * Settings (a full page, not a nav item), then one quiet line with the
- * verbose-logging warning and the app version, which opens the what's-new notes.
+ * Settings (a full page, not a nav item), then the verbose-logging warning
+ * while it is on. The app version lives at the foot of the Settings nav.
  */
 export function SidebarFooter(): JSX.Element {
   const active = useApp((s) => s.activeView === 'settings')
@@ -44,33 +43,19 @@ export function SidebarFooter(): JSX.Element {
           <TooltipContent side="top">Settings</TooltipContent>
         </Tooltip>
       </div>
-      <div className="flex items-center gap-2 text-[11px]">
-        {verbose && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                tabIndex={0}
-                className="min-w-0 truncate rounded-[6px] text-attention outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              >
-                Verbose logging
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="top">Verbose logging is on. Turn it off in Settings, Logs.</TooltipContent>
-          </Tooltip>
-        )}
+      {verbose && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={openWhatsNew}
-              className="-mr-1 ml-auto flex h-5 shrink-0 items-center rounded-control px-2 tabular-nums text-tertiary-foreground outline-none transition-colors hover:bg-glass-strong hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            <span
+              tabIndex={0}
+              className="min-w-0 self-start truncate rounded-[6px] text-[11px] text-attention outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
-              v{__APP_VERSION__}
-            </button>
+              Verbose logging
+            </span>
           </TooltipTrigger>
-          <TooltipContent side="top">What's new in this version</TooltipContent>
+          <TooltipContent side="top">Verbose logging is on. Turn it off in Settings, Logs.</TooltipContent>
         </Tooltip>
-      </div>
+      )}
     </div>
   )
 }

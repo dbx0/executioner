@@ -4,6 +4,7 @@ import { useApp } from '../store.js'
 import { Button } from '../components/ui/button.js'
 import { GlassPanel } from '../components/ui/glass-panel.js'
 import { Spinner } from '../components/ui/spinner.js'
+import { VersionButton } from '../components/VersionButton.js'
 import logoUrl from '../assets/logo.png'
 
 export function Landing(): JSX.Element {
@@ -51,6 +52,7 @@ export function Landing(): JSX.Element {
           An engagement is a folder on disk with its own targets, workflows and evidence.
         </p>
       </GlassPanel>
+      <VersionButton className="absolute bottom-3 right-3" />
     </div>
   )
 }

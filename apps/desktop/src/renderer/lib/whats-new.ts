@@ -94,7 +94,7 @@ export function isReturningUser(): boolean {
 
 const OPEN_EVENT = 'exe:whats-new'
 
-/** Open the dialog on request (the version in the status bar). */
+/** Open the dialog on request (the version button). */
 export function openWhatsNew(): void {
   window.dispatchEvent(new Event(OPEN_EVENT))
 }

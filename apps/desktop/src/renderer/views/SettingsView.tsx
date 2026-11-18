@@ -5,6 +5,7 @@ import { useApp } from '../store.js'
 import { cn } from '../lib/utils.js'
 import { GlassPanel } from '../components/ui/glass-panel.js'
 import { Page, PageBody, PageToolbar } from '../components/ui/page.js'
+import { VersionButton } from '../components/VersionButton.js'
 import { AgentsSection } from './settings/AgentsSection.js'
 import { NodesSection } from './settings/NodesSection.js'
 import { ToolsSection } from './settings/tools/ToolsSection.js'
@@ -73,6 +74,9 @@ export function SettingsView(): JSX.Element {
                 </button>
               )
             })}
+            <div className="mt-auto flex justify-center pt-2">
+              <VersionButton />
+            </div>
           </nav>
         </GlassPanel>
 

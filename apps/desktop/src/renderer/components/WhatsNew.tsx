@@ -68,7 +68,7 @@ function ReleaseNotes({ release, heading }: { release: Release; heading: boolean
 /**
  * The "What's new" dialog. It opens by itself the first time the app runs after
  * an update, with the clip of the headline change on top and the notes of every
- * release since the last one seen below. The version in the status bar opens it
+ * release since the last one seen below. The version button opens it
  * again with the latest release.
  *
  * Escape is also handled here on the window, not only by the dialog shell: the

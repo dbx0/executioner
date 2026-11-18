@@ -7,8 +7,6 @@ import type { ProviderLimits, UsageLimits } from '../../api/usage-limits.js'
 
 vi.stubGlobal('__APP_VERSION__', '0.0.0')
 
-const openWhatsNew = vi.fn()
-vi.mock('../../lib/whats-new.js', () => ({ openWhatsNew: () => openWhatsNew() }))
 
 const usage = { get: vi.fn<() => Promise<UsageLimits>>() }
 vi.mock('../../api/usage-limits.js', () => ({ usageLimitsApi: () => usage }))
@@ -58,7 +56,6 @@ function renderFooter(): void {
 }
 
 beforeEach(() => {
-  openWhatsNew.mockReset()
   usage.get.mockReset()
   stubLog(false)
   useApp.setState({ client: null, connection: null, activeView: 'terminals' })
@@ -88,11 +85,10 @@ describe('SidebarFooter verbose indicator', () => {
   })
 })
 
-describe('SidebarFooter version and settings', () => {
-  it('opens the what\'s-new notes from the version button', () => {
+describe('SidebarFooter settings', () => {
+  it('leaves the app version to the Settings page', () => {
     renderFooter()
-    fireEvent.click(screen.getByRole('button', { name: 'v0.0.0' }))
-    expect(openWhatsNew).toHaveBeenCalledOnce()
+    expect(screen.queryByText(/^v\d/)).toBeNull()
   })
 
   it('opens Settings, and only with an engagement', () => {
