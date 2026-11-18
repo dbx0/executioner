@@ -133,6 +133,31 @@ describe('FindingsView', () => {
     expect(fakeApi.list).toHaveBeenCalledWith({})
   })
 
+  it('searches the loaded list by title, target and content, and clears back', async () => {
+    render(<FindingsView />)
+    await screen.findByText('AWS key in bundle.js')
+
+    const search = screen.getByLabelText('Search findings')
+    // By title: only the matching row stays.
+    fireEvent.change(search, { target: { value: 'directory' } })
+    expect(screen.getByText('Directory listing')).toBeTruthy()
+    expect(screen.queryByText('AWS key in bundle.js')).toBeNull()
+
+    // By the target's name, not just the title.
+    fireEvent.change(search, { target: { value: 'example.com' } })
+    expect(screen.getByText('AWS key in bundle.js')).toBeTruthy()
+
+    // No match shows a message rather than the empty-engagement copy.
+    fireEvent.change(search, { target: { value: 'nothing-here' } })
+    expect(screen.getByText(/no findings match/i)).toBeTruthy()
+    expect(screen.queryByText(/nothing recorded yet/i)).toBeNull()
+
+    // Clearing restores the full list.
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(screen.getByText('AWS key in bundle.js')).toBeTruthy()
+    expect(screen.getByText('Directory listing')).toBeTruthy()
+  })
+
   it('creates a finding and opens it', async () => {
     render(<FindingsView />)
     await screen.findByText('AWS key in bundle.js')

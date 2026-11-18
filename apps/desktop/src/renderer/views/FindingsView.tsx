@@ -1,11 +1,12 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { FileText, Plus, RefreshCw } from 'lucide-react'
+import { FileText, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { useApp } from '../store.js'
 import { useEngineChange } from '../lib/engine-changes.js'
 import { findingsApi, statusLabel, STATUSES, type Finding, type FindingInput } from '../api/findings.js'
 import { targetsApi } from '../api/targets.js'
 import { Button } from '../components/ui/button.js'
+import { Input } from '../components/ui/input.js'
 import { Select } from '../components/ui/select.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
 import { notify } from '../lib/toast.js'
@@ -43,6 +44,7 @@ export function FindingsView(): JSX.Element {
   const [targetValues, setTargetValues] = useState<Record<string, string>>({})
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('all')
+  const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   /** First load done (success or failure). Until then the list shows placeholders
    *  rather than the empty state, which otherwise claims there is nothing here. */
@@ -123,6 +125,25 @@ export function FindingsView(): JSX.Element {
   const selected = findings.find((f) => f.id === selectedId) ?? null
   const listHidden = expanded && selected !== null
 
+  // Client-side search over the loaded (status-filtered) findings: title, the two
+  // text bodies, severity, status and the target's name. It narrows the list the
+  // operator is already looking at, so it stays instant and needs no round-trip.
+  const trimmedQuery = query.trim().toLowerCase()
+  const visibleFindings = useMemo(() => {
+    if (trimmedQuery === '') return findings
+    return findings.filter((f) => {
+      const target = f.targetId === null ? '' : (targetValues[f.targetId] ?? '')
+      return (
+        f.title.toLowerCase().includes(trimmedQuery) ||
+        f.description.toLowerCase().includes(trimmedQuery) ||
+        f.details.toLowerCase().includes(trimmedQuery) ||
+        f.severity.toLowerCase().includes(trimmedQuery) ||
+        statusLabel(f.status).toLowerCase().includes(trimmedQuery) ||
+        target.toLowerCase().includes(trimmedQuery)
+      )
+    })
+  }, [findings, trimmedQuery, targetValues])
+
   const create = async (): Promise<void> => {
     if (api === null) return
     const created = await api.create({ title: 'New finding', severity: 'medium' }).catch(() => null)
@@ -173,8 +194,33 @@ export function FindingsView(): JSX.Element {
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
         <span className="text-[13px] font-medium">Findings</span>
-        <span className="text-[11px] text-muted-foreground">{findings.length}</span>
+        <span className="text-[11px] text-muted-foreground">
+          {trimmedQuery === '' ? findings.length : `${visibleFindings.length} of ${findings.length}`}
+        </span>
         <div className="ml-auto flex items-center gap-2">
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+              strokeWidth={1.75}
+            />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search findings…"
+              aria-label="Search findings"
+              className="h-8 w-56 pl-7 pr-7"
+            />
+            {query !== '' && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setQuery('')}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" strokeWidth={2} />
+              </button>
+            )}
+          </div>
           <Select
             value={statusFilter}
             onValueChange={setStatusFilter}
@@ -202,13 +248,17 @@ export function FindingsView(): JSX.Element {
         {!listHidden && (
           <div data-tour="findings-list" className="flex w-96 shrink-0 flex-col overflow-hidden border-r border-border">
             {loadedOnce ? (
-              <FindingList
-                findings={findings}
-                selectedId={selectedId}
-                targetValues={targetValues}
-                newIds={newIds}
-                onSelect={setSelectedId}
-              />
+              trimmedQuery !== '' && visibleFindings.length === 0 && findings.length > 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">No findings match “{query.trim()}”.</p>
+              ) : (
+                <FindingList
+                  findings={visibleFindings}
+                  selectedId={selectedId}
+                  targetValues={targetValues}
+                  newIds={newIds}
+                  onSelect={setSelectedId}
+                />
+              )
             ) : (
               <FindingListSkeleton />
             )}
