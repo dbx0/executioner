@@ -12,6 +12,48 @@ import tourClip from '../assets/whats-new/0.0.9.webm'
  */
 export const RELEASES: Release[] = [
   {
+    version: '0.0.10',
+    title: 'A new look: pitch black with floating glass',
+    summary:
+      'The whole app has been redrawn. The window is pure black, every page sits on floating glass panels, and the title bar and status bar are gone to leave more room for your work.',
+    sections: [
+      {
+        title: 'New',
+        items: [
+          'Floating sidebar: your engagements, navigation, sessions and runs live in one glass panel, with account usage at the bottom.',
+          'Collapse the sidebar and the engagement icons stay on screen, so switching engagement is always one click.',
+          'Every page has its own toolbar with pill buttons, and you can drag the window from it.',
+          'Tabs in the workspace are one capsule strip, and terminals, files and browsers sit on black cards that match the theme.',
+          'Agent teams show as a strip of member chips above the terminal.',
+          'Workflow editor: the palette, toolbar and zoom controls float over the canvas.',
+          'Chat with the workflow assistant before the workflow has been saved.',
+          'Search in Findings: narrow the list by title, content, severity, status or target as you type.',
+          'Red team agents and a Red Team Ops team ship with every install.',
+          'When an agent asks you something, the question opens as a dialog and the session is marked in the sidebar.',
+        ],
+      },
+      {
+        title: 'Changed',
+        items: [
+          'The app version moved to the bottom of the Settings menu and the start screen.',
+          'Open existing engagement: picking a folder opens it right away.',
+          'A folder that is not an engagement now says so in plain words and tells you what to do next.',
+          'Escape closes every dialog.',
+          'Lists and panels show a loading placeholder instead of an empty space, and buttons show progress while they work.',
+          'Critical and high severity findings have different colors.',
+        ],
+      },
+      {
+        title: 'Fixed',
+        items: [
+          'Keyboard focus rings and hover states were missing on many buttons and now show.',
+          'Severity and status chips had no background color.',
+          'The finding detail lines up on wide screens.',
+        ],
+      },
+    ],
+  },
+  {
     version: '0.0.9',
     title: 'Actions run your recon for you',
     summary:
