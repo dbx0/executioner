@@ -87,6 +87,30 @@ describe('AssistantPanel on an unsaved canvas', () => {
     expect(screen.getByText('recon for a domain')).toBeTruthy()
   })
 
+  it('keeps the thread when the saved id only reaches the panel after the send', async () => {
+    // The editor binds the new id on a later render. If that render lands after
+    // the send has finished opening the thread, loading the stored (empty)
+    // thread again must not wipe what is on screen.
+    const { client, get } = fakeClient()
+    const props = {
+      client,
+      buildGraph: () => ({ nodes: [], edges: [] }),
+      ensureSaved: () => Promise.resolve('wf-1'),
+      onApply: () => {},
+      onClose: () => {},
+    }
+    const { rerender } = render(<AssistantPanel {...props} workflowId={undefined} />)
+
+    type('recon for a domain')
+    await waitFor(() => expect(screen.getByText('Built it.')).toBeTruthy())
+
+    rerender(<AssistantPanel {...props} workflowId="wf-1" />)
+    await Promise.resolve()
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('recon for a domain')).toBeTruthy()
+    expect(screen.getByText('Built it.')).toBeTruthy()
+  })
+
   it('keeps the draft and reports it when the save fails', async () => {
     const { client, post } = fakeClient()
     render(<Harness client={client} onSave={() => Promise.reject(new Error('boom'))} />)

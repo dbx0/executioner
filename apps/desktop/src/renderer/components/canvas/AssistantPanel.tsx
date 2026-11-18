@@ -66,6 +66,10 @@ export function AssistantPanel({
   // The load effect below fires as soon as the new id arrives and would replace
   // the message just typed with the (empty) stored thread.
   const openingThread = useRef(false)
+  // The workflow id `send` saved and opened a thread for. The id reaches this
+  // panel as a prop on a later render, which can land after `send` has already
+  // cleared the flag above, so the load effect also skips that one id by name.
+  const openedBySend = useRef<string | undefined>(undefined)
 
   // Load (or create) the conversation for the open workflow. Re-runs when the
   // workflow changes (e.g. after the first Save binds a real id).
@@ -75,7 +79,9 @@ export function AssistantPanel({
       setMessages([])
       return
     }
-    if (openingThread.current) return
+    if (openingThread.current || openedBySend.current === workflowId) return
+    // Any other workflow is a real switch: load it, and stop skipping the old id.
+    openedBySend.current = undefined
     let cancelled = false
     setLoading(true)
     void api
@@ -135,6 +141,7 @@ export function AssistantPanel({
         try {
           const savedId = await ensureSaved()
           if (savedId === undefined) throw new Error('not saved')
+          openedBySend.current = savedId
           convId = (await api.conversation(savedId, agent)).conversation.id
           setConversationId(convId)
         } catch {
