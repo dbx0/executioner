@@ -24,6 +24,13 @@ export default {
           subtle: 'var(--border-subtle)',
           strong: 'var(--border-strong)',
         },
+        glass: {
+          DEFAULT: 'var(--glass)',
+          strong: 'var(--glass-strong)',
+          active: 'var(--glass-active)',
+          border: 'var(--glass-border)',
+          highlight: 'var(--glass-highlight)',
+        },
         'tertiary-foreground': 'var(--tertiary-foreground)',
         'disabled-foreground': 'var(--disabled-foreground)',
         input: 'var(--input)',
@@ -47,6 +54,11 @@ export default {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
         xl: 'calc(var(--radius) + 4px)',
+        panel: 'var(--radius-panel)',
+        control: 'var(--radius-control)',
+      },
+      spacing: {
+        panel: 'var(--panel-gap)',
       },
       fontFamily: {
         sans: ['var(--font-sans)'],
@@ -54,6 +66,7 @@ export default {
       },
       boxShadow: {
         floating: 'var(--shadow-floating)',
+        glass: 'inset 0 1px 0 var(--glass-highlight)',
       },
       keyframes: {
         'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
