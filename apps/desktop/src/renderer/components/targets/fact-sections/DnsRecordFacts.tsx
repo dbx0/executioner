@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import type { TargetFact } from '../../../api/targets.js'
-import { str, Table } from './primitives.js'
+import { MISSING, str, Table, Td, Tr } from './primitives.js'
 
 /** The order a reader looks for them in: where it points first, then mail, then the rest. */
 const TYPE_ORDER = ['A', 'AAAA', 'CNAME', 'PTR', 'MX', 'NS', 'TXT']
@@ -22,12 +22,16 @@ export function DnsRecordFacts({ facts }: { facts: TargetFact[] }): JSX.Element 
         // is a comma separated list of names or addresses.
         const value = d['type'] === 'TXT' ? str(d['value']) : str(String(d['value'] ?? '').split(',').filter((v) => v !== ''))
         return (
-          <tr key={f.id} className="border-b border-border/60 align-top">
-            <td className="px-2 py-1.5 font-mono">{str(d['name'])}</td>
-            <td className="px-2 py-1.5">{str(d['type'])}</td>
-            <td className="break-all px-2 py-1.5 font-mono">{value}</td>
-            <td className="px-2 py-1.5 font-mono text-muted-foreground">{f.nodeId ?? '—'}</td>
-          </tr>
+          <Tr key={f.id}>
+            <Td mono>{str(d['name'])}</Td>
+            <Td>{str(d['type'])}</Td>
+            <Td mono className="break-all">
+              {value}
+            </Td>
+            <Td mono muted>
+              {f.nodeId ?? MISSING}
+            </Td>
+          </Tr>
         )
       })}
     </Table>

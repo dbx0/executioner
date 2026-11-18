@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { CircleHelp, Ban } from 'lucide-react'
 import type { TargetNode } from '../../api/targets.js'
 import { cn } from '../../lib/utils.js'
+import { Hint } from './Hint.js'
 
 export type ScopeStatus = 'in' | 'out' | 'unknown'
 export type ScopeFilter = ScopeStatus | 'all'
@@ -11,8 +12,9 @@ export type ScopeFilter = ScopeStatus | 'all'
  *
  * Nothing is drawn for an in-scope asset: that is the normal case, and a badge
  * on every row would be noise that teaches you to stop reading badges. The two
- * exceptions are kept visually distinct because they mean different things —
+ * exceptions are kept visually distinct because they mean different things:
  * `unknown` is a question nobody has answered, `out` is a decision someone made.
+ * The reason shows on hover, and is the badge's accessible name.
  */
 export function ScopeBadge({ status, reason }: { status: ScopeStatus; reason: string }): JSX.Element | null {
   if (status === 'in') return null
@@ -20,21 +22,19 @@ export function ScopeBadge({ status, reason }: { status: ScopeStatus; reason: st
   const excluded = status === 'out'
   const Icon = excluded ? Ban : CircleHelp
 
-  return (
+  const badge = (
     <span
       aria-label={reason}
-      title={reason}
       className={cn(
-        'inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium uppercase tracking-wide',
-        excluded
-          ? 'bg-destructive/10 text-destructive'
-          : 'bg-[color-mix(in_srgb,var(--warning,#d97706)_16%,transparent)] text-[var(--warning,#d97706)]',
+        'inline-flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-[0.05em]',
+        excluded ? 'text-status-error' : 'text-attention',
       )}
     >
       <Icon className="size-3" strokeWidth={2} />
       {excluded ? 'Out of scope' : 'Unscoped'}
     </span>
   )
+  return reason === '' ? badge : <Hint label={reason}>{badge}</Hint>
 }
 
 /**

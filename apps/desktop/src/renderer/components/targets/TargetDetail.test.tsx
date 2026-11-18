@@ -160,6 +160,30 @@ describe('TargetDetailPanel — live findings', () => {
     vi.restoreAllMocks()
   })
 
+  it('shows placeholder bars, and a way out, while the target loads', async () => {
+    let resolve!: (detail: TargetDetail) => void
+    get.mockReturnValue(new Promise<TargetDetail>((r) => (resolve = r)))
+    const onClose = vi.fn()
+    render(<TargetDetailPanel api={api} targetId="t1" onClose={onClose} />)
+
+    expect(screen.getByRole('status', { name: /loading target/i })).toBeTruthy()
+    expect(screen.getByLabelText('Close details')).toBeTruthy()
+
+    await act(async () => {
+      resolve(makeTarget())
+      await Promise.resolve()
+    })
+    await screen.findByText('Open admin panel')
+    expect(screen.queryByRole('status', { name: /loading target/i })).toBeNull()
+  })
+
+  it('spins the save button and locks it while a rename is in flight', () => {
+    render(<TargetDetailView target={makeTarget()} screenshots={[]} onRename={() => {}} renaming />)
+    const save = screen.getByRole('button', { name: 'Saving' }) as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    expect(save.querySelector('svg.animate-spin')).toBeTruthy()
+  })
+
   it('shows a finding that arrives while the pane is open', async () => {
     const base = makeTarget()
     const added = { ...(base.findings[0] as TargetDetail['findings'][number]), id: 'fd2', title: 'Exposed backup file' }
@@ -188,7 +212,7 @@ describe('TargetDetailPanel — live findings', () => {
       await Promise.resolve()
     })
 
-    expect(screen.queryByText('Loading…')).toBeNull()
+    expect(screen.queryByRole('status', { name: /loading target/i })).toBeNull()
     expect((screen.getByLabelText('Target value') as HTMLInputElement).value).toBe('half-typed.com')
   })
 })

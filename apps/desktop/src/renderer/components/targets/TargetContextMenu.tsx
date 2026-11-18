@@ -4,6 +4,7 @@ import { Play, ShieldCheck, ShieldX, Trash2, TriangleAlert, Wrench } from 'lucid
 import type { TargetNode } from '../../api/targets.js'
 import type { WorkflowSummary } from '../../api/workflows.js'
 import { Button } from '../ui/button.js'
+import { Spinner } from '../ui/spinner.js'
 import { targetActionModel, type RunBackend } from '../../lib/target-actions.js'
 import {
   ContextMenu,
@@ -27,7 +28,8 @@ export interface TargetContextMenuProps {
   onRunWorkflow: (workflowId: string, backendId: string) => void
   /** Open the Tools page with this target picked, to run a single tool on it. */
   onRunTool: () => void
-  onDelete: () => void
+  /** May return a promise: the confirm button spins until it settles. */
+  onDelete: () => void | Promise<void>
   /** The row this menu belongs to. */
   children: React.ReactNode
 }
@@ -36,8 +38,8 @@ export interface TargetContextMenuProps {
  * Right-click actions for one target, wrapped around the row they act on.
  *
  * Built on Radix's context-menu rather than hand-positioned divs: every panel is
- * portalled, so a submenu is never clipped by — nor adds scrollbars to — an
- * ancestor that scrolls, and collision flipping, keyboard navigation and focus
+ * portalled, so a submenu is never clipped by an ancestor that scrolls (nor
+ * adds scrollbars to it), and collision flipping, keyboard navigation and focus
  * return come with it.
  */
 export function TargetContextMenu({
@@ -52,8 +54,16 @@ export function TargetContextMenu({
   children,
 }: TargetContextMenuProps): JSX.Element {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const actions = targetActionModel(node, workflows, backends)
   const { descendants, singleDestination } = actions
+
+  // The confirm panel is not a menu item, so the menu stays open while the
+  // delete runs: the button has to say that something is happening.
+  const confirmDelete = (): void => {
+    setDeleting(true)
+    void Promise.resolve(onDelete()).finally(() => setDeleting(false))
+  }
 
   return (
     <ContextMenu onOpenChange={(open) => !open && setConfirmingDelete(false)}>
@@ -73,10 +83,11 @@ export function TargetContextMenu({
               </span>
             </p>
             <div className="mt-2 flex items-center justify-end gap-1.5">
-              <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(false)}>
+              <Button variant="ghost" size="sm" disabled={deleting} onClick={() => setConfirmingDelete(false)}>
                 Cancel
               </Button>
-              <Button size="sm" onClick={onDelete}>
+              <Button variant="destructive" size="sm" disabled={deleting} onClick={confirmDelete}>
+                {deleting && <Spinner size="sm" />}
                 Delete anyway
               </Button>
             </div>
@@ -150,7 +161,7 @@ export function TargetContextMenu({
               destructive
               onSelect={(e) => {
                 if (!actions.needsDeleteConfirmation) {
-                  onDelete()
+                  void onDelete()
                   return
                 }
                 // Deleting a subtree is the one irreversible click here, so the

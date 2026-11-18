@@ -62,4 +62,19 @@ describe('AddTargetModal', () => {
     await screen.findByText('nope')
     expect(onClose).not.toHaveBeenCalled()
   })
+
+  it('spins and locks the add button while the request is in flight', async () => {
+    let resolve!: (v: unknown) => void
+    create.mockReturnValue(new Promise((r) => (resolve = r)))
+    const { onClose } = open()
+    type('bmw.com')
+    const add = screen.getByRole('button', { name: /add target/i }) as HTMLButtonElement
+    fireEvent.click(add)
+
+    await waitFor(() => expect(add.disabled).toBe(true))
+    expect(add.querySelector('svg.animate-spin')).toBeTruthy()
+
+    resolve({})
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
 })

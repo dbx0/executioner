@@ -8,7 +8,9 @@ import { Badge } from '../ui/badge.js'
 import { useNewIds } from '../../lib/motion.js'
 import { ScopeBadge } from './ScopeBadge.js'
 
-const ROW_HEIGHT = 32
+/** Row pitch: a 32px row plus the 1px that keeps neighbouring rows apart. */
+const ROW_HEIGHT = 33
+const INDENT = 18
 const OVERSCAN = 8
 /** How long a new row keeps its highlight; after that a row scrolling into view does not replay it. */
 const FLASH_MS = 1000
@@ -116,7 +118,7 @@ export interface VirtualTargetTreeProps {
   newIds?: ReadonlySet<string>
   /**
    * Wraps each row, so a caller can put a context menu around it. The menu owns
-   * the right-click itself — the tree only decides what a row looks like.
+   * the right-click itself: the tree only decides what a row looks like.
    */
   renderRow?: (node: TargetNode, row: JSX.Element) => JSX.Element
 }
@@ -188,10 +190,12 @@ export function VirtualTargetTree({
   return (
     <ScrollArea
       ref={scrollRef}
-      className="min-h-0 flex-1 px-2 py-2"
+      className="min-h-0 flex-1 p-2"
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
     >
-      <div role="tree" style={{ position: 'relative', height: `${total * ROW_HEIGHT}px` }}>
+      {/* Virtualized: the spacer height, each row's offset and its indent are
+          computed per render, so they stay inline styles. */}
+      <div role="tree" className="relative" style={{ height: `${total * ROW_HEIGHT}px` }}>
         {slice.map((row, i) => {
           const { node, depth, hasChildren, expanded: isOpen } = row
           const index = first + i
@@ -216,21 +220,12 @@ export function VirtualTargetTree({
                   toggle(node.id)
                 }
               }}
-              style={{
-                position: 'absolute',
-                top: `${index * ROW_HEIGHT}px`,
-                left: 0,
-                right: 0,
-                height: `${ROW_HEIGHT}px`,
-                paddingLeft: `${depth * 16 + 8}px`,
-              }}
+              style={{ top: `${index * ROW_HEIGHT}px`, paddingLeft: `${depth * INDENT + 10}px` }}
               className={cn(
-                'group flex items-center gap-2 rounded-md pr-2 text-[13px]',
-                'cursor-pointer',
+                'group absolute inset-x-0 flex h-8 cursor-pointer items-center gap-2 rounded-lg pr-2 text-[13px]',
+                'outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50',
                 isNew && 'motion-safe:animate-enter-flash-amber',
-                selected
-                  ? 'bg-surface-3'
-                  : 'hover:bg-surface-2',
+                selected ? 'bg-glass-active' : 'hover:bg-glass-strong',
               )}
             >
               {hasChildren ? (
@@ -243,8 +238,8 @@ export function VirtualTargetTree({
                 <span className="w-3.5 shrink-0" />
               )}
               <Icon className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-              <span className="truncate font-mono text-[12.5px]">{node.value}</span>
-              <span className="ml-auto flex shrink-0 items-center gap-1.5">
+              <span className={cn('truncate font-mono text-[12px]', depth === 0 && 'font-medium')}>{node.value}</span>
+              <span className="ml-auto flex shrink-0 items-center gap-2">
                 <ScopeBadge status={node.scopeStatus} reason={node.scopeReason} />
                 <Badge variant="muted">{node.source}</Badge>
               </span>

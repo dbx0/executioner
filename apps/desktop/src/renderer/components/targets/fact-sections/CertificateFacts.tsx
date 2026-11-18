@@ -1,17 +1,25 @@
 import { useState, type JSX } from 'react'
 import type { TargetFact } from '../../../api/targets.js'
 import { cn } from '../../../lib/utils.js'
-import { str, Table } from './primitives.js'
+import { MISSING, str, Table, Td, Tr } from './primitives.js'
 
 const DAY_MS = 86_400_000
 /** Inside this many days a certificate is called out as expiring. */
 const EXPIRING_SOON_DAYS = 30
 
+type ExpiryTone = 'ok' | 'soon' | 'expired'
+
+const EXPIRY_TONE: Record<ExpiryTone, string> = {
+  expired: 'font-medium text-status-error',
+  soon: 'font-medium text-attention',
+  ok: 'text-muted-foreground',
+}
+
 /**
  * How long a certificate has left, in words. Computed at render time from
  * `not_after`: a stored "days left" would be wrong the day after it was saved.
  */
-export function certificateExpiry(notAfter: unknown, now: number): { text: string; tone: 'ok' | 'soon' | 'expired' } | null {
+export function certificateExpiry(notAfter: unknown, now: number): { text: string; tone: ExpiryTone } | null {
   if (typeof notAfter !== 'string' || notAfter === '') return null
   const end = new Date(notAfter).getTime()
   if (Number.isNaN(end)) return null
@@ -40,27 +48,18 @@ export function CertificateFacts({ facts }: { facts: TargetFact[] }): JSX.Elemen
           .map((n) => n.trim())
           .filter((n) => n !== '')
         return (
-          <tr key={f.id} className="border-b border-border/60 align-top">
-            <td className="px-2 py-1.5 font-mono">{str(d['port'])}</td>
-            <td className="px-2 py-1.5">{str(d['issuer'])}</td>
-            <td className="px-2 py-1.5 font-mono">{str(names)}</td>
-            <td className="px-2 py-1.5">
+          <Tr key={f.id}>
+            <Td mono>{str(d['port'])}</Td>
+            <Td>{str(d['issuer'])}</Td>
+            <Td mono>{str(names)}</Td>
+            <Td>
               {date(d['not_after'])}
-              {expiry !== null && (
-                <span
-                  className={cn(
-                    'ml-2',
-                    expiry.tone === 'expired' && 'font-medium text-destructive',
-                    expiry.tone === 'soon' && 'font-medium text-status-running',
-                    expiry.tone === 'ok' && 'text-muted-foreground',
-                  )}
-                >
-                  {expiry.text}
-                </span>
-              )}
-            </td>
-            <td className="px-2 py-1.5 font-mono text-muted-foreground">{f.nodeId ?? '—'}</td>
-          </tr>
+              {expiry !== null && <span className={cn('ml-2', EXPIRY_TONE[expiry.tone])}>{expiry.text}</span>}
+            </Td>
+            <Td mono muted>
+              {f.nodeId ?? MISSING}
+            </Td>
+          </Tr>
         )
       })}
     </Table>
