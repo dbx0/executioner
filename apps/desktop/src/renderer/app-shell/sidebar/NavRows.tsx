@@ -2,7 +2,7 @@ import type { JSX } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Crosshair, Info, ShieldAlert, ShieldCheck, Workflow, Wrench, Bot, Zap } from 'lucide-react'
 import { useApp, type ViewId, type HubTab } from '../../store.js'
-import { cn } from '../../lib/utils.js'
+import { SidebarRow } from './SidebarRow.js'
 
 // Terminals is no longer a nav item: the workspace is the default view, reached
 // by clicking a session below (or by opening a file from the explorer).
@@ -47,59 +47,27 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ]
 
-/** Render whichever row kind an item is. */
+/**
+ * One nav row, whichever kind it is. A hub row reads active only on its own
+ * tab, since both hub rows open the same view.
+ */
 export function NavItemRow({ item }: { item: NavItem }): JSX.Element {
-  return item.kind === 'view' ? (
-    <NavRow id={item.id} label={item.label} icon={item.icon} />
-  ) : (
-    <HubNavRow tab={item.tab} label={item.label} icon={item.icon} />
+  const active = useApp((s) =>
+    item.kind === 'view' ? s.activeView === item.id : s.activeView === 'workflows' && s.hubTab === item.tab,
   )
-}
-
-export function NavRow({ id, label, icon: Icon }: { id: ViewId; label: string; icon: LucideIcon }): JSX.Element {
-  const active = useApp((s) => s.activeView === id)
   const disabled = useApp((s) => s.connection === null)
   const setActiveView = useApp((s) => s.setActiveView)
-  return (
-    <button
-      type="button"
-      aria-current={active ? 'page' : undefined}
-      disabled={disabled}
-      onClick={() => setActiveView(id)}
-      className={cn(
-        'group flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors disabled:opacity-40',
-        active
-          ? 'selected-surface text-sidebar-accent-foreground'
-          : 'text-muted-foreground hover:bg-surface-2 hover:text-sidebar-foreground',
-      )}
-    >
-      <Icon className="size-4" strokeWidth={active ? 2.25 : 1.75} />
-      <span className="truncate">{label}</span>
-    </button>
-  )
-}
-
-/** A hub nav row (Workflows / Agents): both open the workflows view but select
- *  their own tab, so only the matching row reads active. */
-export function HubNavRow({ tab, label, icon: Icon }: { tab: HubTab; label: string; icon: LucideIcon }): JSX.Element {
-  const active = useApp((s) => s.activeView === 'workflows' && s.hubTab === tab)
-  const disabled = useApp((s) => s.connection === null)
   const openHub = useApp((s) => s.openHub)
+  const Icon = item.icon
   return (
-    <button
-      type="button"
+    <SidebarRow
+      active={active}
       aria-current={active ? 'page' : undefined}
       disabled={disabled}
-      onClick={() => openHub(tab)}
-      className={cn(
-        'group flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors disabled:opacity-40',
-        active
-          ? 'selected-surface text-sidebar-accent-foreground'
-          : 'text-muted-foreground hover:bg-surface-2 hover:text-sidebar-foreground',
-      )}
+      onClick={() => (item.kind === 'view' ? setActiveView(item.id) : openHub(item.tab))}
     >
-      <Icon className="size-4" strokeWidth={active ? 2.25 : 1.75} />
-      <span className="truncate">{label}</span>
-    </button>
+      <Icon className="size-4 shrink-0" strokeWidth={active ? 2.1 : 1.75} />
+      <span className="truncate">{item.label}</span>
+    </SidebarRow>
   )
 }

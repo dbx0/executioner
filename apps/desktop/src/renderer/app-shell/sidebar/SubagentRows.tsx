@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useState } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { Check, ChevronRight } from 'lucide-react'
 import { subtreeHasWorking, type SubagentNode } from '../../lib/subagent-tree.js'
 import { cn } from '../../lib/utils.js'
 import { AgentStatusDot } from '../../components/brand/AgentStatusDot.js'
@@ -18,13 +18,13 @@ export function SubagentNodeRow({ node }: { node: SubagentNode }): JSX.Element {
 
   return (
     <div>
-      <div className="flex h-6 items-center gap-1 rounded-md pr-2 text-[12px] text-muted-foreground">
+      <div className="flex h-6 items-center gap-1 pr-2 text-[12px] text-muted-foreground">
         <button
           type="button"
           aria-label={collapsed ? 'Expand sub-agents' : 'Collapse sub-agents'}
           onClick={() => setCollapsed((c) => !c)}
           className={cn(
-            'grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:text-sidebar-foreground',
+            'grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground hover:text-foreground',
             !hasChildren && 'invisible',
           )}
         >
@@ -34,7 +34,12 @@ export function SubagentNodeRow({ node }: { node: SubagentNode }): JSX.Element {
         {working ? (
           <AgentStatusDot state="working" className="ml-auto size-2" />
         ) : (
-          <span className="ml-auto text-status-success motion-safe:animate-pop">✓</span>
+          <Check
+            role="img"
+            aria-label="Done"
+            className="ml-auto size-3.5 shrink-0 text-status-success motion-safe:animate-pop"
+            strokeWidth={2.5}
+          />
         )}
       </div>
       {hasChildren && !collapsed && <SubagentChildren nodes={node.children} />}
@@ -45,7 +50,7 @@ export function SubagentNodeRow({ node }: { node: SubagentNode }): JSX.Element {
 /** A nested level of sub-agent rows, indented with a lineage guide-line. */
 export function SubagentChildren({ nodes }: { nodes: SubagentNode[] }): JSX.Element {
   return (
-    <div className="ml-4 flex flex-col gap-0.5 border-l border-border pl-1.5">
+    <div className="ml-4 flex flex-col gap-0.5 border-l border-glass-border pl-1">
       {nodes.map((node) => (
         <SubagentNodeRow key={node.id} node={node} />
       ))}

@@ -337,8 +337,9 @@ function createWindow(splash?: Splash): void {
     // Hidden until its first paint, so the splash (or nothing) shows meanwhile
     // instead of a blank frame.
     show: false,
-    // Frameless window with a renderer-drawn 36px titlebar (see Titlebar.tsx).
-    // macOS 'hiddenInset' keeps the native traffic lights over our custom bar;
+    // Frameless window with no title bar at all: the renderer's sidebar header
+    // and page toolbars drag the window (see app-shell/Sidebar.tsx).
+    // macOS 'hiddenInset' keeps the native traffic lights over that header;
     // Windows 'hidden' removes the OS title bar so it doesn't double up.
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset' as const }
@@ -346,12 +347,13 @@ function createWindow(splash?: Splash): void {
         ? { titleBarStyle: 'hidden' as const }
         : {}),
     // Linux ignores titleBarStyle; frame:false drops the native frame so the
-    // renderer's own titlebar isn't stacked under a native one.
+    // renderer's own chrome isn't stacked under a native one.
     ...(process.platform === 'linux' ? { frame: false } : {}),
-    // Position the traffic lights vertically centered in the 36px bar
-    // (center 18 - radius 6 = 12), left inset 16.
+    // Position the traffic lights inside the sidebar header row: the sidebar
+    // panel floats 8px in from the window edge and its header is 44px tall, so
+    // the row's center is 30px down (30 - radius 6 = 24), left inset 22.
     ...(process.platform === 'darwin'
-      ? { trafficLightPosition: { x: 16, y: 12 } }
+      ? { trafficLightPosition: { x: 22, y: 24 } }
       : {}),
     webPreferences: {
       preload: join(here, '..', 'preload', 'index.cjs'),

@@ -1,7 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { TooltipProvider } from '../components/ui/tooltip.js'
-import { Titlebar } from './Titlebar.js'
+import { WindowControls } from './WindowControls.js'
 
 let maximizedListener: ((maximized: boolean) => void) | undefined
 const windowControl = vi.fn()
@@ -19,15 +18,7 @@ function stubPlatform(platform: string): void {
   })
 }
 
-function renderTitlebar(): void {
-  render(
-    <TooltipProvider>
-      <Titlebar />
-    </TooltipProvider>,
-  )
-}
-
-describe('Titlebar window controls', () => {
+describe('WindowControls', () => {
   beforeEach(() => {
     windowControl.mockReset()
     maximizedListener = undefined
@@ -35,13 +26,14 @@ describe('Titlebar window controls', () => {
 
   it('leaves the buttons to the native traffic lights on macOS', () => {
     stubPlatform('darwin')
-    renderTitlebar()
+    const { container } = render(<WindowControls />)
     expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
+    expect(container.firstChild).toBeNull()
   })
 
   it.each(['linux', 'win32'])('draws minimize, maximize and close on %s', (platform) => {
     stubPlatform(platform)
-    renderTitlebar()
+    render(<WindowControls />)
     fireEvent.click(screen.getByRole('button', { name: 'Minimize' }))
     fireEvent.click(screen.getByRole('button', { name: 'Maximize' }))
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
@@ -50,8 +42,14 @@ describe('Titlebar window controls', () => {
 
   it('offers restore once the window is maximized', () => {
     stubPlatform('linux')
-    renderTitlebar()
+    render(<WindowControls />)
     act(() => maximizedListener?.(true))
     expect(screen.getByRole('button', { name: 'Restore' })).toBeDefined()
+  })
+
+  it('stays out of the window drag region', () => {
+    stubPlatform('linux')
+    render(<WindowControls />)
+    expect(screen.getByRole('group', { name: 'Window' }).className).toContain('app-no-drag')
   })
 })

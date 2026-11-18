@@ -1,6 +1,7 @@
 import type { CSSProperties, JSX } from 'react'
 import { useEffect } from 'react'
 import { useApp, type ViewId } from '../store.js'
+import { cn } from '../lib/utils.js'
 import { eventsUrl } from '../lib/connection.js'
 import { emitChange, type ChangeTopic } from '../lib/engine-changes.js'
 import { parseEngineEvent } from '../lib/events.js'
@@ -12,11 +13,11 @@ import { FloatingNotepad } from '../components/FloatingNotepad.js'
 import { OnboardingModal } from '../components/onboarding/OnboardingModal.js'
 import { NewEngagementModal } from '../components/modals/NewEngagementModal.js'
 import { PageTour } from '../components/tour/PageTour.js'
-import { Titlebar } from './Titlebar.js'
 import { Sidebar } from './Sidebar.js'
 import { RightSidebar } from './RightSidebar.js'
-import { EngagementRail } from './EngagementRail.js'
-import { StatusBar } from './StatusBar.js'
+import { SidebarToggle } from './SidebarToggle.js'
+import { WindowControls } from './WindowControls.js'
+import { isDarwin } from './platform.js'
 import { Landing } from './Landing.js'
 import { AboutView } from '../views/AboutView.js'
 import { ScopeView } from '../views/ScopeView.js'
@@ -212,10 +213,22 @@ function useRestoreSession(): void {
   }, [])
 }
 
+/**
+ * What the page gives up at its top-left corner while the sidebar is hidden:
+ * the floating reopen button and, on macOS, the traffic lights (window x 22 to
+ * 74), which then float over the page. `toolbar` pushes the page toolbar's
+ * content clear of both, so nothing interactive sits under them. It reaches the
+ * shared PageToolbar (`header.app-drag`) from here because the toolbar has no
+ * inset of its own.
+ */
+const COLLAPSED_INSET = {
+  darwin: { button: 'left-[82px] top-[15px]', toolbar: '[&_header.app-drag]:pl-[120px]' },
+  other: { button: 'left-panel top-[11px]', toolbar: '[&_header.app-drag]:pl-11' },
+} as const
+
 export function Shell(): JSX.Element {
   const collapsed = useApp((s) => s.sidebarCollapsed)
   const hasEngagement = useApp((s) => s.connection !== null)
-  const openCount = useApp((s) => s.open.length)
   useRestoreSession()
   useKeybindings()
   useAgentEvents()
@@ -223,20 +236,31 @@ export function Shell(): JSX.Element {
   useBrowserPageTracking()
   useAgentStatusRefresh()
   useBrowserOcclusion()
+  const inset = isDarwin() ? COLLAPSED_INSET.darwin : COLLAPSED_INSET.other
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="flex h-dvh w-dvw flex-col overflow-hidden bg-background text-foreground">
-        <Titlebar />
-        <div className="flex min-h-0 flex-1">
-          {openCount > 0 && <EngagementRail />}
-          {!collapsed && <Sidebar />}
-          <main className="min-w-0 flex-1 overflow-hidden bg-background">
-            {hasEngagement ? <ActivePage /> : <Landing />}
-          </main>
-          {hasEngagement && <RightSidebar />}
-        </div>
-        {hasEngagement && <StatusBar />}
+      {/* No title bar and no status strip: the sidebar header and each page's
+          toolbar drag the window, and the sidebar footer carries the status. */}
+      <div className="flex h-dvh w-dvw overflow-hidden bg-background text-foreground">
+        {!collapsed && <Sidebar />}
+        <main className={cn('relative min-w-0 flex-1 overflow-hidden', collapsed && inset.toolbar)}>
+          {hasEngagement ? <ActivePage /> : <Landing />}
+          {/* After the page in the DOM on purpose: Electron applies drag regions in
+              document order, so a no-drag button placed before the page toolbar is
+              swallowed by the toolbar's drag region and cannot be clicked. */}
+          {collapsed && <SidebarToggle floating className={cn('absolute z-20', inset.button)} />}
+        </main>
+        {hasEngagement ? (
+          <RightSidebar />
+        ) : (
+          // No tool capsule without an engagement, but Windows and Linux still need their controls.
+          !isDarwin() && (
+            <div className="flex w-14 shrink-0 justify-center pt-[10px]">
+              <WindowControls />
+            </div>
+          )
+        )}
       </div>
       <CommandPalette />
       <FloatingNotepad />
@@ -248,17 +272,18 @@ export function Shell(): JSX.Element {
         theme="dark"
         toastOptions={{
           classNames: {
-            toast: 'bg-popover border-border text-foreground text-[13px]',
+            toast: 'rounded-panel border-glass-border bg-popover text-popover-foreground text-[13px] shadow-floating',
           },
         }}
       />
-      {/* Asks for the operator, as a notch hanging from the titlebar (36px, so 35 covers its bottom
-          border). A page view starts at least 104px down, so the 34px notch never reaches one. */}
+      {/* Asks for the operator, as a notch hanging from the top edge of the window (there is no
+          title bar any more, so no offset). It is 34px tall and centered, so it only ever covers the
+          middle of a page toolbar's 52px drag row, never a panel below it. */}
       <Toaster
         id={ATTENTION_TOASTER}
         position="top-center"
         theme="dark"
-        offset={35}
+        offset={0}
         style={{ '--width': '560px' } as CSSProperties}
         visibleToasts={1}
         className="attention-toaster"
