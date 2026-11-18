@@ -1,6 +1,8 @@
 import type { JSX } from 'react'
 import { Input } from '../../ui/input.js'
 import { Select } from '../../ui/select.js'
+import { Textarea } from '../../ui/textarea.js'
+import { FieldLabel } from '../field-label.js'
 import { cn } from '../../../lib/utils.js'
 
 export function Field({
@@ -18,8 +20,9 @@ export function Field({
 }): JSX.Element {
   return (
     <div>
-      <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">{label}</label>
+      <FieldLabel>{label}</FieldLabel>
       <Input
+        aria-label={label}
         className="h-8"
         value={value}
         disabled={disabled ?? false}
@@ -47,12 +50,10 @@ export function TextareaField({
 }): JSX.Element {
   return (
     <div className="mt-2">
-      <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">{label}</label>
-      <textarea
-        className={cn(
-          'w-full rounded-md border border-border bg-transparent px-2 py-1.5 text-[13px] outline-none focus:border-ring',
-          mono === true && 'font-mono text-[12px]',
-        )}
+      <FieldLabel>{label}</FieldLabel>
+      <Textarea
+        aria-label={label}
+        className={cn('text-[13px]', mono === true && 'font-mono text-[12px]')}
         value={value}
         rows={rows ?? 3}
         onChange={(e) => onChange(e.target.value)}
@@ -75,7 +76,7 @@ export function SelectField({
 }): JSX.Element {
   return (
     <div>
-      <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">{label}</label>
+      <FieldLabel>{label}</FieldLabel>
       <Select
         ariaLabel={label}
         value={value}

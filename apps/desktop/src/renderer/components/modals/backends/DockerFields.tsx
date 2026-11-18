@@ -1,12 +1,14 @@
 import type { JSX } from 'react'
 import { Check, Download } from 'lucide-react'
+import { FieldLabel } from '../field-label.js'
 import { Field } from './Field.js'
+import { HintChip } from './HintChip.js'
 import type { FormState } from './form-state.js'
 import { RECOMMENDED_IMAGES, useConnectionHints } from './use-connection-hints.js'
 
 /**
  * The Docker half of the backend form: image and container workdir. Images you
- * have already pulled are offered first — those cost nothing to run — followed by
+ * have already pulled are offered first (those cost nothing to run), followed by
  * the recommended bases, so the field is a click rather than a typing exercise.
  */
 export function DockerFields({
@@ -32,21 +34,13 @@ export function DockerFields({
 
       {hints.dockerImages.length > 0 && (
         <div>
-          <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
-            Already pulled
-          </label>
+          <FieldLabel>Already pulled</FieldLabel>
           <div className="flex flex-wrap gap-1.5">
             {hints.dockerImages.map((image) => (
-              <button
-                key={image}
-                type="button"
-                onClick={() => set({ image })}
-                title={image}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 font-mono text-[11.5px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-              >
+              <HintChip key={image} hint={image} onClick={() => set({ image })}>
                 <Check className="size-3 shrink-0 text-status-success" />
                 {image}
-              </button>
+              </HintChip>
             ))}
           </div>
         </div>
@@ -54,19 +48,13 @@ export function DockerFields({
 
       {recommended.length > 0 && (
         <div>
-          <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">Recommended</label>
+          <FieldLabel>Recommended</FieldLabel>
           <div className="flex flex-wrap gap-1.5">
             {recommended.map((r) => (
-              <button
-                key={r.image}
-                type="button"
-                onClick={() => set({ image: r.image })}
-                title={`${r.blurb} — pulled on the first run`}
-                className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-2 py-0.5 font-mono text-[11.5px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-              >
+              <HintChip key={r.image} hint={`${r.blurb}. Pulled on the first run.`} onClick={() => set({ image: r.image })} dashed>
                 <Download className="size-3 shrink-0" strokeWidth={1.75} />
                 {r.image}
-              </button>
+              </HintChip>
             ))}
           </div>
         </div>

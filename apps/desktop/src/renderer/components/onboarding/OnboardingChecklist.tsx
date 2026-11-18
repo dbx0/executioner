@@ -8,10 +8,11 @@ import { backendsApi } from '../../api/backends.js'
 import { agentMcpApi, isWired, type AgentMcpWiring } from '../../api/agent-mcp.js'
 import { cn } from '../../lib/utils.js'
 import { Button } from '../ui/button.js'
+import { GlassPanel } from '../ui/glass-panel.js'
 
 const DISMISS_KEY = 'exe.onboardingDismissed'
 
-/** Read the persisted dismissed flag (guarded — storage may be unavailable). */
+/** Read the persisted dismissed flag (guarded: storage may be unavailable). */
 function loadDismissed(): boolean {
   try {
     return localStorage.getItem(DISMISS_KEY) === 'true'
@@ -53,7 +54,7 @@ interface ItemView {
  * action button (or a muted "Done") on the right.
  *
  * `embedded` (Settings → General): always shown while an engagement is connected,
- * with no dismiss and no auto-hide when complete — a persistent setup reference.
+ * with no dismiss and no auto-hide when complete, as a persistent setup reference.
  * Otherwise (the floating variant) it is dismissible and hides once dismissed or
  * all steps are complete.
  */
@@ -207,8 +208,8 @@ export function OnboardingChecklist({ embedded = false }: { embedded?: boolean }
   if (!embedded && (dismissed || allDone)) return null
 
   return (
-    <div className={embedded ? '' : 'shrink-0 border-b border-border px-4 py-3'}>
-      <div className="rounded-lg border border-border bg-surface-1 p-3">
+    <div className={embedded ? '' : 'shrink-0 pb-panel'}>
+      <GlassPanel className="p-3">
         <div className="flex items-center gap-2 px-1">
           <span className="text-[13px] font-medium">Getting started</span>
           <span className="text-xs text-muted-foreground">
@@ -219,7 +220,7 @@ export function OnboardingChecklist({ embedded = false }: { embedded?: boolean }
               type="button"
               onClick={dismiss}
               aria-label="Dismiss"
-              className="ml-auto inline-flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="ml-auto inline-flex size-6 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-glass-strong hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
               <X className="size-4" strokeWidth={1.75} />
             </button>
@@ -228,13 +229,13 @@ export function OnboardingChecklist({ embedded = false }: { embedded?: boolean }
 
         <ul className="mt-1.5 flex flex-col">
           {items.map((item) => (
-            <li key={item.id} className="flex items-center gap-3 rounded-md px-1 py-1.5">
+            <li key={item.id} className="flex items-center gap-3 px-1 py-1.5">
               <span
                 className={cn(
                   'flex size-4 shrink-0 items-center justify-center rounded-full',
                   item.done
-                    ? 'bg-status-success text-white'
-                    : 'border border-border-strong',
+                    ? 'bg-status-success text-background'
+                    : 'border border-glass-border bg-glass',
                 )}
                 aria-hidden
               >
@@ -249,14 +250,14 @@ export function OnboardingChecklist({ embedded = false }: { embedded?: boolean }
               {item.done ? (
                 <span className="shrink-0 text-xs text-muted-foreground">Done</span>
               ) : (
-                <Button size="sm" variant="outline" onClick={item.onAction} className="shrink-0">
+                <Button size="sm" variant="glass" onClick={item.onAction} className="shrink-0">
                   {item.actionLabel}
                 </Button>
               )}
             </li>
           ))}
         </ul>
-      </div>
+      </GlassPanel>
     </div>
   )
 }

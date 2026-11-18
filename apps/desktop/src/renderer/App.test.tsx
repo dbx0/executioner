@@ -12,9 +12,11 @@ describe('App', () => {
     )
     render(<App />)
     // Full shell present + landing empty state, not a blocking gate.
-    expect(screen.getByRole('heading', { name: 'Executioner' })).toBeTruthy()
+    // First run opens the onboarding dialog over it, which hides the shell from
+    // assistive tech while it is up, so the queries look past that.
+    expect(screen.getByRole('heading', { name: 'Executioner', hidden: true })).toBeTruthy()
     // Both the sidebar control and the Landing CTA can open an engagement.
-    expect(screen.getAllByRole('button', { name: /open engagement/i }).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByRole('button', { name: /open engagement/i, hidden: true }).length).toBeGreaterThanOrEqual(1)
   })
 })
 

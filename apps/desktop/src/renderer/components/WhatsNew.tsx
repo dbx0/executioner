@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { Button } from './ui/button.js'
+import { Dialog, DialogFooter, DialogTitle } from './ui/dialog.js'
 import {
   isReturningUser,
   latestRelease,
@@ -19,7 +20,7 @@ function Media({ media }: { media: ReleaseMedia }): JSX.Element {
   // they get the first frame and the player controls instead.
   const still = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   return (
-    <div className="aspect-video w-full shrink-0 overflow-hidden border-b border-border bg-black">
+    <div className="aspect-video w-full shrink-0 overflow-hidden border-b border-glass-border bg-black">
       {media.kind === 'video' ? (
         <video
           src={media.src}
@@ -69,6 +70,9 @@ function ReleaseNotes({ release, heading }: { release: Release; heading: boolean
  * an update, with the clip of the headline change on top and the notes of every
  * release since the last one seen below. The version in the status bar opens it
  * again with the latest release.
+ *
+ * Escape is also handled here on the window, not only by the dialog shell: the
+ * key can arrive while focus is outside the dialog (a tour card, the page).
  */
 export function WhatsNew({
   releases = RELEASES,
@@ -109,45 +113,40 @@ export function WhatsNew({
   const close = (): void => setShown([])
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-6" onClick={close}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="What's new"
-        className="relative flex max-h-[88vh] w-[640px] max-w-[92vw] animate-zoom-in flex-col overflow-hidden rounded-xl border border-border bg-popover text-foreground shadow-floating"
-        onClick={(e) => e.stopPropagation()}
+    // Raised: it can open over another dialog, and it always wins.
+    <Dialog onClose={close} label="What's new" raised className="relative w-[640px]">
+      <DialogTitle className="sr-only">What&apos;s new</DialogTitle>
+      {/* Sits on the clip, which is black in every theme, so it stays light on dark. */}
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={close}
+        className="absolute right-2.5 top-2.5 z-10 grid size-7 place-items-center rounded-full bg-black/50 text-white/80 outline-none transition-colors hover:bg-black/70 hover:text-white focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={close}
-          className="absolute right-2 top-2 z-10 grid size-7 place-items-center rounded-md bg-black/50 text-white/80 hover:bg-black/70 hover:text-white"
-        >
-          <X className="size-4" />
-        </button>
-        {first.media !== undefined && <Media media={first.media} />}
-        <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
-          <ReleaseNotes release={first} heading />
-          {older.map((release) => (
-            <div key={release.version} className="border-t border-border pt-5">
-              <ReleaseNotes release={release} heading={false} />
-            </div>
-          ))}
-        </div>
-        <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border px-6 py-3">
-          <a
-            href={`https://github.com/dbx0/executioner/releases/tag/v${first.version}`}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[13px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          >
-            Full release notes
-          </a>
-          <Button size="sm" onClick={close} autoFocus>
-            Got it
-          </Button>
-        </div>
+        <X aria-hidden className="size-4" />
+      </button>
+      {first.media !== undefined && <Media media={first.media} />}
+      <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
+        <ReleaseNotes release={first} heading />
+        {older.map((release) => (
+          <div key={release.version} className="border-t border-glass-border pt-5">
+            <ReleaseNotes release={release} heading={false} />
+          </div>
+        ))}
       </div>
-    </div>
+      <DialogFooter className="justify-between px-6">
+        <a
+          href={`https://github.com/dbx0/executioner/releases/tag/v${first.version}`}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-sm text-[13px] text-muted-foreground underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          Full release notes
+        </a>
+        <Button size="sm" onClick={close} autoFocus>
+          Got it
+        </Button>
+      </DialogFooter>
+    </Dialog>
   )
 }

@@ -3,20 +3,9 @@ import { FolderOpen } from 'lucide-react'
 import { Button } from '../../ui/button.js'
 import { Input } from '../../ui/input.js'
 import { IconPicker } from '../../IconPicker.js'
+import { FieldLabel } from '../field-label.js'
 
-export function FieldLabel({
-  children,
-  htmlFor,
-}: {
-  children: React.ReactNode
-  htmlFor?: string | undefined
-}): JSX.Element {
-  return (
-    <label htmlFor={htmlFor} className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
-      {children}
-    </label>
-  )
-}
+export { FieldLabel }
 
 /** Badge (photo or emoji) + name + folder row shared by the AI and Manual tabs. */
 export function IdentityFields(props: {

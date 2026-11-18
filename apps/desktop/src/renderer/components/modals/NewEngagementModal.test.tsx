@@ -38,13 +38,13 @@ describe('NewEngagementModal', () => {
       'window',
       Object.assign(window, { executioner: { pickEngagementPhoto: vi.fn(async () => photo) } }),
     )
-    const { container } = render(<NewEngagementModal />)
+    render(<NewEngagementModal />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Engagement icon' }))
     fireEvent.click(screen.getByRole('button', { name: /Use a photo/ }))
 
     // The badge is decorative (the field is labelled), so it is found by tag.
-    await waitFor(() => expect(container.querySelector('img')?.getAttribute('src')).toBe(photo))
+    await waitFor(() => expect(document.body.querySelector('img')?.getAttribute('src')).toBe(photo))
   })
 
   it('normalizes a wildcard target to its parent in the Manual tab', () => {

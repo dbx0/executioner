@@ -42,17 +42,16 @@ function RecentCard(props: {
       onDoubleClick={props.onOpen}
       title={recent.root}
       className={cn(
-        'group flex items-center gap-3 rounded-lg border p-2.5 text-left transition-colors disabled:opacity-50',
-        props.selected
-          ? 'border-ring bg-surface-2'
-          : 'border-border hover:bg-surface-1',
+        'group flex items-center gap-3 rounded-[14px] border border-glass-border p-2.5 text-left outline-none transition-colors',
+        'focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50',
+        props.selected ? 'bg-glass-active' : 'bg-glass hover:bg-glass-strong',
       )}
     >
       <EngagementBadge
         name={recent.name}
         icon={recent.icon}
         photo={recent.photo}
-        className="size-9 shrink-0 rounded-lg bg-secondary text-secondary-foreground"
+        className="size-9 shrink-0 rounded-[10px] bg-glass-active text-foreground"
         emojiClass="text-[18px]"
         initialsClass="text-[12px] font-semibold"
       />
@@ -60,7 +59,7 @@ function RecentCard(props: {
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[13px] font-medium">{recent.name}</span>
           {props.isOpen && (
-            <span className="shrink-0 rounded border border-border px-1 py-px text-[10px] uppercase tracking-wide text-muted-foreground">
+            <span className="shrink-0 rounded-control border border-glass-border px-1.5 py-px text-[10px] uppercase tracking-wide text-muted-foreground">
               open
             </span>
           )}

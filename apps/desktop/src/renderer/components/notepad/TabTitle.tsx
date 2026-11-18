@@ -2,9 +2,11 @@ import type { JSX } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
+import { Input } from '../ui/input.js'
+import { segmentClass } from '../ui/segmented.js'
 import type { ScratchpadNote } from './scratchpad-state.js'
 
-/** One note tab: click to select, double-click to rename inline, × to close. */
+/** One note tab: click to select, double-click to rename inline, the cross to close. */
 export function TabTitle({
   note,
   active,
@@ -37,16 +39,12 @@ export function TabTitle({
 
   return (
     <div
-      className={cn(
-        'group flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[12.5px]',
-        active
-          ? 'border-border bg-surface-3 text-foreground'
-          : 'border-transparent text-muted-foreground hover:bg-surface-1',
-      )}
+      className={cn(segmentClass(active), 'group h-[26px] gap-1 pl-3 pr-1.5 text-[12.5px] focus-within:ring-[3px] focus-within:ring-ring/50')}
     >
       {editing ? (
-        <input
+        <Input
           ref={inputRef}
+          aria-label="Note title"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commit}
@@ -57,7 +55,7 @@ export function TabTitle({
               setEditing(false)
             }
           }}
-          className="w-24 bg-transparent font-mono text-[12px] outline-none"
+          className="h-5 w-24 rounded-none border-0 bg-transparent px-0 py-0 font-mono text-[12px] focus-visible:ring-0"
         />
       ) : (
         <button
@@ -67,7 +65,7 @@ export function TabTitle({
             setDraft(note.title)
             setEditing(true)
           }}
-          className="max-w-[10rem] truncate font-mono"
+          className="max-w-[10rem] truncate font-mono outline-none"
           title={note.title}
         >
           {note.title}
@@ -77,7 +75,7 @@ export function TabTitle({
         type="button"
         onClick={onClose}
         aria-label={`Close ${note.title}`}
-        className="grid size-4 place-items-center rounded text-muted-foreground opacity-0 hover:bg-surface-3 hover:text-foreground group-hover:opacity-100"
+        className="grid size-4 place-items-center rounded-full text-muted-foreground opacity-0 outline-none hover:bg-glass-active hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
       >
         <X className="size-3" strokeWidth={2} />
       </button>

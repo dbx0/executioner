@@ -1,7 +1,8 @@
 import type { JSX } from 'react'
-import { Check, Loader2 } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { useApp } from '../../../store.js'
 import { EngagementBadge } from '../../EngagementBadge.js'
+import { Spinner } from '../../ui/spinner.js'
 import type { TabId } from './constants.js'
 
 type ScopeRunState = ReturnType<typeof useApp.getState>['scopeRuns'][string] | undefined
@@ -13,12 +14,14 @@ export function RunningPage({ scopeRun }: { scopeRun: ScopeRunState }): JSX.Elem
   return (
     <div className="flex min-h-[220px] flex-col">
       <div className="mb-3 flex items-center gap-2 text-[13px] font-medium">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <Spinner className="text-muted-foreground" />
         Parsing scope and adding targets…
       </div>
-      <div className="flex flex-1 flex-col justify-end gap-1.5 rounded-lg border border-border bg-surface-1 p-3">
+      <div className="flex flex-1 flex-col justify-end gap-1.5 rounded-[14px] border border-glass-border bg-glass p-3">
         {recent.length === 0 ? (
-          <div className="text-[12px] text-muted-foreground">Starting…</div>
+          <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+            <Spinner size="xs" /> Starting…
+          </div>
         ) : (
           recent.map((b, i) => {
             // Fade older bubbles; the newest is full strength.
@@ -28,7 +31,7 @@ export function RunningPage({ scopeRun }: { scopeRun: ScopeRunState }): JSX.Elem
               <div
                 key={b.id}
                 style={{ opacity }}
-                className="animate-zoom-in self-start rounded-lg rounded-bl-sm border border-border bg-card px-3 py-1.5 text-[12.5px] shadow-sm transition-opacity"
+                className="animate-zoom-in self-start rounded-[14px] rounded-bl-sm border border-glass-border bg-glass-strong px-3 py-1.5 text-[12.5px] transition-opacity"
               >
                 {b.message}
               </div>
@@ -70,7 +73,7 @@ export function ConfirmationPage(props: {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border p-3">
+      <div className="rounded-[14px] border border-glass-border bg-glass p-3">
         <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">Created</div>
         <ul className="space-y-1 text-[12.5px]">
           <li className="flex items-center gap-2">
@@ -91,7 +94,7 @@ export function ConfirmationPage(props: {
             {targets.slice(0, 24).map((t) => (
               <span
                 key={`${t.kind}:${t.value}`}
-                className="rounded-md border border-border bg-surface-1 px-2 py-0.5 text-[11.5px]"
+                className="rounded-control border border-glass-border bg-glass-strong px-2.5 py-0.5 text-[11.5px]"
               >
                 {t.value}
               </span>

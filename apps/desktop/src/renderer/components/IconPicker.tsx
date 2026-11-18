@@ -3,6 +3,12 @@ import { useState } from 'react'
 import { ImagePlus } from 'lucide-react'
 import { cn } from '../lib/utils.js'
 import { EngagementBadge } from './EngagementBadge.js'
+import { Spinner } from './ui/spinner.js'
+import { POPOVER_SURFACE } from './ui/surface.js'
+
+/** A text row under the glyph grid. */
+const ROW =
+  'flex w-full items-center gap-1.5 rounded-[9px] px-2 py-1.5 text-left text-[12px] text-muted-foreground outline-none transition-colors hover:bg-glass-strong hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50'
 
 /** A curated palette of emojis that read well as a small engagement badge. */
 const EMOJIS = [
@@ -32,8 +38,7 @@ export interface IconPickerProps {
 /**
  * The engagement badge picker: a trigger showing the current photo or emoji,
  * which toggles a grid of curated glyphs plus a photo import. Selecting either
- * closes the grid; a "None" entry clears it back to initials. Pure hex/color-mix
- * tokens — no opacity utilities.
+ * closes the grid; a "None" entry clears it back to initials.
  */
 export function IconPicker({
   value,
@@ -73,12 +78,12 @@ export function IconPicker({
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          'grid size-10 place-items-center overflow-hidden rounded-lg border transition-colors',
-          open ? 'selected-surface border-transparent' : 'border-border hover:bg-surface-2',
+          'grid size-10 place-items-center overflow-hidden rounded-[12px] border border-glass-border outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          open ? 'bg-glass-active' : 'bg-glass hover:bg-glass-strong',
         )}
       >
         {hasBadge ? (
-          <EngagementBadge name="" icon={value.icon} photo={value.photo} className="size-full rounded-lg" />
+          <EngagementBadge name="" icon={value.icon} photo={value.photo} className="size-full rounded-[12px]" />
         ) : (
           <span className="text-[20px] opacity-50">{placeholder}</span>
         )}
@@ -97,7 +102,7 @@ export function IconPicker({
           <div
             role="listbox"
             aria-label="Icons"
-            className="absolute left-0 top-full z-50 mt-1 w-[248px] rounded-lg border border-border bg-popover p-2 shadow-floating animate-zoom-in"
+            className={cn(POPOVER_SURFACE, 'absolute left-0 top-full z-50 mt-1 w-[248px] animate-zoom-in p-2')}
           >
             <div className="grid grid-cols-8 gap-0.5">
               {EMOJIS.map((emoji) => (
@@ -111,8 +116,8 @@ export function IconPicker({
                     setOpen(false)
                   }}
                   className={cn(
-                    'grid size-7 place-items-center rounded text-[17px] transition-colors',
-                    value.icon === emoji ? 'selected-surface' : 'hover:bg-surface-3',
+                    'grid size-7 place-items-center rounded-lg text-[17px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                    value.icon === emoji ? 'bg-glass-active' : 'hover:bg-glass-strong',
                   )}
                 >
                   {emoji}
@@ -124,9 +129,9 @@ export function IconPicker({
               type="button"
               onClick={pickPhoto}
               disabled={picking}
-              className="mt-1.5 flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[12px] text-muted-foreground hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
+              className={cn(ROW, 'mt-1.5')}
             >
-              <ImagePlus className="size-3.5" strokeWidth={1.75} />
+              {picking ? <Spinner size="sm" /> : <ImagePlus className="size-3.5" strokeWidth={1.75} />}
               {picking ? 'Choosing…' : 'Use a photo…'}
             </button>
             {error !== null && <p className="px-2 pb-1 text-[11.5px] text-status-error">{error}</p>}
@@ -137,7 +142,7 @@ export function IconPicker({
                 onChange({})
                 setOpen(false)
               }}
-              className="w-full rounded px-2 py-1 text-left text-[12px] text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+              className={ROW}
             >
               Use initials instead
             </button>

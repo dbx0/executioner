@@ -19,11 +19,17 @@ import {
 import { useApp } from '../store.js'
 import { AgentIcon } from './brand/AgentIcon.js'
 import { targetsApi, type TargetSummary } from '../api/targets.js'
+import { Spinner } from './ui/spinner.js'
 
 const TARGET_LIMIT = 200
 
+/** A result row: a soft pill that takes the selected glass fill under the keyboard cursor. */
 const itemClass =
-  'flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-2 text-[13px] text-foreground data-[disabled=true]:opacity-40 data-[selected=true]:bg-surface-3 data-[selected=true]:shadow-[inset_0_0_0_1px_var(--border-subtle)] data-[selected=true]:text-foreground'
+  'flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-[13px] text-foreground data-[disabled=true]:opacity-40 data-[selected=true]:bg-glass-active'
+
+/** The small caps heading cmdk renders over each group. */
+const groupClass =
+  '[&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground'
 
 export function CommandPalette(): JSX.Element {
   const open = useApp((s) => s.paletteOpen)
@@ -43,14 +49,18 @@ export function CommandPalette(): JSX.Element {
   const chats = sessions.filter((x) => x.agent !== 'shell')
 
   const [targets, setTargets] = useState<TargetSummary[]>([])
+  // The targets read is in flight: the list says so instead of looking complete.
+  const [loadingTargets, setLoadingTargets] = useState(false)
 
   // Refetch targets each time the palette opens so results stay current.
   useEffect(() => {
     if (!open || client === null) {
       setTargets([])
+      setLoadingTargets(false)
       return
     }
     let cancelled = false
+    setLoadingTargets(true)
     targetsApi(client)
       .list()
       .then((rows) => {
@@ -58,6 +68,9 @@ export function CommandPalette(): JSX.Element {
       })
       .catch(() => {
         if (!cancelled) setTargets([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingTargets(false)
       })
     return () => {
       cancelled = true
@@ -72,21 +85,29 @@ export function CommandPalette(): JSX.Element {
   return (
     <Dialog.Root open={open} onOpenChange={setPalette}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 animate-fade-in bg-black/55 backdrop-blur-[2px]" />
+        <Dialog.Overlay className="fixed inset-0 z-[60] animate-fade-in bg-black/55 backdrop-blur-[2px]" />
         <Dialog.Content
-          className="fixed left-1/2 top-[16%] z-50 w-full max-w-lg -translate-x-1/2 animate-zoom-in overflow-hidden rounded-lg border border-black/[0.14] bg-popover/95 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl dark:border-white/[0.14]"
+          className="fixed left-1/2 top-[16%] z-[60] w-full max-w-lg -translate-x-1/2 animate-zoom-in overflow-hidden rounded-panel border border-glass-border bg-popover text-popover-foreground shadow-floating outline-none"
           aria-describedby={undefined}
         >
           <Dialog.Title className="sr-only">Command palette</Dialog.Title>
           <Command loop>
             <Command.Input
               placeholder="Type a command or search…"
-              className="h-11 w-full border-b border-border bg-transparent px-4 text-sm outline-none placeholder:text-muted-foreground"
+              className="h-12 w-full border-b border-glass-border bg-transparent px-5 text-sm outline-none placeholder:text-muted-foreground"
             />
             <Command.List className="scrollbar-sleek max-h-80 overflow-y-auto p-2">
+              {loadingTargets && (
+                <Command.Loading>
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 text-[12px] text-muted-foreground">
+                    <Spinner size="sm" />
+                    Loading targets
+                  </div>
+                </Command.Loading>
+              )}
               <Command.Empty className="py-6 text-center text-sm text-muted-foreground">No results.</Command.Empty>
 
-              <Command.Group heading="Go to" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground">
+              <Command.Group heading="Go to" className={groupClass}>
                 <Command.Item value="go Scope" disabled={!hasEngagement} onSelect={() => go(() => setActiveView('scope'))} className={itemClass}>
                   <ShieldCheck className="size-4 text-muted-foreground" strokeWidth={1.75} />
                   Scope
@@ -121,9 +142,9 @@ export function CommandPalette(): JSX.Element {
                 </Command.Item>
               </Command.Group>
 
-              {/* Chats: open agent conversations, searchable by title — shown before targets. */}
+              {/* Chats: open agent conversations, searchable by title, shown before targets. */}
               {chats.length > 0 && (
-                <Command.Group heading="Chats" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground">
+                <Command.Group heading="Chats" className={groupClass}>
                   {chats.map((c) => (
                     <Command.Item
                       key={c.id}
@@ -146,7 +167,7 @@ export function CommandPalette(): JSX.Element {
 
               {/* region: targets-search (owned by targets-search agent) */}
               {targets.length > 0 && (
-                <Command.Group heading="Targets" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground">
+                <Command.Group heading="Targets" className={groupClass}>
                   {targets.map((t) => (
                     <Command.Item
                       key={t.id}
@@ -161,7 +182,7 @@ export function CommandPalette(): JSX.Element {
                     >
                       <Target className="size-4 text-muted-foreground" strokeWidth={1.75} />
                       <span className="truncate">{t.value}</span>
-                      <span className="ml-auto shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <span className="ml-auto shrink-0 rounded-control border border-glass-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                         {t.kind}
                       </span>
                     </Command.Item>
@@ -170,7 +191,7 @@ export function CommandPalette(): JSX.Element {
               )}
               {/* endregion: targets-search */}
 
-              <Command.Group heading="Engagement" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground">
+              <Command.Group heading="Engagement" className={groupClass}>
                 <Command.Item value="open engagement" onSelect={() => go(() => void openEngagement(false))} className={itemClass}>
                   <FolderOpen className="size-4 text-muted-foreground" strokeWidth={1.75} />
                   Open engagement…
@@ -186,7 +207,7 @@ export function CommandPalette(): JSX.Element {
               </Command.Group>
 
               {recents.length > 0 && (
-                <Command.Group heading="Recent" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider [&_[cmdk-group-heading]]:text-muted-foreground">
+                <Command.Group heading="Recent" className={groupClass}>
                   {recents.map((r) => (
                     <Command.Item
                       key={r.root}

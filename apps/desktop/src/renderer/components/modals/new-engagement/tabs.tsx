@@ -5,7 +5,10 @@ import { Button } from '../../ui/button.js'
 import { Input } from '../../ui/input.js'
 import type { NormalizedTarget } from '../../../lib/target-input.js'
 import type { Recent } from '../../../store/types.js'
-import { TABS, TEXTAREA_CLASS, type TabId } from './constants.js'
+import { Textarea } from '../../ui/textarea.js'
+import { FieldHint } from '../field-label.js'
+import { ModeTabs as CapsuleTabs } from '../mode-tabs.js'
+import { TABS, type TabId } from './constants.js'
 import { FieldLabel, IdentityFields } from './fields.js'
 import { RecentGrid } from './recents.js'
 
@@ -39,24 +42,21 @@ export function AiTab(props: {
         disabled={props.busy}
       />
       <FieldLabel>Program description</FieldLabel>
-      <textarea
-        className={cn(TEXTAREA_CLASS, 'mb-3')}
+      <Textarea
+        className="mb-3"
         rows={3}
         value={props.description}
         onChange={(e) => props.setDescription(e.target.value)}
         placeholder="What is this program? Any rules of engagement, focus areas, or notes."
       />
       <FieldLabel>Scope</FieldLabel>
-      <textarea
-        className={TEXTAREA_CLASS}
+      <Textarea
         rows={5}
         value={props.scope}
         onChange={(e) => props.setScope(e.target.value)}
         placeholder={'*.example.com\napi.example.com\n10.0.0.0/24'}
       />
-      <p className="mt-1.5 text-[11.5px] text-muted-foreground">
-        Paste the scope from HackerOne/Bugcrowd/etc., or just a list of targets.
-      </p>
+      <FieldHint>Paste the scope from HackerOne/Bugcrowd/etc., or just a list of targets.</FieldHint>
     </>
   )
 }
@@ -94,8 +94,8 @@ export function ManualTab(props: {
         disabled={props.busy}
       />
       <FieldLabel>Program description</FieldLabel>
-      <textarea
-        className={cn(TEXTAREA_CLASS, 'mb-3')}
+      <Textarea
+        className="mb-3"
         rows={3}
         value={props.description}
         onChange={(e) => props.setDescription(e.target.value)}
@@ -114,7 +114,7 @@ export function ManualTab(props: {
           }}
           placeholder="example.com, api.example.com, *.example.com…"
         />
-        <Button type="button" variant="secondary" onClick={props.onAddTarget}>
+        <Button type="button" variant="glass" onClick={props.onAddTarget}>
           <Plus className="size-4" strokeWidth={1.75} />
           Add
         </Button>
@@ -124,7 +124,7 @@ export function ManualTab(props: {
           {props.targets.map((t) => (
             <span
               key={`${t.kind}:${t.value}`}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-1 py-1 pl-2 pr-1 text-[12px]"
+              className="inline-flex items-center gap-1.5 rounded-control border border-glass-border bg-glass-strong py-1 pl-2.5 pr-1 text-[12px]"
             >
               <span className="text-muted-foreground">{t.kind}</span>
               <span>{t.value}</span>
@@ -132,7 +132,7 @@ export function ManualTab(props: {
                 type="button"
                 aria-label={`Remove ${t.value}`}
                 onClick={() => props.onRemoveTarget(t)}
-                className="grid size-4 place-items-center rounded text-muted-foreground hover:text-foreground"
+                className="grid size-4 place-items-center rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <X className="size-3" />
               </button>
@@ -140,9 +140,7 @@ export function ManualTab(props: {
           ))}
         </div>
       )}
-      <p className="mt-1.5 text-[11.5px] text-muted-foreground">
-        Wildcards add the parent domain; duplicates are ignored.
-      </p>
+      <FieldHint>Wildcards add the parent domain; duplicates are ignored.</FieldHint>
     </>
   )
 }
@@ -171,9 +169,7 @@ export function OpenTab(props: {
             onSelect={props.onSelectRecent}
             onOpen={props.onOpenRecent}
           />
-          <p className="mt-1.5 text-[11.5px] text-muted-foreground">
-            Click an engagement to select it, or double-click to open it straight away.
-          </p>
+          <FieldHint>Click an engagement to select it, or double-click to open it straight away.</FieldHint>
         </div>
       )}
 
@@ -188,9 +184,9 @@ export function OpenTab(props: {
         <FolderOpen className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
         <span className="truncate">{browsed ? props.dir : 'Choose an existing engagement folder…'}</span>
       </Button>
-      <p className="mt-1.5 text-[11.5px] text-muted-foreground">
+      <FieldHint>
         Pick a folder that already contains an Executioner engagement (a <code>.executioner</code> directory).
-      </p>
+      </FieldHint>
     </>
   )
 }
@@ -198,24 +194,8 @@ export function OpenTab(props: {
 /** The mode selector shown while the modal is still on the form phase. */
 export function ModeTabs(props: { tab: TabId; onSelect: (id: TabId) => void }): JSX.Element {
   return (
-    <div className="flex shrink-0 items-center gap-1 border-b border-border px-5 py-2.5" role="tablist" aria-label="New engagement mode">
-      {TABS.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          role="tab"
-          aria-selected={props.tab === t.id}
-          onClick={() => props.onSelect(t.id)}
-          className={cn(
-            'rounded-md px-3 py-1.5 text-[13px] transition-colors',
-            props.tab === t.id
-              ? 'selected-surface'
-              : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
-          )}
-        >
-          {t.label}
-        </button>
-      ))}
+    <div className="flex shrink-0 items-center border-b border-glass-border px-5 py-2.5">
+      <CapsuleTabs tabs={TABS} value={props.tab} onSelect={props.onSelect} label="New engagement mode" />
     </div>
   )
 }

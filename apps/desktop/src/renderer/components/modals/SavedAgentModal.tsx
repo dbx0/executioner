@@ -14,9 +14,14 @@ import { agentModelsApi } from '../../api/agent-models.js'
 import { useApp } from '../../store.js'
 import { AgentIcon } from '../brand/AgentIcon.js'
 import { Button } from '../ui/button.js'
+import { Dialog, DialogBody, DialogFooter, DialogHeader } from '../ui/dialog.js'
 import { Input } from '../ui/input.js'
 import { Select } from '../ui/select.js'
+import { Skeleton } from '../ui/skeleton.js'
+import { Spinner } from '../ui/spinner.js'
+import { Textarea } from '../ui/textarea.js'
 import { AGENT_LABELS } from '../../lib/agent-labels.js'
+import { FieldLabel } from './field-label.js'
 import { ScopeField } from './saved-agent/ScopeField.js'
 import { TeamBaseField } from './saved-agent/TeamBaseField.js'
 import { TeamMembersEditor } from './saved-agent/TeamMembersEditor.js'
@@ -27,7 +32,7 @@ import { useTeamMembers } from './saved-agent/use-team-members.js'
  * Create or edit a saved agent or a team. An agent runs a base CLI (`agent`); a
  * team is a Claude launch (`agent` = `claude-team:<id>`) that carries a `members`
  * roster the lead orchestrates. Which one this modal is depends on `initialKind`
- * (for a new record) or the record being edited — there is no in-modal switch.
+ * (for a new record) or the record being edited. There is no in-modal switch.
  * Optional fields are only sent when set (exactOptionalPropertyTypes).
  */
 export function SavedAgentModal({
@@ -63,7 +68,7 @@ export function SavedAgentModal({
   }, [installedAgents, refreshAgents])
 
   // Kind is fixed by how the modal was opened (Add agent vs Add team) or by the
-  // record being edited — there is no in-modal switch between the two.
+  // record being edited. There is no in-modal switch between the two.
   const [kind] = useState<'agent' | 'team'>(
     agent === null ? initialKind : isTeamSavedAgent(agent) ? 'team' : 'agent',
   )
@@ -92,15 +97,17 @@ export function SavedAgentModal({
   const modelAgent = isTeam ? 'claude' : base
   // Models are fetched from the selected base agent (its CLI where it can list
   // them, Claude's aliases otherwise). Empty = the agent can't be enumerated, so
-  // the model becomes a free-text field.
-  const [models, setModels] = useState<string[]>([])
+  // the model becomes a free-text field. The list is kept with the agent it was
+  // fetched for, so a list for another base reads as still loading.
+  const [fetched, setFetched] = useState<{ agent: string; models: string[] } | null>(null)
+  const models = fetched !== null && fetched.agent === modelAgent ? fetched.models : null
 
   useEffect(() => {
     let alive = true
     void agentModelsApi(client)
       .list(modelAgent)
-      .then((r) => alive && setModels(r.models))
-      .catch(() => alive && setModels([]))
+      .then((r) => alive && setFetched({ agent: modelAgent, models: r.models }))
+      .catch(() => alive && setFetched({ agent: modelAgent, models: [] }))
     return () => {
       alive = false
     }
@@ -108,7 +115,7 @@ export function SavedAgentModal({
 
   const modelOptions = useMemo(() => {
     const opts = [{ value: 'default', label: 'Default (inherit)' }]
-    const list = [...models]
+    const list = [...(models ?? [])]
     // Preserve an existing custom model that isn't in the fetched list.
     if (model !== '' && !list.includes(model)) list.unshift(model)
     for (const m of list) opts.push({ value: m, label: m })
@@ -153,118 +160,114 @@ export function SavedAgentModal({
   const noun = isTeam ? 'team' : 'agent'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
-      <div
-        className="flex max-h-[86vh] w-[560px] max-w-[94vw] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-floating"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="text-[14px] font-medium capitalize">
-            {agent === null ? `Add ${noun}` : `Edit ${noun}`}
-          </div>
-          <Button variant="ghost" size="xs" onClick={onClose}>
-            Cancel
-          </Button>
-        </div>
+    <Dialog onClose={onClose} className="w-[560px]">
+      <DialogHeader title={agent === null ? `Add ${noun}` : `Edit ${noun}`} className="capitalize" closeButton />
 
-        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek p-4">
-          <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">Name</label>
-          <Input
-            className="mb-3"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={isTeam ? 'Recon & Strike' : 'Recon specialist'}
-          />
+      <DialogBody>
+        <FieldLabel htmlFor="saved-agent-name">Name</FieldLabel>
+        <Input
+          id="saved-agent-name"
+          className="mb-3"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={isTeam ? 'Recon & Strike' : 'Recon specialist'}
+        />
 
-          {!isTeam && (
-            <>
-              <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">Base agent</label>
+        {!isTeam && (
+          <>
+            <FieldLabel>Base agent</FieldLabel>
+            <Select
+              className="mb-3"
+              ariaLabel="Base agent"
+              value={base}
+              onValueChange={setBase}
+              options={baseChoices.map((id) => ({
+                value: id,
+                label: AGENT_LABELS[id] ?? id,
+                icon: <AgentIcon agent={id} className="size-4" />,
+              }))}
+            />
+          </>
+        )}
+        {isTeam && (
+          <TeamBaseField teamBase={teamBase} locked={editingKind} choices={teamBaseChoices} onChange={setTeamBase} />
+        )}
+
+        <FieldLabel htmlFor="saved-agent-description">Description</FieldLabel>
+        <Input
+          id="saved-agent-description"
+          className="mb-3"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder={
+            isTeam ? 'Full offensive loop: enumerate, scan, exploit, report' : 'Enumerates the attack surface of a target'
+          }
+        />
+
+        <FieldLabel htmlFor="saved-agent-prompt">{isTeam ? 'Lead prompt' : 'Prompt'}</FieldLabel>
+        <Textarea
+          id="saved-agent-prompt"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          rows={isTeam ? 4 : 6}
+          placeholder={
+            isTeam
+              ? 'Lead the team against the target. Delegate to the specialists, then consolidate findings…'
+              : 'You are a reconnaissance specialist. Enumerate subdomains…'
+          }
+          className="mb-3"
+        />
+
+        {!isTeam && (
+          <div className="mb-3">
+            <FieldLabel htmlFor="saved-agent-model">Model (optional)</FieldLabel>
+            {models === null ? (
+              <div role="status" aria-label="Loading models">
+                <Skeleton className="h-9 w-64 rounded-control" />
+              </div>
+            ) : models.length > 0 ? (
               <Select
-                className="mb-3"
-                value={base}
-                onValueChange={setBase}
-                options={baseChoices.map((id) => ({
-                  value: id,
-                  label: AGENT_LABELS[id] ?? id,
-                  icon: <AgentIcon agent={id} className="size-4" />,
-                }))}
+                ariaLabel="Model"
+                value={model === '' ? 'default' : model}
+                onValueChange={(v) => setModel(v === 'default' ? '' : v)}
+                options={modelOptions}
+                className="w-64"
               />
-            </>
-          )}
-          {isTeam && (
-            <TeamBaseField
-              teamBase={teamBase}
-              locked={editingKind}
-              choices={teamBaseChoices}
-              onChange={setTeamBase}
-            />
-          )}
+            ) : (
+              <Input
+                id="saved-agent-model"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="Default (inherit), or type a model"
+              />
+            )}
+          </div>
+        )}
 
-          <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">Description</label>
-          <Input
-            className="mb-3"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder={isTeam ? 'Full offensive loop: enumerate, scan, exploit, report' : 'Enumerates the attack surface of a target'}
+        {isTeam && (
+          <TeamMembersEditor
+            members={members}
+            teamBase={teamBase}
+            onAdd={addMember}
+            onUpdate={updateMember}
+            onRemove={removeMember}
           />
+        )}
 
-          <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
-            {isTeam ? 'Lead prompt' : 'Prompt'}
-          </label>
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={isTeam ? 4 : 6}
-            placeholder={
-              isTeam
-                ? 'Lead the team against the target. Delegate to the specialists, then consolidate findings…'
-                : 'You are a reconnaissance specialist. Enumerate subdomains…'
-            }
-            className="mb-3 flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          />
+        <ScopeField scope={scope} onChange={setScope} />
 
-          {!isTeam && (
-            <div className="mb-3">
-              <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
-                Model (optional)
-              </label>
-              {models.length > 0 ? (
-                <Select
-                  value={model === '' ? 'default' : model}
-                  onValueChange={(v) => setModel(v === 'default' ? '' : v)}
-                  options={modelOptions}
-                  className="w-64"
-                />
-              ) : (
-                <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="Default (inherit) — or type a model" />
-              )}
-            </div>
-          )}
+        {error !== null && <p className="mt-3 text-[12px] text-status-error">{error}</p>}
+      </DialogBody>
 
-          {isTeam && (
-            <TeamMembersEditor
-              members={members}
-              teamBase={teamBase}
-              onAdd={addMember}
-              onUpdate={updateMember}
-              onRemove={removeMember}
-            />
-          )}
-
-          <ScopeField scope={scope} onChange={setScope} />
-
-          {error !== null && <p className="mt-3 text-[12px] text-status-error">{error}</p>}
-        </div>
-
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" disabled={!valid || busy} onClick={() => void save()}>
-            {agent === null ? 'Create' : 'Save'}
-          </Button>
-        </div>
-      </div>
-    </div>
+      <DialogFooter>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" disabled={!valid || busy} onClick={() => void save()}>
+          {busy && <Spinner />}
+          {agent === null ? 'Create' : 'Save'}
+        </Button>
+      </DialogFooter>
+    </Dialog>
   )
 }

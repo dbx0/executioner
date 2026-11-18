@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useState, type ReactNode } from 'react'
-import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import type { BackendTestResult, SshEnrollResult } from '../../api/backends.js'
 import { DockerFields } from '../modals/backends/DockerFields.js'
 import { EnvField } from '../modals/backends/EnvField.js'
@@ -10,10 +10,12 @@ import { TestProgress } from '../modals/backends/TestProgress.js'
 import { expectedSteps, isValid, toInput, type FormState } from '../modals/backends/form-state.js'
 import { useConnectionHints, usePrefill } from '../modals/backends/use-connection-hints.js'
 import { Button } from '../ui/button.js'
+import { Spinner } from '../ui/spinner.js'
+import { StepBody, WizardFooter } from './parts.js'
 
 /**
  * The connection page of an SSH/Docker onboarding run: collect the details, then
- * prove them. Verify is the only way forward — and it runs through the main
+ * prove them. Verify is the only way forward, and it runs through the main
  * process, which starts the engine one-shot, so no engagement has to exist yet.
  * Only a pass turns the primary button into Next. Editing any field invalidates
  * the pass and asks again.
@@ -110,7 +112,7 @@ export function OnboardingConnectionStep({
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek p-5">
+      <StepBody>
         <div className="flex flex-col gap-3">
           <Field label="Name" value={form.name} onChange={(v) => edit({ name: v })} placeholder={`${form.kind}-backend`} />
           {form.kind === 'ssh' ? <SshFields form={form} set={edit} /> : <DockerFields form={form} set={edit} />}
@@ -127,25 +129,21 @@ export function OnboardingConnectionStep({
         )}
 
         {missingWorkdir !== undefined && missingWorkdir !== '' && !busyAny && (
-          <div className="mt-3 flex items-center gap-3 rounded-md border border-border bg-surface-1 p-2.5">
+          <div className="mt-3 flex items-center gap-3 rounded-[14px] border border-glass-border bg-glass p-2.5 pl-3.5">
             <p className="min-w-0 flex-1 text-[12px] text-muted-foreground">
               The remote directory <code className="font-mono text-foreground">{missingWorkdir}</code> doesn&apos;t
               exist on the host.
             </p>
-            <Button size="sm" variant="outline" className="shrink-0" disabled={busyAny} onClick={() => void verify(true)}>
+            <Button size="sm" variant="glass" className="shrink-0" disabled={busyAny} onClick={() => void verify(true)}>
               Create &amp; verify
             </Button>
           </div>
         )}
 
         {error !== null && <p className="mt-3 text-[12px] text-status-error">{error}</p>}
-      </div>
+      </StepBody>
 
-      <div className="flex shrink-0 items-center gap-2 border-t border-border px-5 py-3">
-        <button type="button" onClick={onSkip} className="text-[12px] text-muted-foreground hover:text-foreground">
-          Skip setup
-        </button>
-        <div className="mx-auto flex items-center gap-1.5">{dots}</div>
+      <WizardFooter dots={dots} onSkip={onSkip}>
         <Button variant="ghost" size="sm" disabled={busyAny} onClick={onBack}>
           <ArrowLeft className="size-4" strokeWidth={1.75} />
           Back
@@ -157,11 +155,11 @@ export function OnboardingConnectionStep({
           </Button>
         ) : (
           <Button size="sm" disabled={!valid || busyAny} onClick={() => void verify()}>
-            {testing && <Loader2 className="size-4 animate-spin" />}
+            {testing && <Spinner />}
             {testing ? (isPasswordAuth ? 'Enrolling…' : 'Verifying…') : 'Verify'}
           </Button>
         )}
-      </div>
+      </WizardFooter>
     </>
   )
 }

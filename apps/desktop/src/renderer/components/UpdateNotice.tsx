@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react'
 import { ArrowUpCircle, X } from 'lucide-react'
 import type { UpdateInfo } from '../../main/update.js'
 import { Button } from './ui/button.js'
+import { Spinner } from './ui/spinner.js'
+import { POPOVER_SURFACE } from './ui/surface.js'
+import { cn } from '../lib/utils.js'
 import { errorFields, rlog } from '../lib/log.js'
 
 type Phase =
@@ -93,19 +96,19 @@ export function UpdateNotice(): JSX.Element | null {
     <div
       role="dialog"
       aria-label="Update available"
-      className="fixed bottom-9 right-4 z-[60] w-[320px] animate-zoom-in rounded-lg border border-border bg-popover p-4 text-foreground shadow-floating"
+      className={cn(POPOVER_SURFACE, 'fixed bottom-4 right-4 z-[60] w-[320px] animate-zoom-in p-4')}
     >
       <button
         type="button"
         aria-label="Dismiss"
         onClick={() => setDismissed(true)}
         disabled={busy}
-        className="absolute right-2 top-2 grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
+        className="absolute right-2.5 top-2.5 grid size-6 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-glass-strong hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
       >
         <X className="size-3.5" />
       </button>
       <div className="flex gap-3 pr-5">
-        <ArrowUpCircle className="mt-0.5 size-5 shrink-0 text-primary" strokeWidth={1.75} />
+        <ArrowUpCircle aria-hidden className="mt-0.5 size-5 shrink-0 text-foreground" strokeWidth={1.75} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Executioner {update.latest} is out</p>
           <p className="mt-1 text-[13px] text-muted-foreground">{message}</p>
@@ -117,7 +120,7 @@ export function UpdateNotice(): JSX.Element | null {
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={percent ?? undefined}
-                className="h-1.5 overflow-hidden rounded-full bg-surface-2"
+                className="h-1.5 overflow-hidden rounded-full bg-glass-strong"
               >
                 <div
                   className={
@@ -150,6 +153,7 @@ export function UpdateNotice(): JSX.Element | null {
           </>
         ) : (
           <Button size="sm" onClick={onUpdate} disabled={busy}>
+            {busy && <Spinner size="sm" />}
             {phase.kind === 'downloading' ? 'Downloading...' : phase.kind === 'restarting' ? 'Restarting...' : 'Update'}
           </Button>
         )}
