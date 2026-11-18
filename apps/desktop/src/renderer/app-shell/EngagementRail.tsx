@@ -11,11 +11,13 @@ const SQUARE = 'flex size-[34px] items-center justify-center rounded-[11px] outl
 const ASK_HINT = 'An agent needs you in the browser'
 
 /**
- * The open engagements, as a column inside the sidebar panel. The active one
+ * The open engagements, as a column inside the sidebar panel. It stays on
+ * screen when the sidebar is collapsed (`standalone`), so switching engagement
+ * never needs the full sidebar. The active one
  * is the solid square; a small marker at the panel edge repeats that, because a
  * photo badge covers the square's own fill.
  */
-export function EngagementRail(): JSX.Element {
+export function EngagementRail({ standalone = false }: { standalone?: boolean }): JSX.Element {
   const open = useApp((s) => s.open)
   const activeRoot = useApp((s) => s.activeRoot)
   const switchEngagement = useApp((s) => s.switchEngagement)
@@ -24,7 +26,13 @@ export function EngagementRail(): JSX.Element {
   const setActiveView = useApp((s) => s.setActiveView)
 
   return (
-    <div className="flex w-[52px] shrink-0 flex-col items-center gap-2 border-r border-glass-border pb-3 pt-1">
+    <div
+      className={cn(
+        'flex shrink-0 flex-col items-center gap-2 pb-3 pt-1',
+        // Alone in the collapsed sidebar it fills the panel; beside the nav it is a bordered column.
+        standalone ? 'w-full' : 'w-[52px] border-r border-glass-border',
+      )}
+    >
       {open.map((e) => {
         const active = e.root === activeRoot
         const asking = Object.keys(e.browserAsks).length > 0

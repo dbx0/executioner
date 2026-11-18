@@ -227,8 +227,10 @@ const COLLAPSED_INSET = {
 } as const
 
 export function Shell(): JSX.Element {
-  const collapsed = useApp((s) => s.sidebarCollapsed)
   const hasEngagement = useApp((s) => s.connection !== null)
+  // Collapsed with engagements open, the sidebar keeps its rail (and its own toggle),
+  // so the page only gives up its corner when nothing of the sidebar is left.
+  const sidebarGone = useApp((s) => s.sidebarCollapsed && s.open.length === 0)
   useRestoreSession()
   useKeybindings()
   useAgentEvents()
@@ -243,13 +245,13 @@ export function Shell(): JSX.Element {
       {/* No title bar and no status strip: the sidebar header and each page's
           toolbar drag the window, and the sidebar footer carries the status. */}
       <div className="flex h-dvh w-dvw overflow-hidden bg-background text-foreground">
-        {!collapsed && <Sidebar />}
-        <main className={cn('relative min-w-0 flex-1 overflow-hidden', collapsed && inset.toolbar)}>
+        <Sidebar />
+        <main className={cn('relative min-w-0 flex-1 overflow-hidden', sidebarGone && inset.toolbar)}>
           {hasEngagement ? <ActivePage /> : <Landing />}
           {/* After the page in the DOM on purpose: Electron applies drag regions in
               document order, so a no-drag button placed before the page toolbar is
               swallowed by the toolbar's drag region and cannot be clicked. */}
-          {collapsed && <SidebarToggle floating className={cn('absolute z-20', inset.button)} />}
+          {sidebarGone && <SidebarToggle floating className={cn('absolute z-20', inset.button)} />}
         </main>
         {hasEngagement ? (
           <RightSidebar />

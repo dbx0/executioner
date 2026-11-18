@@ -101,4 +101,25 @@ describe('Sidebar nav groups', () => {
     expect(screen.getByRole('button', { name: 'New engagement' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Close a' })).toBeTruthy()
   })
+
+  it('keeps the engagement rail and a way back when collapsed', () => {
+    useApp.setState({
+      open: [{ root: '/a', name: 'a', browserAsks: {} } as never],
+      activeRoot: '/a',
+      sidebarCollapsed: true,
+    })
+    render(<Sidebar />)
+    expect(screen.getByRole('button', { name: 'New engagement' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Close a' })).toBeTruthy()
+    expect(screen.queryByText('Engagement')).toBeNull()
+    expect(screen.queryByText('Search')).toBeNull()
+    screen.getByRole('button', { name: 'Toggle sidebar' }).click()
+    expect(useApp.getState().sidebarCollapsed).toBe(false)
+  })
+
+  it('renders nothing when collapsed with no engagement open', () => {
+    useApp.setState({ sidebarCollapsed: true })
+    const { container } = render(<Sidebar />)
+    expect(container.querySelector('aside')).toBeNull()
+  })
 })
