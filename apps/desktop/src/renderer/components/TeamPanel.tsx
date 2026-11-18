@@ -5,6 +5,7 @@ import { useApp } from '../store.js'
 import { ClaudeLogo } from './brand/ClaudeLogo.js'
 import { TeamIcon } from './brand/TeamIcon.js'
 import { teamsApi, teamIdFromAgent, type TeamSummary } from '../api/teams.js'
+import { Button } from './ui/button.js'
 import { deriveMemberActivity, unmatchedSubagentCount, type MemberStatus } from '../lib/team-status.js'
 
 /** The spinner/check/neutral glyph for a member's live status. */
@@ -12,6 +13,7 @@ function StatusGlyph({ status }: { status: MemberStatus }): JSX.Element {
   if (status === 'working') {
     return (
       <span
+        role="img"
         className="size-2.5 shrink-0 animate-spin rounded-full border-[1.5px] border-activity border-t-transparent"
         aria-label="working"
       />
@@ -20,15 +22,16 @@ function StatusGlyph({ status }: { status: MemberStatus }): JSX.Element {
   if (status === 'done') {
     return <Check className="size-3 shrink-0 text-status-success motion-safe:animate-pop" strokeWidth={2.5} aria-label="done" />
   }
-  return <span className="size-2 shrink-0 rounded-full bg-tertiary-foreground" aria-label="idle" />
+  return <span role="img" className="size-2 shrink-0 rounded-full bg-tertiary-foreground" aria-label="idle" />
 }
 
 /**
- * The Claude Agent Team panel: a slim, collapsible header over a team session
- * showing the lead Claude plus each roster member's live status. Member status
- * is derived from the session's real sub-agent lifecycle events (never faked):
- * a member is "working" while a matching sub-agent runs, "done" once one has
- * finished, and idle until dispatched. Near-monochrome to match the app tokens.
+ * The Claude Agent Team strip: a glass band along the top of a team session's
+ * terminal card, showing the lead Claude plus a chip per roster member with its
+ * live status. Member status is derived from the session's real sub-agent
+ * lifecycle events (never faked): a member is "working" while a matching
+ * sub-agent runs, "done" once one has finished, and idle until dispatched.
+ * Collapsing it leaves only the summary row.
  */
 export function TeamPanel({ sessionId, agent }: { sessionId: string; agent: string }): JSX.Element | null {
   const client = useApp((s) => s.client)
@@ -76,61 +79,57 @@ export function TeamPanel({ sessionId, agent }: { sessionId: string; agent: stri
   if (team === undefined) return null
 
   return (
-    <div className="shrink-0 rounded-md border border-border bg-card/60 text-xs">
-      <div className="flex items-center gap-2 px-2.5 py-1.5">
-        <button
-          type="button"
+    <section
+      aria-label={`${team.name} team`}
+      className="mx-2.5 mt-2.5 flex shrink-0 flex-col gap-2 rounded-[14px] border border-glass-border bg-glass px-3 py-2 text-xs shadow-glass"
+    >
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="size-5 text-muted-foreground hover:text-foreground"
           aria-label={collapsed ? 'Expand team' : 'Collapse team'}
+          aria-expanded={!collapsed}
           onClick={() => setCollapsed((c) => !c)}
-          className="grid size-4 shrink-0 place-items-center rounded text-muted-foreground hover:text-foreground"
         >
           {collapsed ? <ChevronRight className="size-3" strokeWidth={2} /> : <ChevronDown className="size-3" strokeWidth={2} />}
-        </button>
-        <TeamIcon className="size-3.5 text-muted-foreground" />
-        <span className="font-medium text-foreground">{team.name}</span>
-        <span className="truncate text-muted-foreground">{team.description}</span>
-        <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
+        </Button>
+        <TeamIcon className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="shrink-0 font-semibold text-foreground">{team.name}</span>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{team.description}</span>
+        <span className="shrink-0 text-[11px] text-muted-foreground">
           {workingMembers > 0 ? `${workingMembers} active` : `${team.members.length} members`}
           {extraTasks > 0 ? ` · ${extraTasks} task${extraTasks === 1 ? '' : 's'}` : ''}
         </span>
+        {/* The lead Claude, with its own live status. */}
+        <span className="flex shrink-0 items-center gap-1.5 rounded-control bg-glass-strong py-0.5 pl-1.5 pr-2 text-[11px]">
+          <ClaudeLogo className="size-3.5" />
+          <span className="font-medium text-foreground">Lead</span>
+          <span className="text-muted-foreground">Claude</span>
+          <StatusGlyph status={leadState === 'working' ? 'working' : 'idle'} />
+        </span>
       </div>
 
-      {!collapsed && (
-        <div className="border-t border-border px-2.5 py-1.5">
-          {/* Lead Claude row. */}
-          <div className="flex items-center gap-2 py-1">
-            <ClaudeLogo className="size-3.5" />
-            <span className="font-medium text-foreground">Lead</span>
-            <span className="text-muted-foreground">Claude</span>
-            <span className="ml-auto">
-              <StatusGlyph status={leadState === 'working' ? 'working' : 'idle'} />
-            </span>
-          </div>
-          {/* Member rows, indented under the lead with a lineage guide-line. */}
-          <div className="ml-[0.9rem] flex flex-col border-l border-border pl-2">
-            {activity.map(({ member, status, activeCount }) => (
-              <div key={member.name} className="flex items-center gap-2 py-1">
-                <span
-                  className="grid size-4 shrink-0 place-items-center rounded-sm bg-muted text-[9px] font-semibold uppercase text-muted-foreground"
-                  aria-hidden
-                >
-                  {member.label.charAt(0)}
-                </span>
-                <span className="text-foreground">{member.label}</span>
+      {!collapsed && activity.length > 0 && (
+        <ul className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-1.5">
+          {activity.map(({ member, status, activeCount }) => (
+            <li key={member.name} className="flex min-w-0 flex-col gap-0.5 rounded-[10px] bg-background/45 px-2.5 py-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate font-semibold text-foreground">{member.label}</span>
                 {member.model !== 'inherit' && (
-                  <span className="rounded bg-muted px-1 py-px text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {member.model}
-                  </span>
+                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{member.model}</span>
                 )}
-                <span className="min-w-0 flex-1 truncate text-muted-foreground">{member.description}</span>
-                {activeCount > 1 && <span className="shrink-0 text-[10px] text-muted-foreground">×{activeCount}</span>}
-                <StatusGlyph status={status} />
+                <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                  {activeCount > 1 && <span className="text-[10px] tabular-nums text-muted-foreground">×{activeCount}</span>}
+                  <StatusGlyph status={status} />
+                </span>
               </div>
-            ))}
-          </div>
-        </div>
+              <span className="truncate text-[11px] text-muted-foreground">{member.description}</span>
+            </li>
+          ))}
+        </ul>
       )}
-    </div>
+    </section>
   )
 }
 

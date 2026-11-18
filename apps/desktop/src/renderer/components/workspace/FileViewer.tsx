@@ -5,6 +5,7 @@ import type { AxiosInstance } from 'axios'
 import { filesApi, type FileContent } from '../../api/files.js'
 import { friendlyError } from '../../lib/api-error.js'
 import type { FileTab } from '../../store.js'
+import { LoadingState } from '../ui/spinner.js'
 import { FileEditor } from './editor/FileEditor.js'
 import { isMarkdownPath, looksBinary } from './file-kind.js'
 
@@ -21,7 +22,8 @@ function Placeholder({ icon, title, detail }: { icon: JSX.Element; title: string
 }
 
 /**
- * Renders one opened file: loading, error, binary, or the editor. Content is
+ * Renders one opened file: loading, error, binary, or the editor. The pane it
+ * sits in supplies the ink card, so this draws no surface of its own. Content is
  * fetched once per path; the component stays mounted (hidden) across tab
  * switches, and unsaved edits live in the store, so they survive either way.
  */
@@ -52,7 +54,7 @@ export function FileViewer({ client, file }: { client: AxiosInstance; file: File
   }, [client, file.path])
 
   if (loading) {
-    return <div className="flex h-full items-center justify-center text-xs text-muted-foreground">Loading…</div>
+    return <LoadingState label="Opening file" />
   }
   if (error !== null || content === null) {
     return (

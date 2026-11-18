@@ -1,24 +1,30 @@
 import type { JSX } from 'react'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from '../../store.js'
-import { Terminal as Xterm } from '@xterm/xterm'
+import { Terminal as Xterm, type ITheme } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { ptyUrl } from '../../lib/pty.js'
 import { readTargetDrag, TARGET_DND_MIME } from '../../lib/target-drag.js'
 import { isMacPlatform, workspaceShortcut } from '../../lib/shortcuts.js'
 import type { EngineConnection } from '../../lib/connection.js'
+import { LoadingState } from '../ui/spinner.js'
+import { tokenColors } from './theme-colors.js'
 
-function terminalTheme(): { background: string; foreground: string; cursor: string; selectionBackground: string } {
-  const s = getComputedStyle(document.documentElement)
-  const bg = s.getPropertyValue('--card').trim() || '#0a0a0a'
-  const fg = s.getPropertyValue('--foreground').trim() || '#fafafa'
-  return {
-    background: bg,
-    foreground: fg,
-    cursor: fg,
-    selectionBackground: 'rgba(120,120,120,0.35)',
-  }
+/**
+ * The xterm palette, read from the theme tokens so every theme paints its own
+ * terminal. The ground is the window ground (`--background`), matching the ink
+ * card the terminal sits in. A token that does not resolve is left out, and
+ * xterm keeps its own default for that color.
+ */
+function terminalTheme(): ITheme {
+  return tokenColors({
+    background: '--background',
+    foreground: '--foreground',
+    cursor: '--foreground',
+    cursorAccent: '--background',
+    selectionBackground: '--glass-active',
+  })
 }
 
 export function Terminal({
@@ -51,6 +57,9 @@ export function Terminal({
   activityRef.current = onActivity
   const exitRef = useRef(onExit)
   exitRef.current = onExit
+  // The PTY socket is not open yet (or was torn down and is being opened again
+  // for a new connection): cover the blank terminal until it answers.
+  const [connecting, setConnecting] = useState(true)
 
   // Accept a target/fact/finding dragged from the Targets panel: write its
   // paste-ready reference into the PTY stdin (as if typed at the prompt), with a
@@ -74,6 +83,7 @@ export function Terminal({
     const el = container.current
     if (el === null) return
     let intentional = false
+    setConnecting(true)
 
     // Append symbol/Nerd-font fallbacks so box-drawing and powerline prompt
     // glyphs (╭ ╰ ❯ and Nerd-Font PUA icons in prompts like starship/p10k)
@@ -105,6 +115,7 @@ export function Terminal({
     const socket = new WebSocket(ptyUrl(connection, sessionId))
     socketRef.current = socket
     socket.onmessage = (m) => {
+      setConnecting(false)
       term.write(typeof m.data === 'string' ? m.data : '')
       activityRef.current?.()
     }
@@ -225,7 +236,10 @@ export function Terminal({
         /* transient sizing race */
       }
     }
-    socket.onopen = safeFit
+    socket.onopen = () => {
+      setConnecting(false)
+      safeFit()
+    }
 
     // Ctrl+V is not the only way a paste reaches the terminal — a context menu
     // or a middle-click sends one too, and those bypass the key handler above.
@@ -263,5 +277,12 @@ export function Terminal({
     term.options.theme = terminalTheme()
   }, [theme])
 
-  return <div ref={container} className="h-full w-full" onDragOver={onDragOver} onDrop={onDrop} />
+  // The host keeps its box exactly as the fit addon measures it; the overlay is a
+  // sibling laid over the (positioned) pane card, so it never changes that box.
+  return (
+    <>
+      <div ref={container} className="h-full w-full" onDragOver={onDragOver} onDrop={onDrop} />
+      {connecting && <LoadingState label="Connecting" className="absolute inset-0 bg-background" />}
+    </>
+  )
 }

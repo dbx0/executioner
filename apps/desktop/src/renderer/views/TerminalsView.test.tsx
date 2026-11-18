@@ -102,7 +102,7 @@ describe('TerminalsView panes', () => {
     expect(body('t1').style.left).toBe('0%')
     expect(body('t1').style.top).toBe('0%')
     expect(body('t1').style.padding).toBe('')
-    expect(body('t2').className).toContain('hidden')
+    expect(body('t2').classList.contains('hidden')).toBe(true)
     expect(screen.queryAllByRole('separator')).toHaveLength(0)
   })
 
@@ -112,16 +112,16 @@ describe('TerminalsView panes', () => {
     const split = state().layouts[0]!.root
     const newId = split.type === 'split' && split.b.type === 'leaf' ? split.b.id : ''
     act(() => state().fillPane(newId, { kind: 'terminal', id: 't2' }))
-    // Outer edges bleed fully; the shared edge is inset by 0.5px on each side (a 1px seam).
+    // Outer edges bleed fully; the shared edge is inset by half the panel gutter on each side (one gutter between cards).
     expect(body('t1').style.left).toBe('0%')
-    expect(body('t1').style.width).toBe('calc(50% - 0.5px)')
-    expect(body('t2').style.left).toBe('calc(50% + 0.5px)')
-    expect(body('t2').style.width).toBe('calc(50% - 0.5px)')
+    expect(body('t1').style.width).toBe('calc(50% - var(--panel-gap) / 2)')
+    expect(body('t2').style.left).toBe('calc(50% + var(--panel-gap) / 2)')
+    expect(body('t2').style.width).toBe('calc(50% - var(--panel-gap) / 2)')
     expect(body('t1').style.top).toBe('0%')
     expect(body('t1').style.height).toBe('100%')
     expect(body('t1').style.padding).toBe('')
     expect(body('t2').style.padding).toBe('')
-    expect(body('t2').className).not.toContain('hidden')
+    expect(body('t2').classList.contains('hidden')).toBe(false)
     expect(screen.getAllByRole('separator')).toHaveLength(1)
   })
 
@@ -160,7 +160,7 @@ describe('TerminalsView panes', () => {
     expect(container.querySelectorAll('[aria-label="Split tab"]')).toHaveLength(1)
   })
 
-  it('a split draws a 1px line in the border colour on the seam', () => {
+  it('a split draws a 1px line in the border colour in the gutter', () => {
     render(<TerminalsView />)
     act(() => state().splitPane('p1', 'row'))
     const line = screen.getByRole('separator').querySelector('[data-testid="divider-line"]')
@@ -180,8 +180,8 @@ describe('TerminalsView panes', () => {
     const wrapper = screen.getByTestId('file-f1').parentElement!
     expect(wrapper.style.padding).toBe('')
     expect(wrapper.className).not.toMatch(/\bp-/)
-    expect(wrapper.style.left).toBe('calc(50% + 0.5px)')
-    expect(wrapper.style.width).toBe('calc(50% - 0.5px)')
+    expect(wrapper.style.left).toBe('calc(50% + var(--panel-gap) / 2)')
+    expect(wrapper.style.width).toBe('calc(50% - var(--panel-gap) / 2)')
   })
 
   it('an empty-only layout still has a tab, and it is the active one', () => {

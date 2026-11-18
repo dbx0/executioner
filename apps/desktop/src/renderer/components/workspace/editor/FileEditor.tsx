@@ -1,12 +1,10 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, Columns2, Eye, Loader2, PenLine } from 'lucide-react'
 import { filesApi, type FileContent } from '../../../api/files.js'
 import type { AxiosInstance } from 'axios'
 import type { DiskBaseline } from '../../../store/types.js'
 import { friendlyError } from '../../../lib/api-error.js'
 import { ScrollArea } from '../../ui/scroll-area.js'
-import { cn } from '../../../lib/utils.js'
 import { useApp, type FileTab } from '../../../store.js'
 import { detectLanguage } from './language-detect.js'
 import { isEditorContentUnchanged } from './dirty-state.js'
@@ -17,43 +15,9 @@ import { MonacoEditor } from './MonacoEditor.js'
 import { isMarkdownPath } from '../file-kind.js'
 import { useDiskWatch } from './useDiskWatch.js'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner.js'
+import { EditorHeader, type MarkdownView, type SaveState } from './EditorHeader.js'
+import { Button } from '../../ui/button.js'
 import { scheduleAutosave, DEFAULT_AUTO_SAVE_DELAY_MS } from './autosave.js'
-
-/** How markdown is laid out: source-only, side-by-side, or rendered-only. */
-type MarkdownView = 'source' | 'split' | 'preview'
-
-/** The keyboard-shortcut modifier glyph for the current platform. */
-const MOD = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform) ? '⌘' : 'Ctrl'
-
-function ViewToggle({
-  active,
-  label,
-  onClick,
-  children,
-}: {
-  active: boolean
-  label: string
-  onClick: () => void
-  children: React.ReactNode
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-      className={cn(
-        'flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors',
-        active
-          ? 'bg-surface-3 text-foreground'
-          : 'text-muted-foreground hover:text-foreground',
-      )}
-    >
-      {children}
-    </button>
-  )
-}
 
 /**
  * The editable surface for one loaded, non-binary text file.
@@ -253,12 +217,25 @@ export function FileEditor({
     return () => clearTimeout(t)
   }, [undoableReload])
 
+  const language = detectLanguage(file.path)
+  const saveState: SaveState = readOnly
+    ? { kind: 'read-only' }
+    : saveError !== null
+      ? { kind: 'error', message: saveError }
+      : saving
+        ? { kind: 'saving' }
+        : dirty
+          ? { kind: 'dirty' }
+          : justSaved
+            ? { kind: 'saved' }
+            : { kind: 'clean' }
+
   const editor = (
     <MonacoEditor
       fileId={file.id}
       filePath={file.path}
       content={value}
-      language={detectLanguage(file.path)}
+      language={language}
       readOnly={readOnly}
       onContentChange={handleContentChange}
       onSave={() => void save()}
@@ -266,7 +243,15 @@ export function FileEditor({
   )
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-card">
+    <div className="flex h-full min-h-0 flex-col">
+      <EditorHeader
+        path={file.path}
+        language={language}
+        save={saveState}
+        markdownView={isMarkdown ? mdView : undefined}
+        onMarkdownView={setMdView}
+      />
+
       <ExternalFileChangeBanner
         mutation={externalMutation}
         {...(undoableReload !== null ? { undoReload: handleUndoReload } : {})}
@@ -276,19 +261,19 @@ export function FileEditor({
       />
 
       {comparing && diskContent !== null && (
-        <div className="min-h-0 shrink-0 border-b border-border" style={{ height: '40%' }}>
-          <div className="flex h-6 items-center justify-between px-3 text-[11px] text-muted-foreground">
+        <div className="flex h-[40%] min-h-0 shrink-0 flex-col border-b border-glass-border">
+          <div className="flex h-8 shrink-0 items-center justify-between pl-3 pr-1.5 text-[11px] text-muted-foreground">
             <span>On disk (read-only)</span>
-            <button type="button" onClick={() => setComparing(false)} className="hover:text-foreground">
+            <Button variant="ghost" size="xs" onClick={() => setComparing(false)}>
               Close
-            </button>
+            </Button>
           </div>
-          <div className="h-[calc(100%-1.5rem)]">
+          <div className="min-h-0 flex-1">
             <MonacoEditor
               fileId={`${file.id}:disk`}
               filePath={`${file.path}.disk`}
               content={diskContent}
-              language={detectLanguage(file.path)}
+              language={language}
               readOnly
               onContentChange={() => {}}
               onSave={() => {}}
@@ -297,48 +282,9 @@ export function FileEditor({
         </div>
       )}
 
-      {/* Slim status/toolbar strip. */}
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-3 text-[11px]">
-        {isMarkdown && (
-          <div className="flex items-center gap-0.5">
-            <ViewToggle active={mdView === 'source'} label="Editor" onClick={() => setMdView('source')}>
-              <PenLine className="size-3.5" strokeWidth={1.75} />
-            </ViewToggle>
-            <ViewToggle active={mdView === 'split'} label="Split" onClick={() => setMdView('split')}>
-              <Columns2 className="size-3.5" strokeWidth={1.75} />
-            </ViewToggle>
-            <ViewToggle active={mdView === 'preview'} label="Preview" onClick={() => setMdView('preview')}>
-              <Eye className="size-3.5" strokeWidth={1.75} />
-            </ViewToggle>
-          </div>
-        )}
-        <div className="ml-auto flex items-center gap-2 text-muted-foreground">
-          {readOnly ? (
-            <span>Read-only — this file was truncated on load.</span>
-          ) : saveError !== null ? (
-            <span className="text-destructive">{saveError}</span>
-          ) : saving ? (
-            <span className="flex items-center gap-1">
-              <Loader2 className="size-3 animate-spin" /> Saving…
-            </span>
-          ) : dirty ? (
-            <span className="flex items-center gap-1">
-              <span className="size-1.5 rounded-full bg-muted-foreground" /> Unsaved
-              <kbd className="ml-1 rounded border border-border px-1 text-[10px]">{MOD}S</kbd>
-            </span>
-          ) : justSaved ? (
-            <span className="flex items-center gap-1 text-muted-foreground">
-              <Check className="size-3" /> Saved
-            </span>
-          ) : (
-            <span className="text-muted-foreground">{MOD}S to save</span>
-          )}
-        </div>
-      </div>
-
       {initial.truncated && (
-        <div className="shrink-0 border-b border-border px-4 py-1 text-[11px] text-muted-foreground">
-          Showing the last {Math.round(initial.content.length / 1000)} KB — this file was truncated.
+        <div className="shrink-0 border-b border-glass-border px-3 py-1 text-[11px] text-muted-foreground">
+          Showing the last {Math.round(initial.content.length / 1000)} KB. This file was truncated.
         </div>
       )}
 
@@ -348,7 +294,7 @@ export function FileEditor({
             <MarkdownRender source={value} />
           </ScrollArea>
         ) : isMarkdown && mdView === 'split' ? (
-          <div className="grid h-full min-h-0 grid-cols-2 divide-x divide-border">
+          <div className="grid h-full min-h-0 grid-cols-2 divide-x divide-glass-border">
             <div className="min-h-0 overflow-hidden">{editor}</div>
             <ScrollArea className="min-h-0">
               <MarkdownRender source={value} />

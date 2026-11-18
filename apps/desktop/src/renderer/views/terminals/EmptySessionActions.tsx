@@ -47,17 +47,17 @@ export function EmptySessionActions(): JSX.Element {
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="secondary" size="sm" onClick={() => void createSession({ kind: 'shell' })}>
+      <Button variant="glass" size="sm" onClick={() => void createSession({ kind: 'shell' })}>
         <TerminalSquare className="size-4" strokeWidth={1.75} />
         Terminal
       </Button>
 
       {current !== undefined && (
-        <div className="inline-flex overflow-hidden rounded-md">
+        <div className="inline-flex overflow-hidden rounded-control shadow-glass">
           <Button
-            variant="secondary"
+            variant="glass"
             size="sm"
-            className="rounded-r-none"
+            className="rounded-r-none shadow-none"
             onClick={() => void createSession({ agent: current })}
           >
             <AgentIcon agent={current} className="size-4" />
@@ -66,10 +66,10 @@ export function EmptySessionActions(): JSX.Element {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="secondary"
+                variant="glass"
                 size="sm"
                 aria-label="Choose an agent"
-                className="rounded-l-none border-l border-border-subtle px-1.5"
+                className="rounded-l-none border-l border-glass-border px-2 shadow-none"
               >
                 <ChevronDown className="size-4" strokeWidth={1.75} />
               </Button>

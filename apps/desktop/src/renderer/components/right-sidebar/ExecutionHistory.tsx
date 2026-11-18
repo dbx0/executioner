@@ -1,13 +1,12 @@
 import type { JSX } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { friendlyError } from '../../lib/api-error.js'
-import { RotateCw } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { useEngineChange } from '../../lib/engine-changes.js'
 import { executionsApi, type ExecutionSummary } from '../../api/executions.js'
 import { cn } from '../../lib/utils.js'
-import { Button } from '../ui/button.js'
 import { ScrollArea } from '../ui/scroll-area.js'
+import { Panel, PanelNote, PanelRefresh, PanelRow, PanelRowsSkeleton } from './panel-parts.js'
 
 /** Status dot color, mirroring Sidebar.tsx's run idiom. */
 function runDotClass(status: string): string {
@@ -61,59 +60,45 @@ export function ExecutionHistory(): JSX.Element {
 
   if (client === null) {
     return (
-      <div className="grid h-full place-items-center px-3 text-center text-[12.5px] text-muted-foreground">
-        Open an engagement
-      </div>
+      <Panel title="Executions">
+        <PanelNote fill>Open an engagement</PanelNote>
+      </Panel>
     )
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-9 items-center justify-between px-2.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Executions
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground"
-          onClick={() => setNonce((n) => n + 1)}
-          aria-label="Refresh executions"
-        >
-          <RotateCw className="size-4" strokeWidth={1.75} />
-        </Button>
-      </div>
-
+    <Panel
+      title="Executions"
+      actions={<PanelRefresh label="Refresh executions" loading={loading} onClick={() => setNonce((n) => n + 1)} />}
+    >
       {loading && runs.length === 0 ? (
-        <p className="px-2.5 py-1 text-[12px] text-muted-foreground">Loading…</p>
+        <PanelRowsSkeleton label="Loading executions" />
       ) : error !== null ? (
-        <p className="px-2.5 py-1 text-[12px] text-status-error">{error}</p>
+        <PanelNote tone="error">{error}</PanelNote>
       ) : runs.length === 0 ? (
-        <p className="px-2.5 py-1 text-[12px] text-muted-foreground">No executions yet</p>
+        <PanelNote>No executions yet</PanelNote>
       ) : (
-        <ScrollArea className="min-h-0 flex-1 px-2 pb-2">
+        <ScrollArea className="min-h-0 flex-1 px-1.5 pb-2">
           <div className="flex flex-col gap-0.5">
             {runs.map((r) => {
               const detail = r.targetId ?? shortTime(r.startedAt)
               return (
-                <div
+                <PanelRow
                   key={r.id}
-                  className="flex h-7 items-center gap-2 rounded-md px-2 text-[12.5px] text-muted-foreground hover:bg-surface-2"
-                >
-                  <span className={cn('size-2 shrink-0 rounded-full', runDotClass(r.status))} />
-                  <span className="truncate font-mono text-[11.5px]">{r.id.slice(0, 8)}</span>
-                  {detail !== '' && (
-                    <span className="truncate text-[11px] text-muted-foreground">{detail}</span>
-                  )}
-                  <span className="ml-auto shrink-0 truncate text-[11px] capitalize text-muted-foreground">
-                    {r.status}
-                  </span>
-                </div>
+                  icon={<span aria-hidden className={cn('mx-0.5 size-2 shrink-0 rounded-full', runDotClass(r.status))} />}
+                  label={
+                    <>
+                      <span className="font-mono text-[11.5px]">{r.id.slice(0, 8)}</span>
+                      {detail !== '' && <span className="ml-2 text-[11px] text-tertiary-foreground">{detail}</span>}
+                    </>
+                  }
+                  trailing={<span className="shrink-0 text-[11px] capitalize">{r.status}</span>}
+                />
               )
             })}
           </div>
         </ScrollArea>
       )}
-    </div>
+    </Panel>
   )
 }

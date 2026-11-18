@@ -1,15 +1,16 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronRight, Crosshair, Globe, Link2, Network, RotateCw, Server } from 'lucide-react'
+import { Crosshair, Globe, Link2, Network, Server } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { useEngineChange } from '../../lib/engine-changes.js'
 import { targetsApi, type TargetNode, type TargetDetail, type TargetFact } from '../../api/targets.js'
 import { setTargetDrag } from '../../lib/target-drag.js'
-import { Button } from '../ui/button.js'
 import { ScrollArea } from '../ui/scroll-area.js'
 import { cn } from '../../lib/utils.js'
+import { TargetTreeSkeleton } from '../targets/TargetTreeSkeleton.js'
 import { useFlashIds } from '../targets/VirtualTargetTree.js'
+import { Panel, PanelNote, PanelRefresh, PanelRow, PanelSection } from './panel-parts.js'
 
 /** Brand-ish glyph per target kind so the tree reads at a glance. */
 function kindIcon(kind: string): LucideIcon {
@@ -65,7 +66,7 @@ function TargetRow({
 
   return (
     <div>
-      <div
+      <PanelRow
         draggable
         data-new={isNew ? 'true' : undefined}
         onDragStart={(e) => setTargetDrag(e.dataTransfer, { kind: 'target', text: node.value, target: node.value })}
@@ -73,30 +74,18 @@ function TargetRow({
           onSelect(node)
           if (hasChildren) onToggle(node.id)
         }}
-        title={`${node.value} — drag into a terminal to reference`}
-        style={{ paddingLeft: `${depth * 12 + 4}px` }}
-        className={cn(
-          isNew && 'motion-safe:animate-enter-flash-amber',
-          'group flex h-7 cursor-grab items-center gap-1 rounded-md pr-2 text-[12.5px] transition-colors active:cursor-grabbing',
-          isSelected
-            ? 'selected-surface text-sidebar-accent-foreground'
-            : 'text-muted-foreground hover:bg-surface-2',
-        )}
-      >
-        <ChevronRight
-          className={cn(
-            'size-3.5 shrink-0 text-muted-foreground transition-transform',
-            isOpen && 'rotate-90',
-            !hasChildren && 'invisible',
-          )}
-          strokeWidth={2}
-        />
-        <Icon className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-        <span className="min-w-0 flex-1 truncate">{node.value}</span>
-        {hasChildren && (
-          <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">{node.children.length}</span>
-        )}
-      </div>
+        title={`${node.value}: drag into a terminal to reference`}
+        depth={depth}
+        selected={isSelected}
+        chevron={!hasChildren ? 'none' : isOpen ? 'open' : 'closed'}
+        aria-expanded={hasChildren ? isOpen : undefined}
+        icon={<Icon className="size-3.5 shrink-0" strokeWidth={1.75} />}
+        label={node.value}
+        trailing={
+          hasChildren ? <span className="shrink-0 text-[10px] tabular-nums text-tertiary-foreground">{node.children.length}</span> : undefined
+        }
+        className={cn('cursor-grab font-mono text-[11.5px] active:cursor-grabbing', isNew && 'motion-safe:animate-enter-flash-amber')}
+      />
       {hasChildren && isOpen && (
         <div>
           {node.children.map((child) => (
@@ -122,51 +111,48 @@ function TargetRow({
 function TargetDetailPane({ detail }: { detail: TargetDetail }): JSX.Element {
   const Icon = kindIcon(detail.kind)
   return (
-    <div className="flex flex-col gap-2 px-2.5 py-2">
+    <div className="flex flex-col gap-2 px-1.5 py-2">
       <div
         draggable
         onDragStart={(e) => setTargetDrag(e.dataTransfer, { kind: 'target', text: detail.value, target: detail.value })}
         title="Drag into a terminal to reference"
-        className="flex cursor-grab items-center gap-2 active:cursor-grabbing"
+        className="flex cursor-grab items-center gap-2 px-2 active:cursor-grabbing"
       >
         <Icon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{detail.value}</span>
-        <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+        <span className="shrink-0 rounded-control bg-glass-strong px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
           {detail.kind}
         </span>
       </div>
 
-      <div className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-        <span className="text-muted-foreground">Source</span>
-        <span className="truncate">{detail.source}</span>
-        <span className="text-muted-foreground">First seen</span>
-        <span className="truncate">{new Date(detail.firstSeen).toLocaleString()}</span>
-        <span className="text-muted-foreground">Last seen</span>
-        <span className="truncate">{new Date(detail.lastSeen).toLocaleString()}</span>
-      </div>
+      <dl className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 px-2 text-[11px] text-muted-foreground">
+        <dt className="text-tertiary-foreground">Source</dt>
+        <dd className="truncate">{detail.source}</dd>
+        <dt className="text-tertiary-foreground">First seen</dt>
+        <dd className="truncate">{new Date(detail.firstSeen).toLocaleString()}</dd>
+        <dt className="text-tertiary-foreground">Last seen</dt>
+        <dd className="truncate">{new Date(detail.lastSeen).toLocaleString()}</dd>
+      </dl>
 
       <div>
-        <div className="mb-1 text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Facts {detail.facts.length > 0 && `(${detail.facts.length})`}
-        </div>
+        <PanelSection count={detail.facts.length}>Facts</PanelSection>
         {detail.facts.length === 0 ? (
-          <p className="text-[11.5px] text-muted-foreground">No facts collected yet.</p>
+          <PanelNote>No facts collected yet.</PanelNote>
         ) : (
           <div className="flex flex-col gap-0.5">
             {detail.facts.map((fact) => {
               const summary = summariseFact(fact)
               const text = `${detail.value} ${fact.kind}: ${summary}`
               return (
-                <div
+                <PanelRow
                   key={fact.id}
                   draggable
                   onDragStart={(e) => setTargetDrag(e.dataTransfer, { kind: 'fact', text, target: detail.value })}
                   title="Drag into a terminal to reference"
-                  className="flex cursor-grab flex-col rounded-md px-2 py-1 hover:bg-surface-2 active:cursor-grabbing"
-                >
-                  <span className="truncate text-[11.5px] text-muted-foreground">{fact.kind}</span>
-                  {summary !== '' && <span className="truncate text-[11px] text-muted-foreground">{summary}</span>}
-                </div>
+                  label={fact.kind}
+                  detail={summary === '' ? undefined : summary}
+                  className="cursor-grab hover:bg-glass-strong active:cursor-grabbing"
+                />
               )
             })}
           </div>
@@ -249,36 +235,27 @@ export function TargetsPanel(): JSX.Element {
 
   if (client === null) {
     return (
-      <div className="grid h-full place-items-center px-3 text-center text-[12.5px] text-muted-foreground">
-        Open an engagement
-      </div>
+      <Panel title="Targets">
+        <PanelNote fill>Open an engagement</PanelNote>
+      </Panel>
     )
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-9 items-center justify-between px-2.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Targets</span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground"
-          onClick={() => setNonce((n) => n + 1)}
-          aria-label="Refresh targets"
-        >
-          <RotateCw className="size-4" strokeWidth={1.75} />
-        </Button>
-      </div>
-
+    <Panel
+      title="Targets"
+      meta={allIds.length > 0 ? allIds.length : undefined}
+      actions={<PanelRefresh label="Refresh targets" loading={loading} onClick={() => setNonce((n) => n + 1)} />}
+    >
       {loading && tree.length === 0 ? (
-        <p className="px-2.5 py-1 text-[12px] text-muted-foreground">Loading…</p>
+        <TargetTreeSkeleton />
       ) : error !== null ? (
-        <p className="px-2.5 py-1 text-[12px] text-status-error">{error}</p>
+        <PanelNote tone="error">{error}</PanelNote>
       ) : tree.length === 0 ? (
-        <p className="px-2.5 py-1 text-[12px] text-muted-foreground">No targets yet.</p>
+        <PanelNote>No targets yet.</PanelNote>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <ScrollArea className="min-h-0 flex-1 px-2 pb-1">
+          <ScrollArea className="min-h-0 flex-1 px-1.5 pb-1">
             <div className="flex flex-col gap-0.5">
               {tree.map((node) => (
                 <TargetRow
@@ -296,12 +273,12 @@ export function TargetsPanel(): JSX.Element {
           </ScrollArea>
 
           {detail !== null && (
-            <div className="max-h-[45%] shrink-0 overflow-y-auto border-t border-sidebar-border scrollbar-sleek">
+            <div className="scrollbar-sleek max-h-[45%] shrink-0 overflow-y-auto border-t border-glass-border">
               <TargetDetailPane detail={detail} />
             </div>
           )}
         </div>
       )}
-    </div>
+    </Panel>
   )
 }

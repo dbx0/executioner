@@ -1,10 +1,10 @@
 import type { JSX } from 'react'
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { monaco } from '../../../lib/monaco-setup.js'
 import { useApp } from '../../../store.js'
-import { monacoTheme } from '../../../lib/themes.js'
+import { editorTheme } from './monaco-theme.js'
 import { syncContentOnMount, syncContentUpdate } from './monaco-content-sync.js'
 import { installViewStateTracking, restoreViewState, snapshotViewState } from './view-state-cache.js'
 import { disposeClosedEditorTabs, registerEditorTabDisposer } from './tab-disposal.js'
@@ -40,6 +40,9 @@ export function MonacoEditor({
   onSave,
 }: MonacoEditorProps): JSX.Element {
   const theme = useApp((s) => s.theme)
+  // setTheme applies the CSS variables before it updates the store, so the tokens
+  // read here are already the new theme's.
+  const themeName = useMemo(() => editorTheme(theme), [theme])
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const scrollThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scrollSubRef = useRef<{ dispose: () => void } | null>(null)
@@ -113,7 +116,7 @@ export function MonacoEditor({
       // defaultValue, not a controlled value — we own post-mount content sync,
       // and a controlled path would double-setValue.
       defaultValue={content}
-      theme={monacoTheme(theme)}
+      theme={themeName}
       onChange={handleChange}
       onMount={handleMount}
       path={filePath}
@@ -131,7 +134,7 @@ export function MonacoEditor({
         tabSize: 2,
         readOnly,
         smoothScrolling: true,
-        padding: { top: 0 },
+        padding: { top: 8, bottom: 8 },
       }}
     />
   )
