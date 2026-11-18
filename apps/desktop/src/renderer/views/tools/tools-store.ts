@@ -85,7 +85,7 @@ const MAX_PENDING = 300
 /** Finished runs remembered per engagement. */
 const MAX_FINISHED = 1000
 
-interface PerEngagement {
+export interface PerEngagement {
   streams: Record<string, RunStream>
   pending: EngineEvent[]
   /** Final status by run id, for every run seen to finish. */

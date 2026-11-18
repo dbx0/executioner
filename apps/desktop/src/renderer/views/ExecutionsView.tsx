@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { RefreshCw, Workflow, Crosshair, Square } from 'lucide-react'
+import { RefreshCw, Workflow, Crosshair } from 'lucide-react'
 import { useApp } from '../store.js'
 import { executionsApi, type ExecutionSummary, type NodeOutputRow } from '../api/executions.js'
 import { workflowsApi } from '../api/workflows.js'
@@ -12,27 +12,19 @@ import { NodeOutputCards } from './executions/NodeOutputCards.js'
 import { NodeOutputModal } from './executions/NodeOutputModal.js'
 import { Button } from '../components/ui/button.js'
 import { ExecutionListSkeleton } from './executions/ExecutionListSkeleton.js'
+import { ExecutionList } from './executions/ExecutionList.js'
+import { shortId, statusColor } from './executions/status.js'
+import { GlassPanel } from '../components/ui/glass-panel.js'
+import { Page, PageBody, PageToolbar } from '../components/ui/page.js'
+import { LoadingState, Spinner } from '../components/ui/spinner.js'
+import { Tip } from '../components/ui/tip.js'
 import { cn } from '../lib/utils.js'
 
-function statusColor(status: string): string {
-  if (status === 'succeeded' || status === 'success') return 'text-status-success'
-  if (status === 'running') return 'text-status-running'
-  // A run you stopped yourself is not a failure, so it doesn't read as one.
-  if (status === 'cancelled') return 'text-muted-foreground'
-  return 'text-status-error'
-}
-
-function statusDot(status: string): string {
-  if (status === 'succeeded' || status === 'success') return 'bg-status-success'
-  if (status === 'running') return 'bg-status-running animate-pulse'
-  if (status === 'cancelled') return 'bg-muted-foreground'
-  return 'bg-status-error'
-}
-
-function shortId(id: string): string {
-  return id.slice(0, 8)
-}
-
+/**
+ * The runs page: the list of runs beside the selected run's node output. Also
+ * hosted inside the Workflows hub (`embedded`), where the host supplies the
+ * frame and this renders only the two panes.
+ */
 export function ExecutionsView({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
   const client = useApp((s) => s.client)!
   const connection = useApp((s) => s.connection)!
@@ -45,6 +37,9 @@ export function ExecutionsView({ embedded = false }: { embedded?: boolean } = {}
    *  rather than the empty state, which otherwise claims there are no runs. */
   const [loadedOnce, setLoadedOnce] = useState(false)
   const [persisted, setPersisted] = useState<NodeOutputRow[]>([])
+  /** The run whose persisted output has been read at least once, so the pane
+   *  shows a loader rather than "no output" while the first read is in flight. */
+  const [outputFor, setOutputFor] = useState<string | undefined>()
   const [openNode, setOpenNode] = useState<NodeOutputRow | null>(null)
   const [wfNames, setWfNames] = useState<Record<string, string>>({})
   /** The run whose stop is in flight, so its button can't be pressed twice. */
@@ -95,7 +90,7 @@ export function ExecutionsView({ embedded = false }: { embedded?: boolean } = {}
 
   /**
    * Stop a run. The engine kills whatever the run has open and settles the row,
-   * then announces it on the event bus — but the list is re-read here too, so
+   * then announces it on the event bus, but the list is re-read here too, so
    * the row updates even if that event is missed.
    */
   const stop = useCallback(
@@ -128,7 +123,7 @@ export function ExecutionsView({ embedded = false }: { embedded?: boolean } = {}
   /**
    * Final status per node, straight off the event bus. The engine publishes a
    * node's 'done' event before it writes the row, so a refetch triggered by that
-   * event can find nothing yet — without this a node that plainly finished keeps
+   * event can find nothing yet. Without this a node that plainly finished keeps
    * rendering as "running" until some later fetch catches up.
    */
   const doneStatus = useMemo(() => {
@@ -162,6 +157,7 @@ export function ExecutionsView({ embedded = false }: { embedded?: boolean } = {}
       .output(selected)
       .then((o) => alive && setPersisted(o))
       .catch(() => alive && setPersisted([]))
+      .finally(() => alive && setOutputFor(selected))
     return () => {
       alive = false
     }
@@ -172,7 +168,7 @@ export function ExecutionsView({ embedded = false }: { embedded?: boolean } = {}
    * a node still streaming (or one the refetch hasn't caught yet) is filled in
    * from the live event buffer so a running node isn't a blank card.
    *
-   * Every node is kept, including those with no output at all — a node that
+   * Every node is kept, including those with no output at all: a node that
    * drops off the list is precisely how a silent failure goes unnoticed.
    */
   const nodeRows = useMemo(() => mergeNodeRows(persisted, log, doneStatus), [persisted, log, doneStatus])
@@ -181,132 +177,94 @@ export function ExecutionsView({ embedded = false }: { embedded?: boolean } = {}
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [log.length])
 
-  return (
-    <div className="flex h-full flex-col">
-      {!embedded && (
-        <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
-          <span className="text-sm font-medium">Executions</span>
-          <Button variant="ghost" size="icon-sm" className="ml-auto" onClick={() => void refresh()} aria-label="Refresh">
-            <RefreshCw className={cn('size-4', loading && 'animate-[spin_1s_linear_infinite]')} strokeWidth={1.75} />
-          </Button>
-        </div>
-      )}
+  const run = rows.find((r) => r.id === selected)
+  const outputPending = selected !== undefined && outputFor !== selected && nodeRows.length === 0
 
-      <div className="flex min-h-0 flex-1">
-        {/* List */}
-        <div className="flex w-80 shrink-0 flex-col border-r border-border">
-          <ScrollArea className="min-h-0 flex-1">
-            {!loadedOnce ? (
-              <ExecutionListSkeleton />
-            ) : rows.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">No runs yet. Run a workflow or a node.</p>
-            ) : (
-              rows.map((r) => (
-                <div
-                  key={r.id}
-                  className={cn(
-                    'flex w-full items-start gap-1.5 border-b border-border/60 pr-2.5',
-                    r.id === selected
-                      ? 'selected-surface'
-                      : 'hover:bg-surface-1',
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelected(r.id)}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-left"
-                  >
-                    <span className={cn('mt-1.5 size-2 shrink-0 self-start rounded-full', statusDot(r.status))} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <Workflow className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-                        <span className="truncate text-[12.5px] font-medium">
-                          {r.workflowId === null ? 'Single node' : (wfNames[r.workflowId] ?? 'Workflow')}
-                        </span>
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                        <Crosshair className="size-3 shrink-0" strokeWidth={1.75} />
-                        <span className="truncate font-mono">
-                          {r.targetId !== null ? (targetVals[r.targetId] ?? shortId(r.targetId)) : 'no target'}
-                        </span>
-                      </div>
-                      {r.startedAt !== null && (
-                        <div className="mt-0.5 truncate text-[10.5px] text-muted-foreground">
-                          {new Date(r.startedAt).toLocaleString()}
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                  <span
-                    className={cn(
-                      'shrink-0 self-start pt-2 text-[11px] font-medium capitalize',
-                      statusColor(r.status),
-                    )}
-                  >
-                    {r.status}
-                  </span>
-                  {r.status === 'running' && (
-                    // Deliberately not a Button: its icon size is a 32px box, and
-                    // a padded target that large next to the row's own click area
-                    // is easy to hit by accident. The glyph itself is the target.
-                    <button
-                      type="button"
-                      className="shrink-0 self-start pt-[9px] leading-none text-muted-foreground transition-colors hover:text-status-error disabled:opacity-50"
-                      aria-label={`Stop run ${shortId(r.id)}`}
-                      title="Stop run"
-                      disabled={stopping === r.id}
-                      onClick={() => void stop(r.id)}
-                    >
-                      <Square className="size-3 fill-current" strokeWidth={0} />
-                    </button>
-                  )}
-                </div>
-              ))
-            )}
-          </ScrollArea>
-        </div>
-
-        {/* Detail / live log */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          {selected === undefined ? (
-            <div className="flex flex-1 items-center justify-center">
-              <p className="text-sm text-muted-foreground">Select a run to see its output.</p>
-            </div>
+  const panes = (
+    <>
+      <GlassPanel className="flex w-80 shrink-0 flex-col">
+        <ScrollArea className="min-h-0 flex-1">
+          {!loadedOnce ? (
+            <ExecutionListSkeleton />
+          ) : rows.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">No runs yet. Run a workflow or a node.</p>
           ) : (
-            <>
-              {(() => {
-                const run = rows.find((r) => r.id === selected)
-                const wf = run?.workflowId != null ? (wfNames[run.workflowId] ?? 'Workflow') : 'Single node'
-                const tgt = run?.targetId != null ? (targetVals[run.targetId] ?? shortId(run.targetId)) : null
-                return (
-                  <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-4 text-xs text-muted-foreground">
-                    <Workflow className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
-                    <span className="truncate font-medium text-foreground">{wf}</span>
-                    {tgt !== null && (
-                      <>
-                        <span>·</span>
-                        <Crosshair className="size-3" strokeWidth={1.75} />
-                        <span className="truncate font-mono">{tgt}</span>
-                      </>
-                    )}
-                    <span className={cn('ml-auto capitalize', statusColor(run?.status ?? ''))}>{run?.status ?? '—'}</span>
-                  </div>
-                )
-              })()}
-              <ScrollArea className="min-h-0 flex-1 bg-card">
-                {nodeRows.length > 0 ? (
-                  <NodeOutputCards rows={nodeRows} onOpen={setOpenNode} />
-                ) : (
-                  <p className="p-3 text-[13px] text-muted-foreground">No output recorded for this run.</p>
-                )}
-                <div ref={bottomRef} />
-              </ScrollArea>
-            </>
+            <ExecutionList
+              rows={rows}
+              selected={selected}
+              stopping={stopping}
+              workflowNames={wfNames}
+              targetValues={targetVals}
+              onSelect={setSelected}
+              onStop={(id) => void stop(id)}
+            />
           )}
-        </div>
-      </div>
+        </ScrollArea>
+      </GlassPanel>
 
-      {openNode !== null && <NodeOutputModal row={openNode} onClose={() => setOpenNode(null)} />}
-    </div>
+      <GlassPanel className="flex min-w-0 flex-1 flex-col">
+        {selected === undefined ? (
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-sm text-muted-foreground">Select a run to see its output.</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex h-10 shrink-0 items-center gap-2 border-b border-glass-border px-4 text-xs text-muted-foreground">
+              <Workflow className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
+              <span className="truncate font-medium text-foreground">
+                {run?.workflowId != null ? (wfNames[run.workflowId] ?? 'Workflow') : 'Single node'}
+              </span>
+              {run?.targetId != null && (
+                <>
+                  <span>·</span>
+                  <Crosshair className="size-3" strokeWidth={1.75} />
+                  <span className="truncate font-mono">{targetVals[run.targetId] ?? shortId(run.targetId)}</span>
+                </>
+              )}
+              <span className={cn('ml-auto capitalize', statusColor(run?.status ?? ''))}>{run?.status ?? 'unknown'}</span>
+            </div>
+            <ScrollArea className="min-h-0 flex-1">
+              {nodeRows.length > 0 ? (
+                <NodeOutputCards rows={nodeRows} onOpen={setOpenNode} />
+              ) : outputPending ? (
+                <LoadingState label="Loading output" />
+              ) : (
+                <p className="p-4 text-[13px] text-muted-foreground">No output recorded for this run.</p>
+              )}
+              <div ref={bottomRef} />
+            </ScrollArea>
+          </>
+        )}
+      </GlassPanel>
+    </>
+  )
+
+  const modal = openNode !== null && <NodeOutputModal row={openNode} onClose={() => setOpenNode(null)} />
+
+  if (embedded) {
+    return (
+      <div className="flex h-full min-h-0 gap-panel">
+        {panes}
+        {modal}
+      </div>
+    )
+  }
+
+  return (
+    <Page>
+      <PageToolbar
+        title="Executions"
+        meta={loadedOnce ? rows.length : undefined}
+        actions={
+          <Tip label="Refresh">
+            <Button variant="glass" size="icon-sm" disabled={loading} onClick={() => void refresh()} aria-label="Refresh">
+              {loading ? <Spinner /> : <RefreshCw className="size-4" strokeWidth={1.75} />}
+            </Button>
+          </Tip>
+        }
+      />
+      <PageBody>{panes}</PageBody>
+      {modal}
+    </Page>
   )
 }

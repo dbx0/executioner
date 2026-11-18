@@ -1,6 +1,8 @@
 import type { JSX } from 'react'
-import { AlertCircle, Ban, Check, CircleDashed, Clock, Loader2, X } from 'lucide-react'
+import { AlertCircle, Ban, Check, CircleDashed, Clock, X } from 'lucide-react'
 import type { NodeOutputRow } from '../../api/executions.js'
+import { Spinner } from '../../components/ui/spinner.js'
+import { Tip } from '../../components/ui/tip.js'
 import { cn } from '../../lib/utils.js'
 import { safeRow } from './row.js'
 import { summarizeParsed } from './ParsedView.js'
@@ -43,7 +45,6 @@ const ICONS: Record<string, typeof Check> = {
   succeeded: Check,
   failed: X,
   timeout: Clock,
-  running: Loader2,
   // A node the user stopped: neither a tick nor a cross.
   cancelled: Ban,
 }
@@ -57,8 +58,8 @@ function statusTone(status: string): string {
 
 /**
  * One card per node of a run, stacked one below another like a notification
- * list. The preview leads with stderr when a node failed — that is where the
- * reason lives — and every node gets a card even when it produced nothing,
+ * list. The preview leads with stderr when a node failed (that is where the
+ * reason lives) and every node gets a card even when it produced nothing,
  * because a node that vanishes from the list is exactly how a silent failure
  * hides.
  */
@@ -75,13 +76,13 @@ export function NodeOutputCards({
         const row = safeRow(raw)
         const failed = row.status === 'failed' || row.status === 'timeout'
         // Each branch scans a bounded head, so nothing here walks a whole
-        // stream — `stdout.trim() !== ''` used to copy the entire thing.
+        // stream: `stdout.trim() !== ''` used to copy the entire thing.
         const stderrLine = failed ? firstLine(row.stderr) : ''
         const stdoutLine = stderrLine === '' ? firstLine(row.stdout) : ''
         const preview =
           stderrLine !== '' ? stderrLine : stdoutLine !== '' ? stdoutLine : summarizeParsed(row.parsedValue)
         const Icon = ICONS[row.status] ?? CircleDashed
-        // "Empty" only if there is no parsed result either — a built-in node's
+        // "Empty" only if there is no parsed result either: a built-in node's
         // rows ARE its output, and calling that nothing is what hid screenshot.
         const empty = row.stdout.length + row.stderr.length + row.parsedCount === 0
         // An engine older than the exitCode field omits it entirely. Missing is
@@ -93,38 +94,32 @@ export function NodeOutputCards({
             key={row.nodeId}
             type="button"
             onClick={() => onOpen(raw)}
-            title={`${row.nodeId} — click for full output`}
             className={cn(
-              'flex w-full min-w-0 items-start gap-3 rounded-xl border px-4 py-3 text-left shadow-sm transition-colors',
-              'border-border bg-surface-1',
-              'hover:bg-surface-2',
+              'flex w-full min-w-0 items-start gap-3 rounded-[14px] border px-4 py-3 text-left outline-none transition-colors',
+              'border-glass-border bg-glass hover:bg-glass-strong focus-visible:ring-[3px] focus-visible:ring-ring/50',
               failed && 'border-status-error/40',
             )}
           >
-            <Icon
-              className={cn(
-                'mt-0.5 size-4 shrink-0',
-                statusTone(row.status),
-                row.status === 'running' && 'animate-spin',
-              )}
-              strokeWidth={2}
-            />
+            {row.status === 'running' ? (
+              <Spinner className={cn('mt-0.5', statusTone(row.status))} />
+            ) : (
+              <Icon className={cn('mt-0.5 size-4 shrink-0', statusTone(row.status))} strokeWidth={2} />
+            )}
 
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
               <div className="flex min-w-0 items-center gap-2">
                 <span className="min-w-0 truncate font-mono text-[13px] font-medium">{row.nodeId}</span>
                 {exit !== undefined && exit !== 0 && (
-                  <span className="shrink-0 rounded bg-status-error/15 px-1 font-mono text-[10.5px] text-status-error">
+                  <span className="shrink-0 rounded-control bg-status-error/15 px-1.5 font-mono text-[10.5px] text-status-error">
                     exit {exit}
                   </span>
                 )}
                 {neverStarted && (
-                  <span
-                    className="shrink-0 rounded bg-status-error/15 px-1 font-mono text-[10.5px] text-status-error"
-                    title="No exit code: the process never started"
-                  >
-                    no exit
-                  </span>
+                  <Tip label="No exit code: the process never started">
+                    <span className="shrink-0 rounded-control bg-status-error/15 px-1.5 font-mono text-[10.5px] text-status-error">
+                      no exit
+                    </span>
+                  </Tip>
                 )}
                 {/* Pushed right like a notification's timestamp. */}
                 <span className="ml-auto shrink-0 text-[10.5px] uppercase tracking-wide text-muted-foreground">

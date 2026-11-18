@@ -1,41 +1,29 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AxiosInstance } from 'axios'
-import { Container, Laptop, Loader2, RefreshCw, Server, Unplug } from 'lucide-react'
+import { RefreshCw, Unplug } from 'lucide-react'
 import { useApp } from '../../../store.js'
-import { cn } from '../../../lib/utils.js'
 import { Button } from '../../../components/ui/button.js'
+import { Spinner } from '../../../components/ui/spinner.js'
 import { toolsApi, type ToolInfo, type ToolProbeResult } from '../../../api/tools.js'
-import { backendsApi, type BackendKind, type BackendProfile } from '../../../api/backends.js'
-import { PageHeading } from '../parts.js'
+import { backendsApi, type BackendProfile } from '../../../api/backends.js'
+import { PageHeading, SettingsNote } from '../parts.js'
 import { ToolCard, type CardState } from './ToolCard.js'
 import { InstallModal } from './InstallModal.js'
+import { TabStrip, ToolListSkeleton, type Tab } from './TabStrip.js'
 
 /** The id of the tab that probes the engine host itself. */
 const LOCAL = 'local'
-
-/** One tab: the engine host, or a saved connection. */
-interface Tab {
-  id: string
-  label: string
-  kind: BackendKind
-  /** A one-line description of where this tab probes, for the install modal. */
-  where: string
-}
 
 /** What we know about one tab's probe run. Absent entirely until first visited. */
 interface TabState {
   /** True while a probe is in flight for this tab. */
   busy: boolean
-  /** Programs still being probed — only the local tab resolves progressively. */
+  /** Programs still being probed: only the local tab resolves progressively. */
   pending: Set<string>
   probes: Record<string, ToolProbeResult>
   /** Set when the CONNECTION failed; tools are unknown rather than missing. */
   error: string | null
-}
-
-function kindIcon(kind: BackendKind): typeof Laptop {
-  return kind === 'docker' ? Container : kind === 'ssh' ? Server : Laptop
 }
 
 /** One-line summary of where a backend runs (matches the Connections page). */
@@ -50,47 +38,8 @@ function summary(p: BackendProfile): string {
   return 'this machine'
 }
 
-/** The tab strip. Only rendered when there is more than one connection to show. */
-function TabStrip({
-  tabs,
-  active,
-  onSelect,
-  missingFor,
-}: {
-  tabs: Tab[]
-  active: string
-  onSelect: (id: string) => void
-  missingFor: (id: string) => number | null
-}): JSX.Element {
-  return (
-    <div role="tablist" aria-label="Connection" className="mb-3 flex flex-wrap items-center gap-1 border-b border-border pb-1.5">
-      {tabs.map((tab) => {
-        const Icon = kindIcon(tab.kind)
-        const missing = missingFor(tab.id)
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={active === tab.id}
-            onClick={() => onSelect(tab.id)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs',
-              active === tab.id ? 'bg-surface-3 font-medium' : 'text-muted-foreground hover:bg-surface-2',
-            )}
-          >
-            <Icon className="size-3.5" strokeWidth={1.75} />
-            {tab.label}
-            {missing !== null && missing > 0 && <span className="tabular-nums text-destructive">{missing}</span>}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
 /**
- * Settings → Tools: the tool catalog (every external CLI the node manifests
+ * Settings: Tools. The tool catalog (every external CLI the node manifests
  * invoke, deduped by binary) renders immediately, then each tool's badge
  * resolves as the engine probes that binary.
  *
@@ -98,7 +47,7 @@ function TabStrip({
  * A tab probes only the first time you open it, and its results are cached, so
  * switching back is instant. The local tab probes per tool (badges resolve one
  * by one); a remote tab probes the whole catalog in ONE request, because the
- * round trip — an SSH connection or a throwaway container — is the cost, not
+ * round trip (an SSH connection or a throwaway container) is the cost, not
  * the individual check.
  */
 function ToolsList({ client }: { client: AxiosInstance }): JSX.Element {
@@ -241,7 +190,7 @@ function ToolsList({ client }: { client: AxiosInstance }): JSX.Element {
     return r.installed ? 'installed' : 'missing'
   }
 
-  /** Missing count for a tab's badge — null until that tab has finished a probe. */
+  /** Missing count for a tab's badge: null until that tab has finished a probe. */
   const missingFor = useCallback(
     (id: string): number | null => {
       const s = states[id]
@@ -269,14 +218,14 @@ function ToolsList({ client }: { client: AxiosInstance }): JSX.Element {
               ? 'Connection unreachable'
               : `${tools.length} tool${tools.length === 1 ? '' : 's'}${missing > 0 ? `, ${missing} missing` : ', all installed'}`}
         </p>
-        <Button variant="outline" size="sm" disabled={anyChecking} onClick={recheck}>
-          {anyChecking ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 size-3.5" />}
+        <Button variant="glass" size="sm" disabled={anyChecking} onClick={recheck}>
+          {anyChecking ? <Spinner size="sm" /> : <RefreshCw className="size-3.5" />}
           Recheck
         </Button>
       </div>
 
       {unreachable && (
-        <div className="mb-3 flex items-start gap-2 rounded-lg border border-border bg-surface-1 px-3 py-2.5">
+        <div className="mb-3 flex items-start gap-2 rounded-[14px] border border-glass-border bg-glass px-3.5 py-2.5">
           <Unplug className="mt-0.5 size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
           <div className="min-w-0 text-[12px]">
             <div className="font-medium">Could not reach {activeTab.label}</div>
@@ -289,6 +238,8 @@ function ToolsList({ client }: { client: AxiosInstance }): JSX.Element {
 
       {error !== null ? (
         <p className="text-xs text-destructive">{error}</p>
+      ) : loading ? (
+        <ToolListSkeleton />
       ) : (
         <div className="flex flex-col gap-3">
           {tools.map((tool) => (
@@ -331,7 +282,7 @@ export function ToolsSection(): JSX.Element {
         description="External CLI tools the workflow nodes run, and whether they are installed on each connection."
       />
       {client === null ? (
-        <p className="text-xs text-muted-foreground">Open an engagement to check tools.</p>
+        <SettingsNote>Open an engagement to check tools.</SettingsNote>
       ) : (
         <ToolsList client={client} />
       )}

@@ -1,138 +1,24 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowRight, CirclePlus, Clock, Lightbulb, Plus, Trash2, Zap } from 'lucide-react'
+import { Clock, Lightbulb, Plus } from 'lucide-react'
 import { useApp } from '../store.js'
 import { actionsApi, type Action, type ActionInput, type ActionList, type ActionScope } from '../api/actions.js'
 import { backendsApi, type BackendProfile } from '../api/backends.js'
 import { nodesApi, type NodeListing } from '../api/nodes.js'
 import { targetsApi, type TargetSummary } from '../api/targets.js'
 import { workflowsApi, type WorkflowSummary } from '../api/workflows.js'
-import { intervalText, kindWithArticle, runsOnText, STANDALONE_BUILTIN_NODES, suggestionsFor, type ActionForm } from '../lib/actions.js'
+import { STANDALONE_BUILTIN_NODES, suggestionsFor, type ActionForm } from '../lib/actions.js'
 import { apiErrorMessage } from '../lib/api-error.js'
 import { buildCatalog } from '../lib/node-catalog.js'
-import { cn } from '../lib/utils.js'
 import { NewActionPanel, type ActionTool } from '../components/actions/NewActionPanel.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
 import { Button } from '../components/ui/button.js'
-import { Switch } from '../components/ui/switch.js'
+import { GlassPanel } from '../components/ui/glass-panel.js'
+import { Page, PageBody, PageToolbar } from '../components/ui/page.js'
+import { ActionRow, ActionsSkeleton, Section, SectionHeading, type Names } from './actions/ActionRow.js'
 
-/** The names an action row needs to say what it does. */
-interface Names {
-  workflows: WorkflowSummary[]
-  tools: ActionTool[]
-  targets: TargetSummary[]
-  backends: BackendProfile[]
-}
-
-/** What an action runs, in words, and what kind of thing that is. */
-export function describeRun(action: Action, names: Names): { title: string; kind: 'Workflow' | 'Tool' } {
-  if (action.workflowId !== null) {
-    const workflow = names.workflows.find((w) => w.id === action.workflowId)
-    return { title: `Run ${workflow?.name ?? 'a workflow that no longer exists'}`, kind: 'Workflow' }
-  }
-  const tool = names.tools.find((t) => t.type === action.nodeType)
-  return { title: `Run ${tool?.label ?? action.nodeType ?? 'a tool'}`, kind: 'Tool' }
-}
-
-function ActionRow({
-  action,
-  on,
-  names,
-  onToggle,
-  onDelete,
-}: {
-  action: Action
-  /** Whether it fires here: for a default, this engagement's own switch. */
-  on: boolean
-  names: Names
-  onToggle: (enabled: boolean) => void
-  onDelete: () => void
-}): JSX.Element {
-  const timed = action.kind === 'interval'
-  const run = describeRun(action, names)
-  const target = action.targetId === null ? undefined : names.targets.find((t) => t.id === action.targetId)
-  const kind = action.targetKind ?? 'target'
-
-  return (
-    <li className={cn('group flex items-center gap-4 px-4 py-3', !on && 'text-muted-foreground')}>
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-2">
-        {timed ? (
-          <Clock className="size-4 text-muted-foreground" strokeWidth={1.75} />
-        ) : (
-          <CirclePlus className={cn('size-4', on ? 'text-[var(--activity)]' : 'text-muted-foreground')} strokeWidth={1.75} />
-        )}
-      </span>
-
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-[13.5px] font-medium">
-          {timed ? (
-            intervalText(action.intervalSeconds)
-          ) : (
-            `When ${kindWithArticle(kind)} is added`
-          )}
-        </span>
-        <span className="truncate text-[12px] text-muted-foreground">
-          {timed ? 'In this engagement' : action.inScopeOnly ? 'Only if it is in scope' : 'Any scope'}
-          {!on && ' · switched off'}
-        </span>
-      </div>
-
-      <ArrowRight className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} aria-hidden="true" />
-
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-[13.5px] font-medium">
-          {run.title}
-          {target !== undefined && (
-            <>
-              {' '}
-              on <span className="font-mono text-[12.5px]">{target.value}</span>
-            </>
-          )}
-        </span>
-        <span className="truncate text-[12px] text-muted-foreground">
-          {run.kind} · {runsOnText(action.backendProfileId, names.backends)}
-        </span>
-      </div>
-
-      <Switch checked={on} onCheckedChange={onToggle} aria-label={on ? 'Switch this action off' : 'Switch this action on'} />
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Delete action"
-        className="text-muted-foreground opacity-0 focus-visible:opacity-100 group-hover:opacity-100"
-        onClick={onDelete}
-      >
-        <Trash2 className="size-4" strokeWidth={1.75} />
-      </Button>
-    </li>
-  )
-}
-
-function Section({
-  title,
-  hint,
-  empty,
-  children,
-}: {
-  title: string
-  hint: string
-  empty: string
-  children: JSX.Element[]
-}): JSX.Element {
-  return (
-    <section className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-baseline gap-x-2.5">
-        <h2 className="text-[13px] font-semibold">{title}</h2>
-        <span className="text-[12.5px] text-muted-foreground">{hint}</span>
-      </div>
-      {children.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border px-4 py-5 text-[13px] text-muted-foreground">{empty}</p>
-      ) : (
-        <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">{children}</ul>
-      )}
-    </section>
-  )
-}
+// Kept on this module: callers and tests import the wording helper from the view.
+export { describeRun } from './actions/ActionRow.js'
 
 /**
  * What the system does on its own. An action is a trigger (a kind of target
@@ -227,113 +113,115 @@ export function ActionsView(): JSX.Element {
   }
 
   return (
-    <div className="relative flex h-full flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
-        <Zap className="size-4 text-muted-foreground" strokeWidth={1.75} />
-        <h1 className="text-sm font-medium">Actions</h1>
-        <Button size="sm" className="ml-auto shrink-0" disabled={client === null} onClick={() => setCreating({})}>
-          <Plus className="size-4" strokeWidth={2} />
-          New action
-        </Button>
-      </div>
+    <Page>
+      <PageToolbar
+        title="Actions"
+        actions={
+          <Button size="sm" disabled={client === null} onClick={() => setCreating({})}>
+            <Plus className="size-4" strokeWidth={2} />
+            New action
+          </Button>
+        }
+      />
 
-      <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
-        <div className="flex max-w-[1040px] flex-col gap-7 p-6">
-          <p className="max-w-[620px] text-[13.5px] text-muted-foreground">
-            What Executioner does on its own: run a workflow or a single tool on a schedule, or the moment something new
-            shows up.
-          </p>
-
-          {error !== null && (
-            <p role="alert" className="text-[13px] text-destructive">
-              {error}
+      <PageBody>
+        <GlassPanel className="scrollbar-sleek min-w-0 flex-1 overflow-y-auto">
+          <div className="flex max-w-[1040px] flex-col gap-7 p-6">
+            <p className="max-w-[620px] text-[13.5px] text-muted-foreground">
+              What Executioner does on its own: run a workflow or a single tool on a schedule, or the moment something new
+              shows up.
             </p>
-          )}
 
-          {actions !== null && (
-            <>
-              <Section
-                title="Defaults"
-                hint="Shared by every engagement. The switch turns one on or off here only."
-                empty="No defaults yet. A default runs in every engagement, including the ones you create later."
-              >
-                {actions.defaults.map((action) => (
-                  <ActionRow
-                    key={action.id}
-                    action={action}
-                    on={action.enabledHere}
-                    names={names}
-                    onToggle={(enabled) => toggle('default', action.id, enabled)}
-                    onDelete={() => setDeleting(action)}
-                  />
-                ))}
-              </Section>
+            {error !== null && (
+              <p role="alert" className="text-[13px] text-destructive">
+                {error}
+              </p>
+            )}
 
-              <Section
-                title="This engagement"
-                hint={`Only in ${engagementName}.`}
-                empty="Nothing here yet. Schedules, and actions meant for this engagement alone, show up here."
-              >
-                {actions.engagement.map((action) => (
-                  <ActionRow
-                    key={action.id}
-                    action={action}
-                    on={action.enabled}
-                    names={names}
-                    onToggle={(enabled) => toggle('engagement', action.id, enabled)}
-                    onDelete={() => remove('engagement', action.id)}
-                  />
-                ))}
-              </Section>
+            {actions === null && error === null && <ActionsSkeleton />}
 
-              {suggestions.length > 0 && (
-                <section className="flex flex-col gap-2">
-                  <div className="flex flex-wrap items-baseline gap-x-2.5">
-                    <h2 className="text-[13px] font-semibold">Suggestions</h2>
-                    <span className="text-[12.5px] text-muted-foreground">Starting points. Nothing runs until you create one.</span>
-                  </div>
-                  <ul className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-2">
-                    {suggestions.map((suggestion) => (
-                      <li key={suggestion.id}>
-                        <button
-                          type="button"
-                          onClick={() => setCreating(suggestion.form)}
-                          className="flex h-full w-full flex-col gap-1.5 rounded-xl border border-dashed border-border px-4 py-3 text-left outline-none transition-colors hover:bg-surface-1 focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                        >
-                          <span className="flex items-center gap-2 text-[13.5px] font-medium">
-                            {suggestion.form.trigger === 'interval' ? (
-                              <Clock className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-                            ) : (
-                              <Lightbulb className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-                            )}
-                            {suggestion.title}
-                          </span>
-                          <span className="text-[12px] text-muted-foreground">{suggestion.body}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+            {actions !== null && (
+              <>
+                <Section
+                  title="Defaults"
+                  hint="Shared by every engagement. The switch turns one on or off here only."
+                  empty="No defaults yet. A default runs in every engagement, including the ones you create later."
+                >
+                  {actions.defaults.map((action) => (
+                    <ActionRow
+                      key={action.id}
+                      action={action}
+                      on={action.enabledHere}
+                      names={names}
+                      onToggle={(enabled) => toggle('default', action.id, enabled)}
+                      onDelete={() => setDeleting(action)}
+                    />
+                  ))}
+                </Section>
 
-      {creating !== null && (
-        <NewActionPanel
-          // A suggestion opened over an open panel starts the form afresh.
-          key={JSON.stringify(creating)}
-          initial={creating}
-          workflows={workflows}
-          tools={tools}
-          targets={targets}
-          backends={backends}
-          engagementName={engagementName}
-          onCreate={create}
-          onClose={() => setCreating(null)}
-        />
-      )}
+                <Section
+                  title="This engagement"
+                  hint={`Only in ${engagementName}.`}
+                  empty="Nothing here yet. Schedules, and actions meant for this engagement alone, show up here."
+                >
+                  {actions.engagement.map((action) => (
+                    <ActionRow
+                      key={action.id}
+                      action={action}
+                      on={action.enabled}
+                      names={names}
+                      onToggle={(enabled) => toggle('engagement', action.id, enabled)}
+                      onDelete={() => remove('engagement', action.id)}
+                    />
+                  ))}
+                </Section>
+
+                {suggestions.length > 0 && (
+                  <section className="flex flex-col gap-2">
+                    <SectionHeading title="Suggestions" hint="Starting points. Nothing runs until you create one." />
+                    <ul className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-2">
+                      {suggestions.map((suggestion) => (
+                        <li key={suggestion.id}>
+                          <button
+                            type="button"
+                            onClick={() => setCreating(suggestion.form)}
+                            className="flex h-full w-full flex-col gap-1.5 rounded-[14px] border border-dashed border-glass-border px-4 py-3 text-left outline-none transition-colors hover:bg-glass focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                          >
+                            <span className="flex items-center gap-2 text-[13.5px] font-medium">
+                              {suggestion.form.trigger === 'interval' ? (
+                                <Clock className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                              ) : (
+                                <Lightbulb className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                              )}
+                              {suggestion.title}
+                            </span>
+                            <span className="text-[12px] text-muted-foreground">{suggestion.body}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+              </>
+            )}
+          </div>
+        </GlassPanel>
+
+        {creating !== null && (
+          <NewActionPanel
+            // A suggestion opened over an open panel starts the form afresh.
+            key={JSON.stringify(creating)}
+            initial={creating}
+            workflows={workflows}
+            tools={tools}
+            targets={targets}
+            backends={backends}
+            engagementName={engagementName}
+            onCreate={create}
+            onClose={() => setCreating(null)}
+          />
+        )}
+      </PageBody>
 
       {deleting !== null && (
         <ConfirmModal
@@ -348,6 +236,6 @@ export function ActionsView(): JSX.Element {
           onCancel={() => setDeleting(null)}
         />
       )}
-    </div>
+    </Page>
   )
 }

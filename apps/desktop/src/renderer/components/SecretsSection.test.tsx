@@ -16,7 +16,8 @@ describe('SecretsSection', () => {
       put: vi.fn().mockResolvedValue({ data: {} }),
     } as unknown as AxiosInstance
     render(<SecretsSection client={client} />)
-    fireEvent.click(screen.getAllByRole('button', { name: 'Set key' })[0]!)
+    // The Set key buttons replace their skeletons once the saved keys have loaded.
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Set key' }))[0]!)
     fireEvent.change(document.querySelector('input[type="password"]')!, { target: { value: 'abc123' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(refreshMasks).toHaveBeenCalledTimes(1))

@@ -3,6 +3,8 @@ import type { LucideIcon } from 'lucide-react'
 import { Bot, Boxes, KeyRound, Palette, Plug, ScrollText, SlidersHorizontal, Sparkles, Wrench } from 'lucide-react'
 import { useApp } from '../store.js'
 import { cn } from '../lib/utils.js'
+import { GlassPanel } from '../components/ui/glass-panel.js'
+import { Page, PageBody, PageToolbar } from '../components/ui/page.js'
 import { AgentsSection } from './settings/AgentsSection.js'
 import { NodesSection } from './settings/NodesSection.js'
 import { ToolsSection } from './settings/tools/ToolsSection.js'
@@ -44,40 +46,43 @@ export function SettingsView(): JSX.Element {
   const Body = current.Component
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-11 shrink-0 items-center border-b border-border px-4 text-sm font-medium">Settings</div>
-      <div className="flex min-h-0 flex-1">
+    <Page>
+      <PageToolbar title="Settings" />
+      <PageBody>
         {/* Sub-navigation */}
-        <nav data-tour="settings-nav" className="w-52 shrink-0 overflow-y-auto scrollbar-sleek border-r border-border p-2">
-          {SECTIONS.map(({ id, label, icon: Icon }) => {
-            const selected = id === active
-            return (
-              <button
-                key={id}
-                type="button"
-                aria-current={selected ? 'page' : undefined}
-                onClick={() => setSettingsSection(id)}
-                className={cn(
-                  'flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors',
-                  selected
-                    ? 'selected-surface text-sidebar-accent-foreground'
-                    : 'text-muted-foreground hover:bg-surface-2 hover:text-sidebar-foreground',
-                )}
-              >
-                <Icon className="size-4" strokeWidth={selected ? 2.25 : 1.75} />
-                <span className="truncate">{label}</span>
-              </button>
-            )
-          })}
-        </nav>
+        <GlassPanel asChild className="w-52 shrink-0">
+          <nav data-tour="settings-nav" className="scrollbar-sleek flex flex-col gap-0.5 overflow-y-auto p-2">
+            {SECTIONS.map(({ id, label, icon: Icon }) => {
+              const selected = id === active
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-current={selected ? 'page' : undefined}
+                  onClick={() => setSettingsSection(id)}
+                  className={cn(
+                    'flex h-8 w-full shrink-0 items-center gap-2.5 rounded-control px-3 text-[13px] outline-none transition-colors',
+                    'focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                    selected
+                      ? 'bg-glass-active font-medium text-foreground'
+                      : 'text-muted-foreground hover:bg-glass-strong hover:text-foreground',
+                  )}
+                >
+                  <Icon className="size-4 shrink-0" strokeWidth={selected ? 2.25 : 1.75} />
+                  <span className="truncate">{label}</span>
+                </button>
+              )
+            })}
+          </nav>
+        </GlassPanel>
 
         {/* Content pane */}
-        <div className="min-w-0 flex-1 overflow-y-auto scrollbar-sleek">
-          <div className="mx-auto w-full max-w-3xl px-6 pt-6 pb-16">
+        <GlassPanel className="scrollbar-sleek min-w-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-3xl px-6 pb-16 pt-6">
             <Body />
           </div>
-        </div>
-      </div>
-    </div>
+        </GlassPanel>
+      </PageBody>
+    </Page>
   )
 }

@@ -7,7 +7,9 @@ import { Button } from '../../components/ui/button.js'
 import { Select } from '../../components/ui/select.js'
 import { Checkbox } from '../../components/ui/checkbox.js'
 import { Switch } from '../../components/ui/switch.js'
-import { cn } from '../../lib/utils.js'
+import { Skeleton } from '../../components/ui/skeleton.js'
+import { LEVEL_COLOR, LogList } from './LogList.js'
+import { LogsExportDialog, type LogsExportOptions } from './LogsExportDialog.js'
 import { PageHeading, Row } from './parts.js'
 
 /** Lines pulled per read, so a 25 MB session file never crosses IPC whole. */
@@ -16,13 +18,6 @@ const READ_LIMIT = 2000
 const MAX_LINES = 5000
 const POLL_MS = 1000
 const LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
-
-const LEVEL_COLOR: Record<LogLevel, string> = {
-  debug: 'text-tertiary-foreground',
-  info: 'text-muted-foreground',
-  warn: 'text-status-warning',
-  error: 'text-status-error',
-}
 
 /** The source family: `engine:a1b2/scheduler` and `engine:a1b2` are one filter entry. */
 function sourceKey(src: string): string {
@@ -58,58 +53,6 @@ function sessionLabel(s: SessionInfo, current: boolean): string {
   return `${when}${current ? ' (this session)' : ''}${s.crashed ? ' (closed unexpectedly)' : ''}`
 }
 
-function ExportDialog({
-  onExport,
-  onCancel,
-  busy,
-}: {
-  onExport: (opts: { includeTargets: boolean; includeAllSessions: boolean }) => void
-  onCancel: () => void
-  busy: boolean
-}): JSX.Element {
-  const [includeTargets, setIncludeTargets] = useState(false)
-  const [includeAllSessions, setIncludeAllSessions] = useState(false)
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-6" onClick={onCancel}>
-      <div
-        role="dialog"
-        aria-label="Export logs for a bug report"
-        className="flex w-[440px] max-w-[92vw] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-floating"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="border-b border-border px-4 py-3 text-[14px] font-medium">Export logs for a bug report</div>
-        <div className="flex flex-col gap-3 px-4 py-4 text-[13px]">
-          <p className="text-muted-foreground">
-            Saves a zip you can attach to a bug report. Secrets are always masked. Targets, prompts and tool output are
-            left out unless you include them.
-          </p>
-          <div>
-            <label className="flex items-center gap-2">
-              <Checkbox checked={includeTargets} onChange={(e) => setIncludeTargets(e.target.checked)} />
-              Include target details
-            </label>
-            <p className="ml-6 mt-1 text-xs text-muted-foreground">
-              Also includes crash dumps, which can contain unscrubbed data. Only send this privately.
-            </p>
-          </div>
-          <label className="flex items-center gap-2">
-            <Checkbox checked={includeAllSessions} onChange={(e) => setIncludeAllSessions(e.target.checked)} />
-            Include all recent sessions
-          </label>
-        </div>
-        <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
-          <Button variant="ghost" size="sm" onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button size="sm" disabled={busy} onClick={() => onExport({ includeTargets, includeAllSessions })}>
-            Export
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 /** Logs: the app session log, live, with filters, verbose mode, copy and export. */
 export function LogsSection(): JSX.Element {
   const log = window.executioner.log
@@ -117,6 +60,10 @@ export function LogsSection(): JSX.Element {
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [lines, setLines] = useState<LogLine[]>([])
+  // True from picking a session (or mounting) until its first read settles.
+  const [loadingLines, setLoadingLines] = useState(true)
+  // Null until the session list arrives, so the picker can hold its place.
+  const [sessionsLoaded, setSessionsLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [verbose, setVerbose] = useState(false)
   const [levels, setLevels] = useState<Set<LogLevel>>(new Set(LEVELS))
@@ -137,8 +84,11 @@ export function LogsSection(): JSX.Element {
         setSessions(list)
         setCurrentId(cur?.id ?? null)
         setSelectedId((s) => s ?? cur?.id ?? list[list.length - 1]?.id ?? null)
+        // No session at all means there is nothing to read: stop the list loader too.
+        if (cur == null && list.length === 0) setLoadingLines(false)
       })
       .catch((e: unknown) => live && setError((e as Error).message))
+      .finally(() => live && setSessionsLoaded(true))
     void log
       .getVerbose()
       .then((v) => live && setVerbose(v))
@@ -164,6 +114,7 @@ export function LogsSection(): JSX.Element {
           setLines((prev) => (initial ? next : mergeTail(prev, next)))
         })
         .catch((e: unknown) => live && setError((e as Error).message))
+        .finally(() => live && initial && setLoadingLines(false))
     }
     load(true)
     if (selectedId !== currentId) return () => void (live = false)
@@ -222,7 +173,7 @@ export function LogsSection(): JSX.Element {
       .catch(() => undefined)
   }
 
-  const doExport = (opts: { includeTargets: boolean; includeAllSessions: boolean }): void => {
+  const doExport = (opts: LogsExportOptions): void => {
     setExportBusy(true)
     void log
       .exportLogs({
@@ -259,24 +210,29 @@ export function LogsSection(): JSX.Element {
       )}
 
       <div className="mt-4 flex items-center gap-2">
-        <Select
-          ariaLabel="Session"
-          value={selectedId ?? ''}
-          onValueChange={(id) => {
-            setLines([])
-            setExpanded(new Set())
-            setSelectedId(id)
-          }}
-          options={sessions.map((s) => ({ value: s.id, label: sessionLabel(s, s.id === currentId) }))}
-          className="h-8 min-w-0 max-w-[320px] flex-1 text-[12.5px]"
-        />
+        {!sessionsLoaded ? (
+          <Skeleton role="status" aria-label="Loading sessions" className="h-8 w-[320px] max-w-full rounded-full" />
+        ) : (
+          <Select
+            ariaLabel="Session"
+            value={selectedId ?? ''}
+            onValueChange={(id) => {
+              setLines([])
+              setLoadingLines(true)
+              setExpanded(new Set())
+              setSelectedId(id)
+            }}
+            options={sessions.map((s) => ({ value: s.id, label: sessionLabel(s, s.id === currentId) }))}
+            className="h-8 min-w-0 max-w-[320px] flex-1 text-[12.5px]"
+          />
+        )}
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {note !== null && <span className="text-[12px] text-muted-foreground">{note}</span>}
-          <Button variant="outline" size="sm" onClick={copy}>
+          <Button variant="glass" size="sm" onClick={copy}>
             <Copy className="size-4" strokeWidth={1.75} />
             Copy
           </Button>
-          <Button variant="outline" size="sm" onClick={openFolder}>
+          <Button variant="glass" size="sm" onClick={openFolder}>
             <FolderOpen className="size-4" strokeWidth={1.75} />
             Open logs folder
           </Button>
@@ -289,22 +245,22 @@ export function LogsSection(): JSX.Element {
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px]">
         {LEVELS.map((lvl) => (
-          <label key={lvl} className="flex items-center gap-1.5">
+          <label key={lvl} className="flex cursor-pointer items-center gap-1.5">
             <Checkbox
               aria-label={lvl}
               checked={levels.has(lvl)}
-              onChange={() => setLevels((s) => toggle(s, lvl))}
+              onCheckedChange={() => setLevels((s) => toggle(s, lvl))}
             />
             <span className={LEVEL_COLOR[lvl]}>{lvl}</span>
           </label>
         ))}
         <span className="text-muted-foreground">|</span>
         {sources.map((src) => (
-          <label key={src} className="flex items-center gap-1.5">
+          <label key={src} className="flex cursor-pointer items-center gap-1.5">
             <Checkbox
               aria-label={src}
               checked={!hiddenSources.has(src)}
-              onChange={() => setHiddenSources((s) => toggle(s, src))}
+              onCheckedChange={() => setHiddenSources((s) => toggle(s, src))}
             />
             <span className="text-muted-foreground">{src}</span>
           </label>
@@ -316,57 +272,20 @@ export function LogsSection(): JSX.Element {
       {error !== null ? (
         <p className="mt-3 text-[12px] text-status-error">{error}</p>
       ) : (
-        <div
-          ref={listRef}
-          onScroll={(e) => {
-            const el = e.currentTarget
+        <LogList
+          listRef={listRef}
+          onScroll={(el) => {
             stickRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
           }}
-          className="mt-3 min-h-0 flex-1 overflow-auto scrollbar-sleek rounded-lg border border-border bg-surface-1 p-2 font-mono text-[12px] leading-relaxed"
-        >
-          {visible.length === 0 ? (
-            <span className="text-muted-foreground">No log lines match.</span>
-          ) : (
-            visible.map((l, i) => {
-              const key = lines.indexOf(l)
-              const open = expanded.has(key)
-              const hasData = l.data !== undefined
-              return (
-                <div key={key} className="border-b border-border/40 last:border-0">
-                  <div
-                    role={hasData ? 'button' : undefined}
-                    tabIndex={hasData ? 0 : undefined}
-                    onClick={hasData ? () => setExpanded((s) => toggle(s, key)) : undefined}
-                    onKeyDown={
-                      hasData
-                        ? (e) => {
-                            if (e.key === 'Enter' || e.key === ' ') setExpanded((s) => toggle(s, key))
-                          }
-                        : undefined
-                    }
-                    className={cn('flex gap-2 px-1 py-0.5', hasData && 'cursor-pointer hover:bg-surface-2')}
-                    data-index={i}
-                  >
-                    <span className="shrink-0 text-tertiary-foreground">{l.t.slice(11, 23)}</span>
-                    <span className={cn('w-10 shrink-0 uppercase', LEVEL_COLOR[l.lvl])}>{l.lvl}</span>
-                    <span className="w-28 shrink-0 truncate text-muted-foreground" title={l.src}>
-                      {l.src}
-                    </span>
-                    <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{l.msg}</span>
-                  </div>
-                  {open && hasData && (
-                    <pre className="mb-1 ml-6 overflow-auto rounded bg-surface-2 p-2 text-[11.5px]">
-                      {JSON.stringify(l.data, null, 2)}
-                    </pre>
-                  )}
-                </div>
-              )
-            })
-          )}
-        </div>
+          loading={loadingLines}
+          lines={lines}
+          visible={visible}
+          expanded={expanded}
+          onToggle={(key) => setExpanded((prev) => toggle(prev, key))}
+        />
       )}
 
-      {exporting && <ExportDialog busy={exportBusy} onCancel={() => setExporting(false)} onExport={doExport} />}
+      {exporting && <LogsExportDialog busy={exportBusy} onCancel={() => setExporting(false)} onExport={doExport} />}
     </div>
   )
 }

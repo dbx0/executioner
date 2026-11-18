@@ -1,14 +1,14 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import type { AxiosInstance } from 'axios'
-import { FolderOpen, Loader2, RefreshCw, Sparkles, X } from 'lucide-react'
+import { FolderOpen, RefreshCw, Sparkles, X } from 'lucide-react'
 import { useApp } from '../../store.js'
-import { AgentIcon } from '../../components/brand/AgentIcon.js'
 import { ConfirmModal } from '../../components/modals/ConfirmModal.js'
 import { Button } from '../../components/ui/button.js'
-import { Switch } from '../../components/ui/switch.js'
+import { LoadingState, Spinner } from '../../components/ui/spinner.js'
 import { skillsApi, type Skill, type SkillsConfig } from '../../api/skills.js'
-import { PageHeading, GroupLabel } from './parts.js'
+import { AgentRow, SkillListSkeleton, SkillRow } from './SkillRows.js'
+import { GroupLabel, IconTile, PageHeading, SettingsCard, SettingsNote } from './parts.js'
 
 /** Agents that take a native skill flag at spawn (toggle only). */
 const SKILL_FLAG_AGENTS: Array<{ id: string; name: string }> = [
@@ -23,49 +23,6 @@ const FALLBACK_AGENTS: Array<{ id: string; name: string }> = [
   { id: 'gemini', name: 'Gemini' },
   { id: 'cursor', name: 'Cursor' },
 ]
-
-/** One agent activation row: brand mark, name, hint, and a Switch. */
-function AgentRow({
-  id,
-  name,
-  hint,
-  checked,
-  disabled,
-  onToggle,
-}: {
-  id: string
-  name: string
-  hint: string
-  checked: boolean
-  disabled: boolean
-  onToggle: (next: boolean) => void
-}): JSX.Element {
-  return (
-    <div className="flex items-center gap-3 border-b border-border py-3 last:border-b-0">
-      <span className="grid size-8 shrink-0 place-items-center rounded-md bg-surface-2">
-        <AgentIcon agent={id} className="size-[18px]" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-medium">{name}</div>
-        <div className="text-[11.5px] text-muted-foreground">{hint}</div>
-      </div>
-      <Switch checked={checked} disabled={disabled} onCheckedChange={onToggle} aria-label={`Enable skills for ${name}`} />
-    </div>
-  )
-}
-
-/** One skill row: bold title, one-line description, muted mono path below. */
-function SkillRow({ skill }: { skill: Skill }): JSX.Element {
-  return (
-    <div className="border-b border-border px-3 py-2.5 last:border-b-0">
-      <div className="text-[13px] font-semibold">{skill.name}</div>
-      {skill.description !== '' && (
-        <div className="truncate text-xs text-muted-foreground">{skill.description}</div>
-      )}
-      <div className="mt-1 truncate font-mono text-[10.5px] text-muted-foreground">{skill.path}</div>
-    </div>
-  )
-}
 
 function SkillsBody({ client }: { client: AxiosInstance }): JSX.Element {
   const api = skillsApi(client)
@@ -150,7 +107,7 @@ function SkillsBody({ client }: { client: AxiosInstance }): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client])
 
-  // Fallback agent toggled ON → confirm generating AGENTS.md; either way we save
+  // Fallback agent toggled ON: confirm generating AGENTS.md; either way we save
   // the enabled intent. Toggling OFF just saves.
   const onFallbackToggle = useCallback(
     (agent: { id: string; name: string }, next: boolean) => {
@@ -164,21 +121,17 @@ function SkillsBody({ client }: { client: AxiosInstance }): JSX.Element {
   )
 
   if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" /> Loading…
-      </div>
-    )
+    return <LoadingState label="Loading skills settings" className="h-40" />
   }
 
   return (
     <>
       {/* 1. Folder card */}
-      <div className="rounded-lg border border-border bg-card p-3.5">
+      <SettingsCard className="p-3.5">
         <div className="flex items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-md bg-surface-2">
+          <IconTile>
             <FolderOpen className="size-5 text-muted-foreground" />
-          </span>
+          </IconTile>
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-medium">Skills folder</div>
             {config.folder !== null ? (
@@ -192,18 +145,18 @@ function SkillsBody({ client }: { client: AxiosInstance }): JSX.Element {
               <X className="size-3.5" /> Clear
             </Button>
           )}
-          <Button variant="outline" size="sm" className="shrink-0" onClick={chooseFolder}>
+          <Button variant="glass" size="sm" className="shrink-0" onClick={chooseFolder}>
             Choose folder…
           </Button>
         </div>
-      </div>
+      </SettingsCard>
       <p className="mt-2 text-[11.5px] text-muted-foreground">
         Don&apos;t have any offensive skills? Check out the{' '}
         <a
           href="https://github.com/dbx0/skills"
           target="_blank"
           rel="noreferrer"
-          className="text-foreground underline underline-offset-2 hover:text-primary"
+          className="rounded text-foreground underline underline-offset-2 outline-none hover:text-primary focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           author skills
         </a>
@@ -212,7 +165,7 @@ function SkillsBody({ client }: { client: AxiosInstance }): JSX.Element {
 
       {/* 2. Per-agent activation */}
       <GroupLabel>Enable for agents</GroupLabel>
-      <div className="rounded-lg border border-border bg-card px-3.5">
+      <SettingsCard className="px-3.5">
         {SKILL_FLAG_AGENTS.map((a) => (
           <AgentRow
             key={a.id}
@@ -235,31 +188,29 @@ function SkillsBody({ client }: { client: AxiosInstance }): JSX.Element {
             onToggle={(next) => onFallbackToggle(a, next)}
           />
         ))}
-      </div>
+      </SettingsCard>
       <div className="mt-2 flex items-center gap-3">
-        <Button variant="outline" size="sm" disabled={config.folder === null || busy} onClick={generateAgentsMd}>
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+        <Button variant="glass" size="sm" disabled={config.folder === null || busy} onClick={generateAgentsMd}>
+          {busy ? <Spinner size="sm" /> : <RefreshCw className="size-3.5" />}
           Regenerate AGENTS.md
         </Button>
         {notice !== null && <span className="text-[11.5px] text-muted-foreground">{notice}</span>}
       </div>
 
-      {/* 3. Skills list — one scrollable card, not an endless run of cards. */}
+      {/* 3. Skills list: one scrollable card, not an endless run of cards. */}
       <GroupLabel>Discovered skills{skills.length > 0 ? ` (${skills.length})` : ''}</GroupLabel>
       {config.folder === null ? (
-        <p className="text-xs text-muted-foreground">Choose a skills folder to see the skills it contains.</p>
+        <SettingsNote>Choose a skills folder to see the skills it contains.</SettingsNote>
       ) : listing ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" /> Scanning…
-        </div>
+        <SkillListSkeleton />
       ) : skills.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No skills found in this folder.</p>
+        <SettingsNote>No skills found in this folder.</SettingsNote>
       ) : (
-        <div className="max-h-80 overflow-y-auto scrollbar-sleek rounded-lg border border-border bg-card">
+        <SettingsCard className="scrollbar-sleek max-h-80 overflow-y-auto">
           {skills.map((s) => (
             <SkillRow key={s.path} skill={s} />
           ))}
-        </div>
+        </SettingsCard>
       )}
 
       {confirmAgent !== null && (
@@ -275,7 +226,7 @@ function SkillsBody({ client }: { client: AxiosInstance }): JSX.Element {
           onCancel={() => {
             // Still save the enabled intent; note AGENTS.md was not regenerated.
             setEnabled(confirmAgent.id, true)
-            setNotice('Enabled — AGENTS.md was not regenerated. Use “Regenerate AGENTS.md” when ready.')
+            setNotice('Enabled. AGENTS.md was not regenerated. Use “Regenerate AGENTS.md” when ready.')
             setConfirmAgent(null)
           }}
         />
@@ -291,9 +242,9 @@ export function SkillsSection(): JSX.Element {
     <div>
       <PageHeading title="Skills" description="Point spawned agents at a folder of Agent Skills. The folder and its toggles are yours, in every engagement." />
       {client === null ? (
-        <p className="text-xs text-muted-foreground">
+        <SettingsNote>
           <Sparkles className="mr-1 inline size-3.5" /> Open an engagement to configure skills.
-        </p>
+        </SettingsNote>
       ) : (
         <SkillsBody client={client} />
       )}

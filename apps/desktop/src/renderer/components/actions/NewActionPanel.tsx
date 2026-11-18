@@ -1,4 +1,4 @@
-import type { JSX, ReactNode } from 'react'
+import type { JSX } from 'react'
 import { useState } from 'react'
 import { Clock, CirclePlus, Workflow, Wrench, X } from 'lucide-react'
 import type { ActionInput } from '../../api/actions.js'
@@ -23,84 +23,18 @@ import type { ParamSpec } from '../../lib/param-specs.js'
 import { cn } from '../../lib/utils.js'
 import { ParamDrawer } from '../canvas/ParamDrawer.js'
 import { Button } from '../ui/button.js'
-import { Input } from '../ui/input.js'
+import { GlassPanel } from '../ui/glass-panel.js'
+import { NumberField } from '../ui/number-field.js'
 import { Select } from '../ui/select.js'
+import { Spinner } from '../ui/spinner.js'
 import { Switch } from '../ui/switch.js'
+import { Choice, FieldLabel, Legend, ScopeOption } from './choices.js'
 
 /** A tool an action can run on its own, with the form its options take. */
 export interface ActionTool {
   type: string
   label: string
   params: ParamSpec[]
-}
-
-function Legend({ children }: { children: ReactNode }): JSX.Element {
-  return <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{children}</div>
-}
-
-function FieldLabel({ children }: { children: ReactNode }): JSX.Element {
-  return <div className="mb-1 text-[12px] text-muted-foreground">{children}</div>
-}
-
-/** One of two side-by-side choices; the chosen one carries the selected surface. */
-function Choice({
-  selected,
-  onSelect,
-  icon,
-  children,
-}: {
-  selected: boolean
-  onSelect: () => void
-  icon: ReactNode
-  children: ReactNode
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      onClick={onSelect}
-      className={cn(
-        'flex h-11 items-center gap-2.5 rounded-lg border px-3 text-left text-[13px] font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        selected ? 'border-foreground bg-surface-2 text-foreground' : 'border-border text-muted-foreground hover:bg-surface-1',
-      )}
-    >
-      {icon}
-      {children}
-    </button>
-  )
-}
-
-/** A radio row with a title and a line under it. */
-function ScopeOption({
-  selected,
-  onSelect,
-  disabled = false,
-  title,
-  hint,
-}: {
-  selected: boolean
-  onSelect: () => void
-  disabled?: boolean
-  title: string
-  hint: string
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      disabled={disabled}
-      onClick={onSelect}
-      className={cn(
-        'flex w-full flex-col gap-0.5 rounded-lg border px-3 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50',
-        selected ? 'border-foreground bg-surface-2' : 'border-border hover:bg-surface-1',
-      )}
-    >
-      <span className="text-[13px] font-medium">{title}</span>
-      <span className="text-[12px] text-muted-foreground">{hint}</span>
-    </button>
-  )
 }
 
 /**
@@ -160,18 +94,16 @@ export function NewActionPanel({
   }
 
   return (
-    <aside
-      aria-label="New action"
-      className="absolute inset-y-0 right-0 z-20 flex w-[440px] max-w-full flex-col border-l border-border bg-popover shadow-floating"
-    >
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border pl-4 pr-1.5">
-        <h2 className="flex-1 text-sm font-medium">New action</h2>
+    <GlassPanel asChild className="flex w-[440px] max-w-[50%] shrink-0 flex-col">
+      <aside aria-label="New action">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-glass-border pl-5 pr-2">
+        <h2 className="flex-1 text-[14px] font-semibold tracking-[-0.01em]">New action</h2>
         <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={onClose}>
           <X className="size-4" strokeWidth={1.75} />
         </Button>
       </div>
 
-      <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
+      <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-5">
         <section>
           <Legend>When</Legend>
           <div role="radiogroup" aria-label="Trigger" className="grid grid-cols-2 gap-2">
@@ -195,13 +127,7 @@ export function NewActionPanel({
             <div className="mt-3 grid grid-cols-2 gap-2">
               <div>
                 <FieldLabel>Every</FieldLabel>
-                <Input
-                  type="number"
-                  min={1}
-                  aria-label="Every"
-                  value={form.every}
-                  onChange={(e) => set({ every: e.target.value })}
-                />
+                <NumberField min={1} aria-label="Every" value={form.every} onValueChange={(every) => set({ every })} />
               </div>
               <div>
                 <FieldLabel>Unit</FieldLabel>
@@ -303,13 +229,13 @@ export function NewActionPanel({
                         ? "Runs with the tool's default options."
                         : 'Runs with the options you changed.'}
                     </span>
-                    <Button variant="outline" size="sm" onClick={() => setShowOptions((v) => !v)}>
+                    <Button variant="glass" size="sm" onClick={() => setShowOptions((v) => !v)}>
                       {showOptions ? 'Hide options' : 'Edit options'}
                     </Button>
                   </div>
                 )}
                 {tool !== undefined && showOptions && (
-                  <div className="mt-2 rounded-lg border border-border">
+                  <div className="mt-2 rounded-[14px] border border-glass-border">
                     <ParamDrawer
                       params={tool.params.filter((p) => p.name !== 'target')}
                       values={form.nodeParams}
@@ -360,20 +286,22 @@ export function NewActionPanel({
           </div>
         </section>
 
-        <p className="rounded-lg border border-border bg-surface-1 px-3 py-2.5 text-[13px] text-muted-foreground">{sentence}</p>
+        <p className="rounded-[14px] border border-glass-border bg-glass px-3.5 py-2.5 text-[13px] text-muted-foreground">{sentence}</p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 border-t border-border px-4 py-3">
+      <div className="flex shrink-0 items-center gap-2 border-t border-glass-border px-5 py-3.5">
         <span role="status" className={cn('min-w-0 flex-1 truncate text-[12px]', error !== null ? 'text-destructive' : 'text-muted-foreground')}>
           {error ?? problem ?? ''}
         </span>
-        <Button variant="outline" size="sm" onClick={onClose}>
+        <Button variant="glass" size="sm" onClick={onClose}>
           Cancel
         </Button>
         <Button size="sm" disabled={problem !== null || busy} onClick={() => void save()}>
+          {busy && <Spinner size="sm" />}
           Create action
         </Button>
       </div>
-    </aside>
+      </aside>
+    </GlassPanel>
   )
 }

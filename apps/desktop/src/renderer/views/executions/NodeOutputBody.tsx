@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useMemo, useState } from 'react'
 import { Copy } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
+import { segmentClass } from '../../components/ui/segmented.js'
 import { cn } from '../../lib/utils.js'
 import { formatParsed, type SafeRow } from './row.js'
 import { ParsedView } from './ParsedView.js'
@@ -10,12 +11,12 @@ export type Stream = 'stdout' | 'stderr' | 'parsed'
 
 /** How many characters of a stream are actually put in the DOM. A tool can emit
  *  tens of megabytes, and laying that out as one wrapped <pre> blocks the frame
- *  for seconds — the click that opened this view is what gets blamed for it.
+ *  for seconds, and the click that opened this view is what gets blamed for it.
  *  The head and the tail are what anyone reads, so show both and say what was
  *  left out. Copy still copies everything. */
 const RENDER_LIMIT = 200_000
 
-/** Does this stream hold anything but whitespace? Tests in place — `.trim()`
+/** Does this stream hold anything but whitespace? Tests in place: `.trim()`
  *  copies the whole stream just to compare it against ''. */
 function hasContent(text: string): boolean {
   return /\S/.test(text)
@@ -86,8 +87,8 @@ export function NodeOutputBody({
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
-      <div className="flex items-center gap-1 border-b border-border px-[var(--output-gutter,1.25rem)] py-2.5">
-        <div className="inline-flex rounded-md border border-border p-0.5" role="tablist">
+      <div className="flex shrink-0 items-center gap-1 border-b border-glass-border px-[var(--output-gutter,1.25rem)] py-2.5">
+        <div className="glass-capsule inline-flex h-8 items-center gap-0.5 p-[3px]" role="tablist" aria-label="Output stream">
           {(['stdout', 'stderr', 'parsed'] as Stream[]).map((s) => {
             const len = s === 'stdout' ? row.stdout.length : s === 'stderr' ? row.stderr.length : row.parsedCount
             return (
@@ -98,8 +99,8 @@ export function NodeOutputBody({
                 aria-selected={tab === s}
                 onClick={() => setTab(s)}
                 className={cn(
-                  'rounded px-2.5 py-1 font-mono text-[12px] transition-colors',
-                  tab === s ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground',
+                  segmentClass(tab === s),
+                  'h-[26px] px-3 font-mono text-[12px]',
                   s === 'stderr' && len > 0 && tab !== s && 'text-attention',
                 )}
               >
@@ -126,7 +127,7 @@ export function NodeOutputBody({
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek bg-card px-[var(--output-gutter,1.25rem)] py-4">
+      <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto bg-background px-[var(--output-gutter,1.25rem)] py-4">
         {!hasContent(text) ? (
           <p className="text-[13px] text-muted-foreground">
             {failed && tab === 'stderr'
@@ -149,7 +150,7 @@ export function NodeOutputBody({
             </pre>
             {shown.hidden > 0 && (
               <>
-                <p className="my-3 rounded border border-border bg-surface-1 px-3 py-2 text-[12px] text-muted-foreground">
+                <p className="my-3 rounded-[10px] border border-glass-border bg-glass px-3 py-2 text-[12px] text-muted-foreground">
                   {(shown.hidden / 1024 / 1024).toFixed(1)} MB not shown. This is the first and last{' '}
                   {String(RENDER_LIMIT / 2 / 1024)} KB. Copy takes the whole stream.
                 </p>

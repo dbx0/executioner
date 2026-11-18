@@ -905,6 +905,17 @@ describe('ToolsView', () => {
     expect(screen.getByText('The ssh connection this run used is gone, so pick where to run it.')).toBeTruthy()
   })
 
+  it('shows a skeleton, not an empty catalog, until the tools arrive', async () => {
+    let arrive: (list: NodeListing[]) => void = () => undefined
+    nodes.list.mockReturnValueOnce(new Promise<NodeListing[]>((resolve) => (arrive = resolve)))
+    render(<ToolsView />)
+    expect(screen.getByRole('status', { name: 'Loading tools' })).toBeTruthy()
+    expect(screen.queryByText('No tool matches that.')).toBeNull()
+    arrive([])
+    await screen.findByText('No tool matches that.')
+    expect(screen.queryByRole('status', { name: 'Loading tools' })).toBeNull()
+  })
+
   it('picks the connection in the page header, before any tool is chosen', async () => {
     backends.list.mockResolvedValue([backend()])
     await open()

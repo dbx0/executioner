@@ -5,6 +5,9 @@ import { KeyRound, Check } from 'lucide-react'
 import { secretsApi, type Secret } from '../api/secrets.js'
 import { Button } from './ui/button.js'
 import { Input } from './ui/input.js'
+import { Dialog, DialogBody, DialogFooter, DialogHeader } from './ui/dialog.js'
+import { Skeleton } from './ui/skeleton.js'
+import { Spinner } from './ui/spinner.js'
 import { refreshLogMasks } from '../lib/log.js'
 
 interface Provider {
@@ -19,7 +22,7 @@ const PROVIDERS: Provider[] = [
   {
     name: 'Shodan',
     domain: 'shodan.io',
-    description: 'Host lookups — get a key at account.shodan.io',
+    description: 'Host lookups. Get a key at account.shodan.io',
     keys: [{ key: 'SHODAN_API_KEY', label: 'API key', placeholder: '32-character key, e.g. aBcD…09Xy' }],
   },
   {
@@ -43,7 +46,7 @@ function Favicon({ domain }: { domain: string }): JSX.Element {
   const [failed, setFailed] = useState(false)
   if (failed) {
     return (
-      <span className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-2">
+      <span className="grid size-7 shrink-0 place-items-center rounded-[9px] bg-glass-strong">
         <KeyRound className="size-4 text-muted-foreground" strokeWidth={1.75} />
       </span>
     )
@@ -55,7 +58,7 @@ function Favicon({ domain }: { domain: string }): JSX.Element {
       width={28}
       height={28}
       onError={() => setFailed(true)}
-      className="size-7 shrink-0 rounded-md"
+      className="size-7 shrink-0 rounded-[9px]"
     />
   )
 }
@@ -66,7 +69,8 @@ function Favicon({ domain }: { domain: string }): JSX.Element {
  */
 export function SecretsSection({ client }: { client: AxiosInstance }): JSX.Element {
   const api = secretsApi(client)
-  const [secrets, setSecrets] = useState<Secret[]>([])
+  // Null until the first list settles: a provider is not offered as unset while that is unknown.
+  const [secrets, setSecrets] = useState<Secret[] | null>(null)
   const [editing, setEditing] = useState<Provider | null>(null)
 
   const refresh = useCallback(() => {
@@ -78,7 +82,7 @@ export function SecretsSection({ client }: { client: AxiosInstance }): JSX.Eleme
 
   useEffect(refresh, [refresh])
 
-  const setKeys = new Set(secrets.map((s) => s.key))
+  const setKeys = new Set((secrets ?? []).map((s) => s.key))
 
   return (
     <>
@@ -86,7 +90,7 @@ export function SecretsSection({ client }: { client: AxiosInstance }): JSX.Eleme
         {PROVIDERS.map((p) => {
           const configured = p.keys.every((k) => k.optional === true || setKeys.has(k.key))
           return (
-            <div key={p.name} className="flex items-center gap-3 border-b border-border py-3">
+            <div key={p.name} className="flex items-center gap-3 border-b border-glass-border py-3">
               <Favicon domain={p.domain} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 text-[13px] font-medium">
@@ -99,9 +103,13 @@ export function SecretsSection({ client }: { client: AxiosInstance }): JSX.Eleme
                 </div>
                 <div className="truncate text-xs text-muted-foreground">{p.description}</div>
               </div>
-              <Button variant="outline" size="sm" className="shrink-0" onClick={() => setEditing(p)}>
-                {configured ? 'Update key' : 'Set key'}
-              </Button>
+              {secrets === null ? (
+                <Skeleton role="status" aria-label={`Loading ${p.name} key status`} className="h-8 w-[84px] shrink-0 rounded-full" />
+              ) : (
+                <Button variant="glass" size="sm" className="shrink-0" onClick={() => setEditing(p)}>
+                  {configured ? 'Update key' : 'Set key'}
+                </Button>
+              )}
             </div>
           )
         })}
@@ -158,48 +166,41 @@ function SetSecretModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
-      <div
-        className="flex w-[420px] max-w-[92vw] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-floating"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <Favicon domain={provider.domain} />
-          <span className="text-[14px] font-medium">{provider.name}</span>
-        </div>
-        <div className="flex flex-col gap-3 px-4 py-4">
-          {provider.keys.map((k) => (
-            <label key={k.key} className="flex flex-col gap-1 text-[13px]">
-              <span className="flex items-center gap-2">
-                {k.label}
-                {k.optional === true && <span className="text-[11px] text-muted-foreground">optional</span>}
-                <span className="font-mono text-[11px] text-muted-foreground">{k.key}</span>
-                {setKeys.has(k.key) && <span className="text-[11px] text-status-success">set</span>}
-              </span>
-              <Input
-                type="password"
-                className="h-8"
-                placeholder={setKeys.has(k.key) ? 'Enter to replace…' : k.placeholder}
-                value={values[k.key] ?? ''}
-                onChange={(e) => setValues((v) => ({ ...v, [k.key]: e.target.value }))}
-              />
-            </label>
-          ))}
-          {error !== null && <p className="text-[12px] text-status-error">{error}</p>}
-        </div>
-        <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            disabled={busy || provider.keys.every((k) => (values[k.key] ?? '').trim() === '')}
-            onClick={() => void save()}
-          >
-            Save
-          </Button>
-        </div>
-      </div>
-    </div>
+    <Dialog onClose={onClose} size="sm" dismissable={!busy}>
+      <DialogHeader icon={<Favicon domain={provider.domain} />} title={provider.name} />
+      <DialogBody className="flex flex-col gap-3">
+        {provider.keys.map((k) => (
+          <label key={k.key} className="flex flex-col gap-1.5 text-[13px]">
+            <span className="flex items-center gap-2">
+              {k.label}
+              {k.optional === true && <span className="text-[11px] text-muted-foreground">optional</span>}
+              <span className="font-mono text-[11px] text-muted-foreground">{k.key}</span>
+              {setKeys.has(k.key) && <span className="text-[11px] text-status-success">set</span>}
+            </span>
+            <Input
+              type="password"
+              className="h-8"
+              placeholder={setKeys.has(k.key) ? 'Enter to replace…' : k.placeholder}
+              value={values[k.key] ?? ''}
+              onChange={(e) => setValues((v) => ({ ...v, [k.key]: e.target.value }))}
+            />
+          </label>
+        ))}
+        {error !== null && <p className="text-[12px] text-status-error">{error}</p>}
+      </DialogBody>
+      <DialogFooter>
+        <Button variant="ghost" size="sm" disabled={busy} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          size="sm"
+          disabled={busy || provider.keys.every((k) => (values[k.key] ?? '').trim() === '')}
+          onClick={() => void save()}
+        >
+          {busy && <Spinner size="sm" />}
+          Save
+        </Button>
+      </DialogFooter>
+    </Dialog>
   )
 }
