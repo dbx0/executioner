@@ -82,6 +82,35 @@ describe('NewEngagementModal', () => {
     expect(screen.getByText('Choose an existing engagement folder…')).toBeTruthy()
   })
 
+  it('opens the folder as soon as it is picked, without waiting for Open', async () => {
+    const openEngagementFolder = vi.fn(async () => '/home/x/acme')
+    useApp.setState({
+      pickEngagementFolder: vi.fn(async () => '/home/x/acme') as never,
+      openEngagementFolder: openEngagementFolder as never,
+    })
+    render(<NewEngagementModal />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Open existing' }))
+    fireEvent.click(screen.getByText('Choose an existing engagement folder…'))
+    await waitFor(() => expect(openEngagementFolder).toHaveBeenCalledWith('/home/x/acme'))
+    await waitFor(() => expect(useApp.getState().newEngagementOpen).toBe(false))
+  })
+
+  it('shows why a picked folder would not open and stays on the form', async () => {
+    const message = '"acme" is not an engagement yet.'
+    useApp.setState({
+      pickEngagementFolder: vi.fn(async () => '/home/x/acme') as never,
+      openEngagementFolder: vi.fn(async () => {
+        useApp.setState({ error: message })
+        return null
+      }) as never,
+    })
+    render(<NewEngagementModal />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Open existing' }))
+    fireEvent.click(screen.getByText('Choose an existing engagement folder…'))
+    expect(await screen.findByText(message)).toBeTruthy()
+    expect(useApp.getState().newEngagementOpen).toBe(true)
+  })
+
   it('does not render when closed', () => {
     useApp.setState({ newEngagementOpen: false })
     const { container } = render(<NewEngagementModal />)

@@ -176,6 +176,17 @@ export function NewEngagementModal(): JSX.Element | null {
     if (root !== null) close()
   }
 
+  // On "Open existing" the folder is the whole answer, so picking one opens it
+  // right away: a folder that is not an engagement says so at once, instead of
+  // looking accepted until Open is pressed.
+  const pickAndOpen = (): void => {
+    void pickFolder().then((chosen) => {
+      if (chosen === undefined) return
+      setDir(chosen)
+      return submitOpen(chosen)
+    })
+  }
+
   const error = localError ?? storeError
 
   return (
@@ -250,7 +261,7 @@ export function NewEngagementModal(): JSX.Element | null {
         ) : (
           <OpenTab
             dir={dir}
-            onPickFolder={pickInto}
+            onPickFolder={pickAndOpen}
             busy={busy}
             recents={recents}
             openRoots={openRoots}
