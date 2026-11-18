@@ -1,9 +1,16 @@
-import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { act, render as rtlRender, screen, fireEvent, waitFor, type RenderResult } from '@testing-library/react'
+import type { ReactElement } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosInstance } from 'axios'
 import { useApp } from '../store.js'
 import type { Overview } from '../api/overview.js'
 import { emitChange } from '../lib/engine-changes.js'
+import { TooltipProvider } from '../components/ui/tooltip.js'
+
+/** The page's hints are app tooltips, which need the provider the shell mounts. */
+function render(ui: ReactElement): RenderResult {
+  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
+}
 
 function makeOverview(over: Partial<Overview> = {}): Overview {
   return {
@@ -154,6 +161,51 @@ describe('AboutView', () => {
     get.mockResolvedValue(makeOverview({ scope: { rules: 0, includes: 0, excludes: 0 } }))
     render(<AboutView />)
     expect(await screen.findByText(/every asset reads as unscoped/i)).toBeTruthy()
+  })
+
+  it('draws the layout in placeholders while the first read is in flight', async () => {
+    let land: (o: Overview) => void = () => {}
+    get.mockReturnValue(new Promise<Overview>((resolve) => (land = resolve)))
+    render(<AboutView />)
+
+    expect(screen.getByRole('status', { name: 'Loading overview' })).toBeTruthy()
+    expect(document.querySelectorAll('[data-skeleton-tile]')).toHaveLength(6)
+    expect(screen.queryByText(/loading…/i)).toBeNull()
+    // The refresh control is busy, not clickable, while that read is pending.
+    expect((screen.getByRole('button', { name: /refresh/i }) as HTMLButtonElement).disabled).toBe(true)
+
+    await act(async () => land(makeOverview()))
+    expect(await screen.findByRole('heading', { name: 'acme' })).toBeTruthy()
+    expect(screen.queryByRole('status', { name: 'Loading overview' })).toBeNull()
+  })
+
+  it('shows kind, coverage and scope verdicts together, with nothing behind a switch', async () => {
+    render(<AboutView />)
+    expect(await screen.findByText('Assets by kind')).toBeTruthy()
+    expect(screen.getByText('Subdomains')).toBeTruthy()
+    expect(screen.getByText('12 total')).toBeTruthy()
+
+    expect(screen.getByText('In-scope coverage')).toBeTruthy()
+    expect(screen.getByText('Recon only')).toBeTruthy()
+    expect(screen.getByText(/untouched assets have no recon facts/i)).toBeTruthy()
+
+    expect(screen.getByText('Scope verdicts')).toBeTruthy()
+    expect(screen.getByText('Out of scope')).toBeTruthy()
+    expect(screen.getByText('3 include · 1 exclude')).toBeTruthy()
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+  })
+
+  it('names the engagement in the toolbar', async () => {
+    render(<AboutView />)
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('acme / About')
+  })
+
+  it('keeps the run and automation totals on the page', async () => {
+    render(<AboutView />)
+    await screen.findByText('Wired up')
+    for (const label of ['Workflows', 'Schedules', 'Saved agents', 'Scope rules', 'Runs succeeded', 'Runs failed', 'Runs cancelled', 'Last run']) {
+      expect(screen.getByText(label)).toBeTruthy()
+    }
   })
 
   it('surfaces a failed read instead of an empty page', async () => {

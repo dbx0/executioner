@@ -91,7 +91,13 @@ const KIND_LABELS: Record<string, string> = {
 export function kindSlices(byKind: Record<string, number>): Slice[] {
   return Object.entries(byKind)
     .sort((a, b) => b[1] - a[1])
-    .map(([key, value]) => ({ key, label: KIND_LABELS[key] ?? key, value, tone: 'bg-activity' }))
+    .map(([key, value]) => ({ key, label: KIND_LABELS[key] ?? key, value, tone: 'bg-muted-foreground' }))
+}
+
+export interface AgentActivity {
+  working: number
+  open: number
+  subagents: number
 }
 
 /** What the engagement's agents are doing right now, from the live session state. */
@@ -99,7 +105,7 @@ export function agentActivity(
   sessions: { id: string }[],
   sessionState: Record<string, 'idle' | 'working'>,
   subagents: Record<string, { state: 'working' | 'done' }[]>,
-): { working: number; open: number; subagents: number } {
+): AgentActivity {
   const working = sessions.filter((s) => sessionState[s.id] === 'working').length
   const subs = Object.values(subagents)
     .flat()
