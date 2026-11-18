@@ -44,6 +44,17 @@ vi.mock('../api/targets.js', () => ({
   targetsApi: () => ({ list: () => Promise.resolve([{ id: 't1', value: 'example.com' }]) }),
 }))
 
+// Radix Select scrolls and captures the pointer, which jsdom does not implement.
+Element.prototype.scrollIntoView ??= () => {}
+Element.prototype.hasPointerCapture ??= () => false
+Element.prototype.releasePointerCapture ??= () => {}
+
+/** Open one of the page's pill menus by its accessible name and pick an option. */
+async function choose(menu: string, option: string): Promise<void> {
+  fireEvent.keyDown(screen.getByRole('combobox', { name: menu }), { key: 'ArrowDown' })
+  fireEvent.click(await screen.findByRole('option', { name: option }))
+}
+
 const { FindingsView } = await import('./FindingsView.js')
 const { notify } = await import('../lib/toast.js')
 
@@ -60,16 +71,15 @@ describe('FindingsView', () => {
     expect(await screen.findByText('AWS key in bundle.js')).toBeTruthy()
     expect(screen.getByText('Directory listing')).toBeTruthy()
     expect(screen.getAllByText('example.com').length).toBeGreaterThan(0)
-    expect(screen.getByText('high')).toBeTruthy()
+    expect(screen.getByText('High')).toBeTruthy()
   })
 
   it('opens a finding when its title is clicked, showing description and details', async () => {
     render(<FindingsView />)
     fireEvent.click(await screen.findByText('AWS key in bundle.js'))
 
-    // Findings are filed as markdown, so reading one shows it rendered — the
-    // description twice over, since the list row keeps its own snippet.
-    expect(await screen.findAllByText('A live key ships to the browser.')).toHaveLength(2)
+    // Findings are filed as markdown, so reading one shows it rendered.
+    expect(await screen.findByText('A live key ships to the browser.')).toBeTruthy()
     expect(screen.getByText('AKIAEXAMPLE')).toBeTruthy()
     expect(screen.queryByDisplayValue('AKIAEXAMPLE')).toBeNull()
     // Where it came from is part of reading it.
@@ -131,6 +141,25 @@ describe('FindingsView', () => {
     await screen.findByText('AWS key in bundle.js')
 
     expect(fakeApi.list).toHaveBeenCalledWith({})
+
+    await choose('Filter by status', 'Confirmed')
+    await waitFor(() => expect(fakeApi.list).toHaveBeenCalledWith({ status: 'confirmed' }))
+
+    await choose('Filter by status', 'All statuses')
+    await waitFor(() => expect(fakeApi.list).toHaveBeenLastCalledWith({}))
+  })
+
+  it('changes severity and status from the open finding and saves both', async () => {
+    render(<FindingsView />)
+    fireEvent.click(await screen.findByText('AWS key in bundle.js'))
+
+    await choose('Severity', 'Critical')
+    await choose('Status', 'Fixed')
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(fakeApi.update).toHaveBeenCalledWith('f1', expect.objectContaining({ severity: 'critical', status: 'fixed' })),
+    )
   })
 
   it('searches the loaded list by title, target and content, and clears back', async () => {
@@ -231,6 +260,40 @@ describe('FindingsView loading state', () => {
     await waitFor(() => expect(screen.getByText(/nothing recorded yet/i)).toBeTruthy())
   })
 
+  it('shows a placeholder finding while a deep-linked finding is still loading', async () => {
+    const d = deferred<Finding[]>()
+    fakeApi.list.mockReturnValue(d.promise)
+    useApp.setState({ pendingFindingId: 'f1' })
+
+    render(<FindingsView />)
+
+    expect(await screen.findByRole('status', { name: /loading finding$/i })).toBeTruthy()
+    expect(screen.queryByText(/select a finding/i)).toBeNull()
+
+    d.resolve([finding()])
+    expect(await screen.findByDisplayValue('AWS key in bundle.js')).toBeTruthy()
+    expect(screen.queryByRole('status', { name: /loading finding$/i })).toBeNull()
+    fakeApi.list.mockImplementation(() => Promise.resolve(rows))
+  })
+
+  it('locks an action and shows a spinner while its request is in flight', async () => {
+    fakeApi.list.mockImplementation(() => Promise.resolve([finding()]))
+    render(<FindingsView />)
+    await screen.findByText('AWS key in bundle.js')
+
+    const d = deferred<{ path: string; relativePath: string; count: number }>()
+    fakeApi.report.mockReturnValueOnce(d.promise)
+    const exportButton = screen.getByRole('button', { name: /export report/i }) as HTMLButtonElement
+    fireEvent.click(exportButton)
+
+    expect(exportButton.disabled).toBe(true)
+    expect(exportButton.querySelector('svg')?.getAttribute('class')).toContain('animate-spin')
+
+    d.resolve({ path: '/tmp/r.md', relativePath: 'r.md', count: 1 })
+    await waitFor(() => expect(exportButton.disabled).toBe(false))
+    fakeApi.list.mockImplementation(() => Promise.resolve(rows))
+  })
+
   it('keeps the rows on screen while a refresh is in flight', async () => {
     // A refresh must not blank out data the user is already reading.
     fakeApi.list.mockReturnValueOnce(Promise.resolve([finding()]))
@@ -318,7 +381,7 @@ describe('FindingsView live refresh', () => {
     rows = rows.map((r) => (r.id === 'f2' ? { ...r, severity: 'critical', targetId: null } : { ...r }))
     emitChange('findings')
 
-    expect(await screen.findByText('critical')).toBeTruthy()
+    expect(await screen.findByText('Critical')).toBeTruthy()
   })
 })
 
