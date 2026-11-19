@@ -1,12 +1,20 @@
-import type { JSX } from 'react'
+import type { JSX, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { targetsApi, type TargetSummary } from '../../api/targets.js'
 import { backendsApi, type BackendProfile } from '../../api/backends.js'
+import { teamAgentString, type TeamSummary } from '../../api/teams.js'
+import { AGENT_LABELS } from '../../lib/agent-labels.js'
 import { AgentIcon } from '../brand/AgentIcon.js'
 import { Button } from '../ui/button.js'
+import { Dialog, DialogBody, DialogFooter, DialogHeader } from '../ui/dialog.js'
+import { Input } from '../ui/input.js'
+import { Spinner } from '../ui/spinner.js'
+import { POPOVER_SURFACE } from '../ui/surface.js'
+import { cn } from '../../lib/utils.js'
 import { Select } from '../ui/select.js'
+import { Switch } from '../ui/switch.js'
 
 const MAX_ROWS = 100
 
@@ -47,32 +55,85 @@ export function composeRunPrompt(
 }
 
 /**
- * Run a saved agent: pick one or more targets, choose connectivity (Local or a
- * saved backend profile), then start a primed agent terminal. Enforced backend
- * routing (run_command) needs Claude; other base agents still launch primed.
+ * The prompts a run starts sessions with. Shared, the run is one session that
+ * is handed every target. One per target, each target gets a session of its own
+ * that knows about no other, so three targets are three agents working apart.
+ * With fewer than two targets there is nothing to split and it is one session.
+ */
+export function runPrompts(
+  agent: RunnableAgent,
+  targets: { value: string; kind: string }[],
+  backendId: string,
+  perTarget: boolean,
+): string[] {
+  if (!perTarget || targets.length < 2) return [composeRunPrompt(agent, targets, backendId)]
+  return targets.map((target) => composeRunPrompt(agent, [target], backendId))
+}
+
+/** The standalone agent CLIs, in the order they are offered. */
+const AGENT_CLIS = ['claude', 'codex', 'opencode', 'gemini', 'cursor', 'hermes']
+
+/**
+ * Everything "run an agent" can mean, as one list to choose from: the agent
+ * CLIs installed here (all of them until that check has answered), then the
+ * saved agents, then the Claude teams. A team is left out when a saved agent
+ * already carries its name, and all teams are when Claude is not there to run
+ * them.
+ */
+export function runnableChoices(input: {
+  installed: string[] | null
+  saved: RunnableAgent[]
+  teams: Pick<TeamSummary, 'id' | 'name'>[]
+}): RunnableAgent[] {
+  const has = (id: string): boolean => input.installed === null || input.installed.includes(id)
+  const clis = AGENT_CLIS.filter(has).map((id) => ({ name: AGENT_LABELS[id] ?? id, agent: id, prompt: '' }))
+  const saved = input.saved.map(({ name, agent, prompt }) => ({ name, agent, prompt }))
+  const savedNames = new Set(saved.map((a) => a.name))
+  const teams = has('claude')
+    ? input.teams.filter((team) => !savedNames.has(team.name)).map((team) => ({ name: team.name, agent: teamAgentString(team.id), prompt: '' }))
+    : []
+  return [...clis, ...saved, ...teams]
+}
+
+/**
+ * Run an agent: pick one or more targets, choose connectivity (Local or a saved
+ * backend profile), then start a primed agent terminal. Opened for a known
+ * agent it runs that one; opened with `choices` it asks which first. Enforced
+ * backend routing (run_command) needs Claude; other base agents still launch
+ * primed.
  */
 export function RunAgentModal({
-  agent,
+  agent: preset,
+  choices = [],
   onClose,
 }: {
-  agent: RunnableAgent
+  /** The agent to run, when the caller already knows it. */
+  agent?: RunnableAgent
+  /** What to offer when it does not. */
+  choices?: RunnableAgent[]
   onClose: () => void
 }): JSX.Element {
   const client = useApp((s) => s.client)!
   const createSession = useApp((s) => s.createSession)
-  const [targets, setTargets] = useState<TargetSummary[]>([])
+  // Null until the list answers, so the search box can say it is still loading.
+  const [targets, setTargets] = useState<TargetSummary[] | null>(null)
   const [backends, setBackends] = useState<BackendProfile[]>([])
   const [selected, setSelected] = useState<TargetSummary[]>([])
   const [backendId, setBackendId] = useState('local')
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  // Which of `choices` is picked, by position; names can repeat across kinds.
+  const [choice, setChoice] = useState('')
+  const [perTarget, setPerTarget] = useState(false)
+  const [launching, setLaunching] = useState(false)
+  const agent = preset ?? choices[Number(choice === '' ? -1 : choice)]
 
   useEffect(() => {
     let alive = true
     void targetsApi(client)
       .list()
       .then((list) => alive && setTargets(list))
-      .catch(() => {})
+      .catch(() => alive && setTargets([]))
     void backendsApi(client)
       .list()
       .then((list) => alive && setBackends(list))
@@ -85,7 +146,8 @@ export function RunAgentModal({
   const selectedIds = useMemo(() => new Set(selected.map((t) => t.id)), [selected])
   const results = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const matched = (q === '' ? targets : targets.filter((t) => t.value.toLowerCase().includes(q))).filter(
+    const all = targets ?? []
+    const matched = (q === '' ? all : all.filter((t) => t.value.toLowerCase().includes(q))).filter(
       (t) => !selectedIds.has(t.id),
     )
     return matched.slice(0, MAX_ROWS)
@@ -99,56 +161,83 @@ export function RunAgentModal({
 
   // Claude and Claude teams both launch the claude CLI, so both support the
   // enforced backend routing (run_command) that other base agents lack.
-  const isClaude = agent.agent === 'claude' || agent.agent.startsWith('claude-team')
+  const isClaude = agent !== undefined && (agent.agent === 'claude' || agent.agent.startsWith('claude-team'))
   const backendOptions = [
     { value: 'local', label: 'Local' },
     ...backends.map((b) => ({ value: b.id, label: `${b.name} (${b.kind})` })),
   ]
 
+  // Splitting only means something with two or more targets to split over.
+  const splits = perTarget && selected.length > 1
+
   const run = (): void => {
-    const composed = composeRunPrompt(
+    if (agent === undefined || launching) return
+    const prompts = runPrompts(
       agent,
       selected.map((t) => ({ value: t.value, kind: t.kind })),
       backendId,
+      perTarget,
     )
-    // A team picked from the menu with no targets composes to nothing; launch it bare.
-    void createSession(composed === '' ? { agent: agent.agent } : { agent: agent.agent, prompt: composed })
-    onClose()
+    setLaunching(true)
+    // One after another, so the sessions open in the order the targets were picked.
+    void (async () => {
+      try {
+        for (const prompt of prompts) {
+          // An agent picked with no targets composes to nothing; launch it bare.
+          await createSession(prompt === '' ? { agent: agent.agent } : { agent: agent.agent, prompt })
+        }
+      } finally {
+        // The dialog stays up, showing the spinner, until every session has started.
+        onClose()
+      }
+    })()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
-      <div
-        className="flex max-h-[80vh] w-[520px] max-w-[94vw] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-floating"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <AgentIcon agent={agent.agent} className="size-4" />
-          <span className="truncate text-[14px] font-medium">Run “{agent.name}”</span>
-          <Button variant="ghost" size="xs" className="ml-auto" onClick={onClose}>
-            Cancel
-          </Button>
-        </div>
+    <Dialog onClose={onClose} dismissable={!launching}>
+      <DialogHeader
+        icon={agent !== undefined ? <AgentIcon agent={agent.agent} className="size-4 shrink-0" /> : undefined}
+        title={preset === undefined ? 'Run an agent' : `Run “${preset.name}”`}
+      />
 
-        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek p-4">
-          <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">Targets</label>
+      <DialogBody className="flex flex-col gap-4">
+        {preset === undefined && (
+          <Field label="Agent">
+            <Select
+              ariaLabel="Agent"
+              value={choice}
+              onValueChange={setChoice}
+              placeholder={choices.length === 0 ? 'No agent installed' : 'Pick an agent'}
+              options={choices.map((c, i) => ({
+                value: String(i),
+                label: c.name,
+                icon: <AgentIcon agent={c.agent} className="size-4" />,
+              }))}
+            />
+          </Field>
+        )}
+
+        <Field label="Targets">
           {selected.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {selected.map((t) => (
-                <span
-                  key={t.id}
-                  className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-1 px-2 py-0.5 text-[12px]"
-                >
+                <span key={t.id} className="inline-flex items-center gap-1 rounded-control bg-glass-strong py-0.5 pl-2.5 pr-1 text-[12px]">
                   <span className="font-mono">{t.value}</span>
-                  <button type="button" aria-label={`Remove ${t.value}`} onClick={() => removeTarget(t.id)}>
-                    <X className="size-3 text-muted-foreground hover:text-foreground" />
+                  <button
+                    type="button"
+                    aria-label={`Remove ${t.value}`}
+                    onClick={() => removeTarget(t.id)}
+                    className="grid size-4 place-items-center rounded-full text-muted-foreground outline-none hover:bg-glass-active hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    <X className="size-3" />
                   </button>
                 </span>
               ))}
             </div>
           )}
-          <div className="relative mb-3">
-            <input
+          <div className="relative">
+            <Input
+              aria-label="Search targets"
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value)
@@ -156,11 +245,15 @@ export function RunAgentModal({
               }}
               onFocus={() => setOpen(true)}
               onBlur={() => setTimeout(() => setOpen(false), 120)}
-              placeholder={targets.length === 0 ? 'No targets — add one first' : `Search ${targets.length} targets…`}
-              className="h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-[13px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              disabled={targets === null}
+              placeholder={
+                targets === null ? 'Loading targets' : targets.length === 0 ? 'No targets. Add one first.' : `Search ${targets.length} targets…`
+              }
+              className="text-[13px]"
             />
+            {targets === null && <Spinner size="sm" className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />}
             {open && results.length > 0 && (
-              <div className="scrollbar-sleek absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-floating">
+              <div className={cn(POPOVER_SURFACE, 'scrollbar-sleek absolute z-20 mt-1 max-h-56 w-full overflow-auto p-1')}>
                 {results.map((t) => (
                   <button
                     key={t.id}
@@ -169,7 +262,7 @@ export function RunAgentModal({
                       e.preventDefault()
                       addTarget(t)
                     }}
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] hover:bg-surface-2"
+                    className="flex w-full items-center gap-2 rounded-[9px] px-2.5 py-1.5 text-left text-[13px] outline-none hover:bg-glass-strong focus-visible:bg-glass-strong"
                   >
                     <span className="truncate font-mono text-[12px]">{t.value}</span>
                     <span className="ml-auto text-[11px] text-muted-foreground">{t.kind}</span>
@@ -178,27 +271,52 @@ export function RunAgentModal({
               </div>
             )}
           </div>
+        </Field>
 
-          <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">Connectivity</label>
-          <Select value={backendId} onValueChange={setBackendId} options={backendOptions} />
+        {selected.length > 1 && (
+          <div className="flex items-center gap-3">
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-[13px] font-medium">One session per target</span>
+              <span className="text-[12px] text-muted-foreground">
+                {perTarget
+                  ? `Starts ${String(selected.length)} sessions, each working on a single target.`
+                  : `Off: one session works on all ${String(selected.length)} targets.`}
+              </span>
+            </span>
+            <Switch checked={perTarget} onCheckedChange={setPerTarget} aria-label="One session per target" />
+          </div>
+        )}
 
+        <Field label="Connectivity">
+          <Select ariaLabel="Connectivity" value={backendId} onValueChange={setBackendId} options={backendOptions} />
           {backendId !== 'local' && !isClaude && (
             <p className="mt-2 text-[11px] text-attention">
               Enforced backend routing (run_command) needs Claude. This agent will launch primed with the task, but
               commands may run locally.
             </p>
           )}
-        </div>
+        </Field>
+      </DialogBody>
 
-        <div className="flex justify-end gap-2 border-t border-border px-4 py-3">
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={run}>
-            Run
-          </Button>
-        </div>
-      </div>
+      <DialogFooter>
+        <Button variant="ghost" size="sm" disabled={launching} onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" disabled={agent === undefined || launching} aria-busy={launching} onClick={run}>
+          {launching && <Spinner size="sm" />}
+          {splits ? `Run ${String(selected.length)} sessions` : 'Run'}
+        </Button>
+      </DialogFooter>
+    </Dialog>
+  )
+}
+
+/** A labelled block of the form: a small caps caption over its control. */
+function Field({ label, children }: { label: string; children: ReactNode }): JSX.Element {
+  return (
+    <div>
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      {children}
     </div>
   )
 }

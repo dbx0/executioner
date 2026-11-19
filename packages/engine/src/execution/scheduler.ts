@@ -10,17 +10,26 @@ export interface RunScheduledWorkflow {
   (workflowId: string, targetId: string | null, backendProfileId?: string | null): Promise<unknown>
 }
 
+/** Runs one node (a tool, or a built-in recon node) against a target; resolves when it finishes. */
+export interface RunScheduledNode {
+  (nodeType: string, params: Record<string, unknown>, targetId: string | null, backendProfileId?: string | null): Promise<unknown>
+}
+
 export interface SchedulerDeps {
   project: Project
   /** Reuses the same GraphExecutor path the run route uses. */
   runWorkflow: RunScheduledWorkflow
+  /** How an action that names a single node runs it. Absent → such actions are skipped. */
+  runNode?: RunScheduledNode
 }
 
 /**
- * Fires workflow triggers over time:
- * - `interval` schedules run their workflow every `intervalSeconds` seconds.
- * - `on_create` schedules run their workflow whenever a matching target is
- *   created (driven by the target-create route via {@link onTargetCreated}).
+ * Fires actions over time. An action runs a workflow or a single node:
+ * - `interval` actions run every `intervalSeconds` seconds.
+ * - `on_create` actions run whenever a matching target is created (driven by
+ *   the target-create route via {@link onTargetCreated}). These come from two
+ *   places: the engagement's own, and the defaults every engagement shares,
+ *   each as this engagement has it switched.
  *
  * Best-effort: a failing run is swallowed so one bad workflow never stops the
  * timer loop. An interval tick that lands while the schedule's previous run is
@@ -99,7 +108,7 @@ export class Scheduler {
     const timer = setInterval(() => {
       if (this.runningSchedules.has(schedule.id)) return
       this.runningSchedules.add(schedule.id)
-      void this.fire(schedule.workflowId, schedule.targetId, schedule.backendProfileId).finally(() => {
+      void this.fire(schedule, schedule.targetId).finally(() => {
         this.runningSchedules.delete(schedule.id)
       })
     }, ms)
@@ -108,21 +117,24 @@ export class Scheduler {
     this.timers.set(schedule.id, timer)
   }
 
-  private fire(workflowId: string, targetId: string | null, backendProfileId?: string | null): Promise<void> {
-    return this.track(this.runOnce(workflowId, targetId, backendProfileId))
+  private fire(action: Schedule, targetId: string | null): Promise<void> {
+    return this.track(this.runOnce(action, targetId))
   }
 
-  private async runOnce(
-    workflowId: string,
-    targetId: string | null,
-    backendProfileId?: string | null,
-  ): Promise<void> {
-    engineLog.debug('scheduler', 'Scheduled run starting', { workflow: workflowId })
+  private async runOnce(action: Schedule, targetId: string | null): Promise<void> {
+    const what = action.workflowId !== null ? { workflow: action.workflowId } : { node: action.nodeType }
+    engineLog.debug('scheduler', 'Scheduled run starting', what)
     try {
-      await this.scheduledRun.run(true, () => this.deps.runWorkflow(workflowId, targetId, backendProfileId))
+      await this.scheduledRun.run(true, async () => {
+        if (action.workflowId !== null) {
+          await this.deps.runWorkflow(action.workflowId, targetId, action.backendProfileId)
+        } else if (action.nodeType !== null && this.deps.runNode !== undefined) {
+          await this.deps.runNode(action.nodeType, action.nodeParams ?? {}, targetId, action.backendProfileId)
+        }
+      })
     } catch (e) {
       /* best-effort: a failed scheduled run must not break the loop */
-      engineLog.warn('scheduler', 'Scheduled run failed', { workflow: workflowId, ...errorFields(e) })
+      engineLog.warn('scheduler', 'Scheduled run failed', { ...what, ...errorFields(e) })
     }
   }
 
@@ -141,10 +153,18 @@ export class Scheduler {
 
   private async runMatching(target: Target): Promise<void> {
     if (this.scheduledRun.getStore() === true) return
-    for (const schedule of this.deps.project.schedules.list()) {
-      if (schedule.enabled && schedule.kind === 'on_create' && schedule.targetKind === target.kind) {
-        await this.fire(schedule.workflowId, target.id, schedule.backendProfileId)
-      }
+    const { project } = this.deps
+    // A default fires here when this engagement switched it on, or made no
+    // choice and the default itself is on.
+    const defaults = project.defaultActions
+      .list()
+      .map((action) => ({ ...action, enabled: project.defaultOverrides.get(action.id) ?? action.enabled }))
+    for (const action of [...defaults, ...project.schedules.list()]) {
+      if (!action.enabled || action.kind !== 'on_create' || action.targetKind !== target.kind) continue
+      // "In scope" means a rule includes it. A target no rule mentions is a
+      // question for the operator, not something to act on unattended.
+      if (action.inScopeOnly && target.scopeStatus !== 'in') continue
+      await this.fire(action, target.id)
     }
   }
 }

@@ -1,7 +1,10 @@
 import type { JSX } from 'react'
-import { Loader2, RefreshCw, Zap } from 'lucide-react'
+import { RefreshCw, Zap } from 'lucide-react'
 import { ClaudeLogo } from '../components/brand/ClaudeLogo.js'
 import { CodexLogo } from '../components/brand/CodexLogo.js'
+import { Skeleton } from '../components/ui/skeleton.js'
+import { Spinner } from '../components/ui/spinner.js'
+import { cn } from '../lib/utils.js'
 import type { LimitWindow, ProviderLimits, UsageLimits } from '../api/usage-limits.js'
 
 /**
@@ -59,24 +62,49 @@ export function meterFillColor(percent: number): string {
 }
 
 /**
- * A single labeled meter chip: a thin bar + "{label} {percent}%". The fill is
- * absolutely positioned so it always paints its 4px height regardless of the
- * track's flex/inline context (an `h-full` child collapses when the track's own
- * height isn't established — which left the bar looking empty).
+ * The meter track and its fill, shared by the panel chips and the sidebar
+ * footer. The fill is absolutely positioned so it always paints the track's
+ * height regardless of the flex or inline context around it (an `h-full` child
+ * collapses when the track's own height is not established, which left the bar
+ * looking empty). Width and colour are computed, so they stay inline styles.
  */
+export function MeterBar({ percent, className }: { percent: number; className?: string }): JSX.Element {
+  return (
+    <span className={cn('relative block h-[5px] overflow-hidden rounded-full bg-glass-active', className)}>
+      <span
+        className="absolute inset-y-0 left-0 rounded-full"
+        style={{ width: `${clampPercent(percent)}%`, backgroundColor: meterFillColor(percent) }}
+      />
+    </span>
+  )
+}
+
+/** A single labeled meter chip: a thin bar + "{label} {percent}%". */
 function Meter({ label, percent }: { label: string; percent: number }): JSX.Element {
-  const width = clampPercent(percent)
   return (
     <div className="flex min-w-0 flex-1 items-center gap-1.5">
-      <span className="relative block h-[5px] min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-        <span
-          className="absolute inset-y-0 left-0 rounded-full"
-          style={{ width: `${width}%`, backgroundColor: meterFillColor(percent) }}
-        />
-      </span>
+      <MeterBar percent={percent} className="min-w-0 flex-1" />
       <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
         {label} {Math.round(percent)}%
       </span>
+    </div>
+  )
+}
+
+/** Two placeholder provider rows, shaped like the real ones so the panel does not jump. */
+function UsageSkeleton(): JSX.Element {
+  return (
+    <div role="status" aria-label="Loading usage" className="flex flex-col gap-3 px-2 py-2">
+      {[0, 1].map((row) => (
+        <div key={row} className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="size-4 rounded-full" />
+            <Skeleton className="h-3 w-14" />
+            <Skeleton className="ml-auto h-3 w-20" />
+          </div>
+          <Skeleton className="ml-6 h-[5px] rounded-full" />
+        </div>
+      ))}
     </div>
   )
 }
@@ -105,7 +133,7 @@ function ProviderRow({ p, now }: { p: ProviderLimits; now: number }): JSX.Elemen
   ].filter((m): m is { key: string; label: string; percent: number } => m !== null)
 
   return (
-    <div className="flex flex-col gap-1.5 rounded-md px-2 py-1.5">
+    <div className="flex flex-col gap-1.5 px-2 py-1.5">
       <div className="flex items-center gap-2">
         <ProviderMark provider={p.provider} />
         <span className="text-[12px] font-medium text-foreground">{PROVIDER_NAME[p.provider]}</span>
@@ -158,23 +186,24 @@ export function UsagePanel({
         <button
           type="button"
           onClick={onRefresh}
+          disabled={isFetching}
           aria-label="Refresh usage"
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-surface-2 hover:text-foreground"
+          className="flex size-6 items-center justify-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-glass-active hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none"
         >
-          {isFetching ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+          {isFetching ? <Spinner size="sm" /> : <RefreshCw className="size-3.5" />}
         </button>
       </div>
 
-      <div className="h-px bg-border" />
+      <div className="h-px bg-glass-border" />
 
-      <div className={`flex flex-col py-1 ${isFetching ? 'animate-pulse' : ''}`}>
+      <div className={cn('flex flex-col py-1', isFetching && limits !== null && 'animate-pulse')}>
         {limits !== null ? (
           <>
             <ProviderRow p={limits.claude} now={now} />
             <ProviderRow p={limits.codex} now={now} />
           </>
         ) : (
-          <div className="px-2 py-3 text-[11px] text-muted-foreground">Loading usage…</div>
+          <UsageSkeleton />
         )}
       </div>
     </div>

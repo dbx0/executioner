@@ -5,6 +5,7 @@ import { installNativeContextMenuSuppression } from './lib/native-context-menu.j
 import { UpdateNotice } from './components/UpdateNotice.js'
 import { CrashNotice } from './components/CrashNotice.js'
 import { CloseConfirm } from './components/CloseConfirm.js'
+import { WhatsNew } from './components/WhatsNew.js'
 
 export function App(): JSX.Element {
   // A desktop app has no use for the browser's Back/Reload/Inspect menu: the
@@ -17,6 +18,7 @@ export function App(): JSX.Element {
       <UpdateNotice />
       <CrashNotice />
       <CloseConfirm />
+      <WhatsNew />
     </>
   )
 }

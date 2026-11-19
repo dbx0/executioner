@@ -28,6 +28,11 @@ const FACT_IDENTITY: Record<string, string[]> = {
   screenshot: ['url', 'path'],
   technology: ['technology', 'name', 'plugin', 'value'],
   vulnerability: ['id', 'template', 'title', 'type', 'param', 'payload'],
+  // One certificate per port: a renewal replaces the expiring one.
+  certificate: ['port'],
+  // One answer set per name and record type: a repointed CNAME replaces the old
+  // answer rather than leaving both, so the row always says where it points now.
+  dns_record: ['name', 'type'],
 }
 
 /**

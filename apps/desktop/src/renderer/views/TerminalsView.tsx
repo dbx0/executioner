@@ -2,21 +2,26 @@ import type { CSSProperties, JSX, MouseEvent as ReactMouseEvent } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Plus, TerminalSquare, FileText, Globe, SquareDashed } from 'lucide-react'
 import { useApp, type ActiveTab } from '../store.js'
-import { Terminal } from '../components/terminal/Terminal.js'
-import { FileViewer, isMarkdownPath } from '../components/workspace/FileViewer.js'
+import { FileViewer } from '../components/workspace/FileViewer.js'
+import { AgentIcon } from '../components/brand/AgentIcon.js'
 import { AgentStatusDot } from '../components/brand/AgentStatusDot.js'
 import { OnboardingChecklist } from '../components/onboarding/OnboardingChecklist.js'
 import { SpawnMenu } from '../components/SpawnMenu.js'
-import { TeamPanel, isTeamSession } from '../components/TeamPanel.js'
 import { Button } from '../components/ui/button.js'
+import { GlassPanel } from '../components/ui/glass-panel.js'
+import { Page } from '../components/ui/page.js'
 import { keepsNativeMenu } from '../lib/native-context-menu.js'
 import { itemKey, leaves, rects, type Rect } from '../lib/pane-tree.js'
 import { cn } from '../lib/utils.js'
+
+const TAB_ICON = 'size-3.5 shrink-0'
 import { bulkCloseConfirmation, bulkCloseTargets, closeConfirmation, type BulkClose } from '../store/slices/layouts.js'
 import { BrowserHandoffItems, BrowserPane } from './terminals/BrowserPane.js'
 import { EmptySessionActions } from './terminals/EmptySessionActions.js'
+import { paneBox, paneCardClass } from './terminals/pane-box.js'
 import { PaneMenu, PaneOverlay } from './terminals/PaneOverlay.js'
 import { RunAgentCards } from './terminals/RunAgentCards.js'
+import { TerminalPane } from './terminals/TerminalPane.js'
 import { WorkspaceTab } from './terminals/WorkspaceTab.js'
 
 /**
@@ -39,14 +44,12 @@ export function TerminalsView(): JSX.Element {
   const activeView = useApp((s) => s.activeView)
   const sessionState = useApp((s) => s.sessionState)
   const tabMeta = useApp((s) => s.tabMeta)
-  const closeSession = useApp((s) => s.closeSession)
   const splitPane = useApp((s) => s.splitPane)
   const movePaneToNewTab = useApp((s) => s.movePaneToNewTab)
   const closeLayout = useApp((s) => s.closeLayout)
   const closePane = useApp((s) => s.closePane)
   const focusPane = useApp((s) => s.focusPane)
   const promoteFileTab = useApp((s) => s.promoteFileTab)
-  const pulseSession = useApp((s) => s.pulseSession)
   const toggleTabPin = useApp((s) => s.toggleTabPin)
   const setTabColor = useApp((s) => s.setTabColor)
   const closeOtherTabs = useApp((s) => s.closeOtherTabs)
@@ -89,9 +92,12 @@ export function TerminalsView(): JSX.Element {
     }
   }
   const split = activeLayout !== undefined && leaves(activeLayout.root).length >= 2
-  const paneProps = (key: string): { style: CSSProperties | undefined; focus: Record<string, ((e: ReactMouseEvent) => void) | string> } => {
+  /** What a pane card needs: where it sits, whether it is the focused pane of a split, and its focus/menu handlers. */
+  const paneProps = (
+    key: string,
+  ): { style: CSSProperties | undefined; className: string; focus: Record<string, ((e: ReactMouseEvent) => void) | string> } => {
     const at = placements.get(key)
-    if (at === undefined) return { style: undefined, focus: {} }
+    if (at === undefined) return { style: undefined, className: 'hidden', focus: {} }
     // Terminals and editors keep their own right-click menu; the pane menu covers the rest of the pane.
     const menu = (e: ReactMouseEvent): void => {
       if (keepsNativeMenu(e.target)) return
@@ -101,20 +107,10 @@ export function TerminalsView(): JSX.Element {
     const focus = (): void => {
       if (activeLayout !== undefined && activeLayout.focusedLeafId !== at.leafId) focusPane(activeLayout.id, at.leafId)
     }
-    // A 1px seam between panes: inset 0.5px only on edges shared with another pane.
-    const EPS = 1e-6
-    const inL = split && at.rect.x > EPS ? 0.5 : 0
-    const inR = split && at.rect.x + at.rect.w < 1 - EPS ? 0.5 : 0
-    const inT = split && at.rect.y > EPS ? 0.5 : 0
-    const inB = split && at.rect.y + at.rect.h < 1 - EPS ? 0.5 : 0
-    const edge = (start: number, size: number, a: number, b: number): { start: string; size: string } => ({
-      start: a === 0 ? `${start * 100}%` : `calc(${start * 100}% + ${a}px)`,
-      size: a + b === 0 ? `${size * 100}%` : `calc(${size * 100}% - ${a + b}px)`,
-    })
-    const h = edge(at.rect.x, at.rect.w, inL, inR)
-    const v = edge(at.rect.y, at.rect.h, inT, inB)
     return {
-      style: { left: h.start, top: v.start, width: h.size, height: v.size },
+      style: paneBox(at.rect),
+      // Only a split marks its focused pane; a lone pane has nothing to tell apart.
+      className: paneCardClass(split && activeLayout?.focusedLeafId === at.leafId),
       focus: { 'data-pane-leaf': at.leafId, onMouseDownCapture: focus, onFocusCapture: focus, onContextMenu: menu },
     }
   }
@@ -129,7 +125,7 @@ export function TerminalsView(): JSX.Element {
     const asking = panes.some((p) => p.item?.kind === 'browser' && browserAsks[p.item.id] !== undefined)
     return { layout, tab, split: panes.length >= 2, asking }
   })
-  const askDot = <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-amber-500" role="img" aria-label="Needs you" />
+  const askDot = <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-attention" role="img" aria-label="Needs you" />
   const isPinned = (layoutId: string): boolean => tabMeta[layoutId]?.pinned === true
   const bulkQuestion = (layoutId: string, which: BulkClose): string | undefined =>
     bulkCloseConfirmation(bulkCloseTargets(layouts, tabMeta, layoutId, which), sessions, sessionState) ?? undefined
@@ -143,10 +139,17 @@ export function TerminalsView(): JSX.Element {
     strip.slice(0, tabIndex(layoutId)).some((x) => !isPinned(x.layout.id))
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Tab strip: terminals then files. */}
-      <div className="flex h-9 shrink-0 items-center border-b border-border pl-1 pr-2">
-        <div className="scrollbar-none flex min-w-0 items-stretch overflow-x-auto">
+    <Page>
+      {/* The page toolbar: the tab strip (terminals, files, browsers) and the new-session button. The row drags the window. */}
+      <header className="app-drag flex h-[52px] shrink-0 items-center gap-2 px-1">
+        <div
+          role="tablist"
+          aria-label="Open tabs"
+          className={cn(
+            'glass-capsule app-no-drag scrollbar-none h-[34px] min-w-0 items-center gap-0.5 overflow-x-auto p-[3px]',
+            strip.length === 0 ? 'hidden' : 'flex',
+          )}
+        >
           {strip.map(({ layout, tab: itemTab, split: isSplit, asking }) => {
             const meta = tabMeta[layout.id]
             // The empty-only placeholder has no item; its handlers are never reached (bare menu).
@@ -200,7 +203,7 @@ export function TerminalsView(): JSX.Element {
                   key={`l-${layout.id}`}
                   {...common}
                   title="Empty pane"
-                  icon={<SquareDashed className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />}
+                  icon={<SquareDashed className={TAB_ICON} strokeWidth={1.75} />}
                 />
               )
             }
@@ -212,6 +215,7 @@ export function TerminalsView(): JSX.Element {
                   key={`l-${layout.id}`}
                   {...common}
                   title={s.title ?? s.label}
+                  icon={s.agent === 'shell' ? <TerminalSquare className={TAB_ICON} strokeWidth={1.75} /> : <AgentIcon agent={s.agent} className={TAB_ICON} />}
                   statusDot={asking ? askDot : <AgentStatusDot state={sessionState[s.id] ?? 'idle'} />}
                 />
               )
@@ -224,7 +228,7 @@ export function TerminalsView(): JSX.Element {
                   key={`l-${layout.id}`}
                   {...common}
                   title={b.title === '' ? 'New tab' : b.title}
-                  icon={<Globe className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />}
+                  icon={<Globe className={TAB_ICON} strokeWidth={1.75} />}
                   statusDot={
                     asking ? (
                       askDot
@@ -243,12 +247,7 @@ export function TerminalsView(): JSX.Element {
                 key={`l-${layout.id}`}
                 {...common}
                 title={f.title ?? f.name}
-                icon={
-                  <FileText
-                    className={cn('size-3.5 shrink-0', isMarkdownPath(f.path) ? 'text-muted-foreground' : 'text-muted-foreground')}
-                    strokeWidth={1.75}
-                  />
-                }
+                icon={<FileText className={TAB_ICON} strokeWidth={1.75} />}
                 statusDot={asking ? askDot : undefined}
                 filePath={f.path}
                 preview={f.preview === true}
@@ -259,19 +258,19 @@ export function TerminalsView(): JSX.Element {
           })}
         </div>
         <SpawnMenu>
-          <Button variant="ghost" size="icon-sm" className="ml-1 shrink-0" aria-label="New session">
-            <Plus className="size-4" strokeWidth={1.75} />
+          <Button variant="glass" size="icon-sm" className="app-no-drag shrink-0" aria-label="New session">
+            <Plus className="size-4" strokeWidth={2} />
           </Button>
         </SpawnMenu>
-      </div>
+      </header>
 
       {error !== null && empty && (
-        <div className="shrink-0 border-b border-border bg-destructive/10 px-4 py-1.5 text-xs text-destructive">
+        <p role="alert" className="mb-panel shrink-0 rounded-control bg-status-error/10 px-4 py-1.5 text-xs text-status-error">
           {error}
-        </div>
+        </p>
       )}
 
-      <div ref={hostRef} className="relative min-h-0 flex-1 bg-card">
+      <div ref={hostRef} className="relative min-h-0 flex-1">
         {empty ? (
           <div className="flex h-full flex-col">
             <OnboardingChecklist />
@@ -288,39 +287,19 @@ export function TerminalsView(): JSX.Element {
           <>
             {sessions.map((s) => {
               const pane = paneProps(itemKey({ kind: 'terminal', id: s.id }))
-              const shown = pane.style !== undefined
-              const team = isTeamSession(s.agent)
               return (
-                <div
-                  key={s.id}
-                  className={cn('absolute flex-col gap-1.5 p-1.5', shown ? 'flex' : 'hidden')}
-                  style={pane.style}
-                  {...pane.focus}
-                >
-                  {team && <TeamPanel sessionId={s.id} agent={s.agent} />}
-                  <div className="relative min-h-0 flex-1">
-                    <Terminal
-                      connection={connection}
-                      sessionId={s.id}
-                      // Shells infer activity from output; agents report real status via hooks.
-                      onActivity={s.agent === 'shell' ? () => pulseSession(s.id) : undefined}
-                      onExit={() => closeSession(s.id)}
-                      // Agent TUIs take a multi-line prompt; a shell's Shift+Enter
-                      // stays an ordinary Enter.
-                      multilineShiftEnter={s.agent !== 'shell'}
-                    />
-                  </div>
-                </div>
+                <GlassPanel key={s.id} tone="ink" className={cn(pane.className, pane.style !== undefined && 'flex flex-col')} style={pane.style} {...pane.focus}>
+                  <TerminalPane connection={connection} session={s} />
+                </GlassPanel>
               )
             })}
             {client !== null &&
               files.map((f) => {
                 const pane = paneProps(itemKey({ kind: 'file', id: f.id }))
-                const shown = pane.style !== undefined
                 return (
-                  <div key={f.id} className={cn('absolute', shown ? 'block' : 'hidden')} style={pane.style} {...pane.focus}>
+                  <GlassPanel key={f.id} tone="ink" className={pane.className} style={pane.style} {...pane.focus}>
                     <FileViewer client={client} file={f} />
-                  </div>
+                  </GlassPanel>
                 )
               })}
             {activeRoot !== null &&
@@ -329,14 +308,14 @@ export function TerminalsView(): JSX.Element {
                 const shown = pane.style !== undefined
                 const leafId = placements.get(itemKey({ kind: 'browser', id: b.id }))?.leafId
                 return (
-                  <div key={b.id} className={cn('absolute', shown ? 'block' : 'hidden')} style={pane.style} {...pane.focus}>
+                  <GlassPanel key={b.id} tone="ink" className={pane.className} style={pane.style} {...pane.focus}>
                     <BrowserPane
                       root={activeRoot}
                       browser={b}
                       active={shown && activeLayout?.focusedLeafId === leafId}
                       visible={shown && activeView === 'terminals'}
                     />
-                  </div>
+                  </GlassPanel>
                 )
               })}
             {activeLayout !== undefined && <PaneOverlay layout={activeLayout} />}
@@ -344,6 +323,6 @@ export function TerminalsView(): JSX.Element {
           </>
         )}
       </div>
-    </div>
+    </Page>
   )
 }

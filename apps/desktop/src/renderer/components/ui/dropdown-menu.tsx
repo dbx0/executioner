@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import * as React from 'react'
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu'
 import { cn } from '../../lib/utils.js'
+import { POPOVER_ITEM, POPOVER_LABEL, POPOVER_SEPARATOR, POPOVER_SURFACE } from './surface.js'
 
 export const DropdownMenu = DropdownMenuPrimitive.Root
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
@@ -15,7 +16,8 @@ export const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        'z-50 min-w-[11rem] animate-zoom-in overflow-hidden rounded-lg border border-border bg-popover/95 p-1 shadow-floating backdrop-blur-2xl',
+        POPOVER_SURFACE,
+        'z-[80] min-w-[11rem] animate-zoom-in overflow-hidden p-1',
         className,
       )}
       {...props}
@@ -31,8 +33,8 @@ export const DropdownMenuItem = React.forwardRef<
   <DropdownMenuPrimitive.Item
     ref={ref}
     className={cn(
-      'flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-foreground outline-none',
-      'data-[highlighted]:bg-surface-3 data-[highlighted]:text-foreground [&_svg]:size-4 [&_svg]:text-muted-foreground',
+      POPOVER_ITEM,
+      'text-foreground [&_svg]:size-4 [&_svg]:text-muted-foreground',
       className,
     )}
     {...props}
@@ -42,13 +44,10 @@ DropdownMenuItem.displayName = 'DropdownMenuItem'
 
 export function DropdownMenuLabel({ className, ...props }: React.HTMLAttributes<HTMLDivElement>): JSX.Element {
   return (
-    <div
-      className={cn('px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground', className)}
-      {...props}
-    />
+    <div className={cn(POPOVER_LABEL, className)} {...props} />
   )
 }
 
 export function DropdownMenuSeparator(): JSX.Element {
-  return <DropdownMenuPrimitive.Separator className="my-1 h-px bg-border" />
+  return <DropdownMenuPrimitive.Separator className={POPOVER_SEPARATOR} />
 }

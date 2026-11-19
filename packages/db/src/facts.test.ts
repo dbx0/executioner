@@ -96,4 +96,26 @@ describe('FactRepository', () => {
     expect(facts.targetCountForExecution('run-1')).toBe(1)
     expect(facts.targetCountForExecution('nope')).toBe(0)
   })
+
+  it('keeps one certificate per port, replaced when the host is probed again', () => {
+    facts.record({ targetId, kind: 'certificate', executionId: null, nodeId: 'tls-1', data: { port: 443, not_after: '2026-12-01T00:00:00Z' } })
+    facts.record({ targetId, kind: 'certificate', executionId: null, nodeId: 'tls-2', data: { port: '443', not_after: '2027-03-01T00:00:00Z' } })
+    facts.record({ targetId, kind: 'certificate', executionId: null, nodeId: 'tls-3', data: { port: 8443, not_after: '2026-12-01T00:00:00Z' } })
+    const certs = facts.forTarget(targetId, 'certificate')
+    expect(certs.map((f) => [String(f.data.port), f.data.not_after])).toEqual([
+      ['443', '2027-03-01T00:00:00Z'],
+      ['8443', '2026-12-01T00:00:00Z'],
+    ])
+  })
+
+  it('keeps one dns_record per name and type, so a moved CNAME replaces the old answer', () => {
+    facts.record({ targetId, kind: 'dns_record', executionId: null, nodeId: 'dns-1', data: { name: 'example.com', type: 'CNAME', value: 'old.herokuapp.com' } })
+    facts.record({ targetId, kind: 'dns_record', executionId: null, nodeId: 'dns-1', data: { name: 'example.com', type: 'A', value: '1.2.3.4' } })
+    facts.record({ targetId, kind: 'dns_record', executionId: null, nodeId: 'dns-2', data: { name: 'example.com', type: 'CNAME', value: 'new.vercel.app' } })
+    const records = facts.forTarget(targetId, 'dns_record')
+    expect(records.map((f) => [f.data.type, f.data.value]).sort()).toEqual([
+      ['A', '1.2.3.4'],
+      ['CNAME', 'new.vercel.app'],
+    ])
+  })
 })

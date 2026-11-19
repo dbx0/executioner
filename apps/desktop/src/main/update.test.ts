@@ -14,6 +14,7 @@ import {
   relaunchTarget,
   releaseAsset,
   tagFromReleaseUrl,
+  windowsInstallCommand,
 } from './update.js'
 
 describe('tagFromReleaseUrl', () => {
@@ -88,6 +89,28 @@ describe('macInstallCommand', () => {
 
   it('removes its own job however the script ends, so launchd runs it once', () => {
     expect(argv.at(-1)).toContain(`trap 'launchctl remove "$EXE_LAUNCHD_LABEL"' EXIT`)
+  })
+})
+
+describe('windowsInstallCommand', () => {
+  const argv = windowsInstallCommand()
+
+  it('runs an attached launcher so powershell keeps a console', () => {
+    // DETACHED_PROCESS leaves powershell.exe without a console and it exits 0
+    // without running anything. startInstall spawns this argv without
+    // detached:true, and the argv itself is a single -Command launcher (no
+    // multiline script), so the launcher runs normally.
+    expect(argv.slice(0, -1)).toEqual(['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command'])
+  })
+
+  it('starts the real installer in a hidden powershell via an encoded command', () => {
+    const launcher = argv.at(-1) ?? ''
+    expect(launcher).toContain('Start-Process -FilePath powershell.exe -WindowStyle Hidden')
+    const encoded = /-EncodedCommand','([A-Za-z0-9+/=]+)'/.exec(launcher)?.[1] ?? ''
+    const script = Buffer.from(encoded, 'base64').toString('utf16le')
+    expect(script).toContain('Wait-Process -Id $env:EXE_PID')
+    expect(script).toContain("Join-Path $env:EXECUTIONER_DOWNLOAD_DIR 'install.ps1'")
+    expect(script).toContain('Start-Process -FilePath $env:EXE_RELAUNCH')
   })
 })
 

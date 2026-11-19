@@ -1,15 +1,24 @@
 id = "dnsx"
 name = "dnsx"
-description = "Fast DNS toolkit — resolves domains and validates live hosts across multiple record types"
+description = "Fast DNS toolkit. Resolves a name across record types, or reverse-resolves an IP, and records every answer"
 category = "recon"
-accepts = ["domain", "subdomain"]
+accepts = ["domain", "subdomain", "ip"]
 
 [params]
-record_types = { type = "string", placeholder = "a,aaaa,cname", default = "a", label = "Record types", description = "DNS record type to query (a, aaaa, cname, mx, ns, txt)" }
+a = { type = "bool", default = true, label = "A", description = "IPv4 addresses" }
+aaaa = { type = "bool", default = true, label = "AAAA", description = "IPv6 addresses" }
+cname = { type = "bool", default = true, label = "CNAME", description = "Where the name is aliased to" }
+mx = { type = "bool", default = true, label = "MX", description = "Mail servers" }
+ns = { type = "bool", default = true, label = "NS", description = "Name servers" }
+txt = { type = "bool", default = true, label = "TXT", description = "Text records (SPF, domain verification)" }
+ptr = { type = "bool", default = false, label = "PTR", description = "Reverse lookup. Turn on for an IP target" }
+resolvers = { type = "string", default = "", placeholder = "1.1.1.1,8.8.8.8", label = "Resolvers", description = "DNS servers to ask, comma separated. Leave empty for the dnsx defaults (public resolvers). Set it when the network only allows its own resolver" }
 
 [command]
 program = "dnsx"
-args = ["-d", "{{ target.value }}", "-resp", "-json", "-silent", "-{{ params.record_types }}"]
+# -l resolves the hosts it is given. -d is the brute-force input and refuses to
+# run without a wordlist.
+args = ["-l", "{{ target.value }}", "-resp", "-json", "-silent", "{{ params.a | -a }}", "{{ params.aaaa | -aaaa }}", "{{ params.cname | -cname }}", "{{ params.mx | -mx }}", "{{ params.ns | -ns }}", "{{ params.txt | -txt }}", "{{ params.ptr | -ptr }}", "{{ params.resolvers | -r }}", "{{ params.resolvers? }}"]
 timeout_ms = 120000
 
 [emit]
@@ -20,3 +29,41 @@ records = "$"
 [[emit.facts]]
 kind = "raw_output"
 data = { host = "{{ record.host }}", status_code = "{{ record.status_code }}" }
+
+# One rule per record type. A row only carries the types that were asked for and
+# answered, so the others resolve nothing and are skipped. An answer that is
+# present but blank (a null MX) is skipped too.
+[[emit.facts]]
+kind = "dns_record"
+data = { name = "{{ record.host }}", type = "A", value = "{{ record.a }}" }
+skip_if_empty = ["value"]
+
+[[emit.facts]]
+kind = "dns_record"
+data = { name = "{{ record.host }}", type = "AAAA", value = "{{ record.aaaa }}" }
+skip_if_empty = ["value"]
+
+[[emit.facts]]
+kind = "dns_record"
+data = { name = "{{ record.host }}", type = "CNAME", value = "{{ record.cname }}" }
+skip_if_empty = ["value"]
+
+[[emit.facts]]
+kind = "dns_record"
+data = { name = "{{ record.host }}", type = "MX", value = "{{ record.mx }}" }
+skip_if_empty = ["value"]
+
+[[emit.facts]]
+kind = "dns_record"
+data = { name = "{{ record.host }}", type = "NS", value = "{{ record.ns }}" }
+skip_if_empty = ["value"]
+
+[[emit.facts]]
+kind = "dns_record"
+data = { name = "{{ record.host }}", type = "TXT", value = "{{ record.txt }}" }
+skip_if_empty = ["value"]
+
+[[emit.facts]]
+kind = "dns_record"
+data = { name = "{{ record.host }}", type = "PTR", value = "{{ record.ptr }}" }
+skip_if_empty = ["value"]

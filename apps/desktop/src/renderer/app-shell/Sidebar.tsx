@@ -1,54 +1,119 @@
 import type { JSX } from 'react'
 import { Search } from 'lucide-react'
 import { useApp } from '../store.js'
+import { cn } from '../lib/utils.js'
+import { GlassPanel } from '../components/ui/glass-panel.js'
 import { ScrollArea } from '../components/ui/scroll-area.js'
+import { EngagementRail } from './EngagementRail.js'
+import { SidebarToggle } from './SidebarToggle.js'
+import { isDarwin } from './platform.js'
 import { NAV_GROUPS, NavItemRow } from './sidebar/NavRows.js'
 import { SectionLabel } from './sidebar/SectionLabel.js'
 import { SessionsSection } from './sidebar/SessionsSection.js'
 import { RunsSection } from './sidebar/RunsSection.js'
 import { SidebarFooter } from './sidebar/SidebarFooter.js'
 
-export function Sidebar(): JSX.Element {
+/**
+ * The top row of the sidebar. There is no title bar, so this row drags the
+ * window and, on macOS, leaves its left end to the native traffic lights
+ * (they sit at x 22 to 74 of the window, see `trafficLightPosition` in the main
+ * process; the panel itself starts 8px in).
+ */
+function SidebarHeader(): JSX.Element {
+  const engagementName = useApp((s) => s.engagementName)
+  return (
+    <div className={cn('app-drag flex h-11 shrink-0 items-center gap-2 pr-2.5', isDarwin() ? 'pl-[70px]' : 'pl-3.5')}>
+      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-[-0.01em]">
+        {engagementName ?? 'Executioner'}
+      </span>
+      <SidebarToggle className="size-7" />
+    </div>
+  )
+}
+
+/**
+ * The collapsed sidebar: only the engagement rail, in a slim panel of its own,
+ * with the toggle on top to bring the rest back. On macOS the panel is wide
+ * enough to hold the traffic lights (window x 22 to 74), which get the first
+ * row to themselves.
+ */
+function CollapsedSidebar(): JSX.Element {
+  const darwin = isDarwin()
+  return (
+    <div className="flex shrink-0 p-panel">
+      <GlassPanel asChild>
+        <aside aria-label="Engagements" className={cn('flex flex-col', darwin ? 'w-[76px]' : 'w-[52px]')}>
+          {darwin && <div className="app-drag h-11 shrink-0" />}
+          <div className={cn('app-drag flex shrink-0 items-center justify-center', darwin ? 'h-9' : 'h-11')}>
+            <SidebarToggle className="size-7" />
+          </div>
+          <ScrollArea className="min-h-0 flex-1">
+            <EngagementRail standalone />
+          </ScrollArea>
+        </aside>
+      </GlassPanel>
+    </div>
+  )
+}
+
+/**
+ * The sidebar: one floating glass panel holding the header row, the engagement
+ * rail (only once an engagement is open) and the nav column. With its 8px
+ * inset it takes 312px of the window, 260px without the rail. Collapsed, it
+ * shrinks to the rail alone; with no engagement open there is no rail to keep,
+ * so it renders nothing and the shell floats a reopen button instead.
+ */
+export function Sidebar(): JSX.Element | null {
   const hasEngagement = useApp((s) => s.connection !== null)
+  const hasRail = useApp((s) => s.open.length > 0)
+  const collapsed = useApp((s) => s.sidebarCollapsed)
   const setPalette = useApp((s) => s.setPalette)
 
+  if (collapsed) return hasRail ? <CollapsedSidebar /> : null
+
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-      <ScrollArea className="min-h-0 flex-1 px-2 pb-2 pt-2">
-        <button
-          type="button"
-          data-tour="search"
-          onClick={() => setPalette(true)}
-          // Deliberately muted: the palette opener sits distinctly quieter than
-          // the nav items (which are sidebar-foreground/65). Its own opacity-60
-          // guarantees it reads dimmer even where --muted-foreground resolves
-          // close to --sidebar-foreground. Hover lifts only the background.
-          className="mb-1 flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-[13px] text-muted-foreground opacity-60 transition-[background-color,opacity] hover:bg-surface-2"
-        >
-          <Search className="size-4" strokeWidth={1.75} />
-          <span>Search</span>
-          <kbd className="ml-auto rounded border border-border px-1 text-[10px]">⌘K</kbd>
-        </button>
+    <div className="flex shrink-0 p-panel">
+      <GlassPanel asChild>
+        <aside className={cn('flex flex-col', hasRail ? 'w-[296px]' : 'w-[244px]')}>
+          <SidebarHeader />
+          <div className="flex min-h-0 flex-1">
+            {hasRail && <EngagementRail />}
+            <div className="flex min-w-0 flex-1 flex-col">
+              <ScrollArea className="min-h-0 flex-1 px-2.5 pb-2 pt-0.5">
+                <button
+                  type="button"
+                  data-tour="search"
+                  onClick={() => setPalette(true)}
+                  className="glass-capsule flex h-8 w-full items-center gap-2 px-3 text-[13px] text-muted-foreground outline-none transition-colors hover:bg-glass-active hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                >
+                  <Search className="size-3.5 shrink-0" strokeWidth={2} />
+                  <span>Search</span>
+                  <kbd className="ml-auto font-sans text-[11px] text-tertiary-foreground">⌘K</kbd>
+                </button>
 
-        <div data-tour="nav">
-          {NAV_GROUPS.map((group) => (
-            <nav key={group.label} className="flex flex-col gap-0.5">
-              <SectionLabel>{group.label}</SectionLabel>
-              {group.items.map((item) => (
-                <NavItemRow key={item.kind === 'view' ? item.id : item.tab} item={item} />
-              ))}
-            </nav>
-          ))}
-        </div>
+                <div data-tour="nav">
+                  {NAV_GROUPS.map((group) => (
+                    <nav key={group.label} className="flex flex-col gap-0.5">
+                      <SectionLabel>{group.label}</SectionLabel>
+                      {group.items.map((item) => (
+                        <NavItemRow key={item.kind === 'view' ? item.id : item.tab} item={item} />
+                      ))}
+                    </nav>
+                  ))}
+                </div>
 
-        {hasEngagement && <SessionsSection />}
-      </ScrollArea>
+                {hasEngagement && <SessionsSection />}
+              </ScrollArea>
 
-      {/* Runs is pinned to the bottom of the sidebar (below the scrolling nav,
-          above the footer) so it stays put as the agent list grows. */}
-      {hasEngagement && <RunsSection />}
+              {/* Runs is pinned to the bottom of the sidebar (below the scrolling nav,
+                  above the footer) so it stays put as the agent list grows. */}
+              {hasEngagement && <RunsSection />}
 
-      <SidebarFooter />
-    </aside>
+              <SidebarFooter />
+            </div>
+          </div>
+        </aside>
+      </GlassPanel>
+    </div>
   )
 }

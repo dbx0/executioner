@@ -55,7 +55,7 @@ function columnsOf(rows: Array<Record<string, unknown>>): string[] {
 const MAX_TABLE_ROWS = 500
 
 function Empty(): JSX.Element {
-  return <span className="text-tertiary-foreground">—</span>
+  return <span className="text-tertiary-foreground">-</span>
 }
 
 /**
@@ -108,7 +108,7 @@ export function ParsedView({ value }: { value: unknown }): JSX.Element {
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-[12px]">
         <thead>
-          <tr className="border-b border-border">
+          <tr className="border-b border-glass-border">
             {cols.map((c) => (
               <th
                 key={c}
@@ -123,7 +123,7 @@ export function ParsedView({ value }: { value: unknown }): JSX.Element {
           {shown.map((r, i) => (
             <tr
               key={i}
-              className={cn('border-b border-border/40', i % 2 === 1 && 'bg-surface-1')}
+              className={cn('border-b border-glass-border', i % 2 === 1 && 'bg-glass')}
             >
               {cols.map((c) => {
                 const text = cellText(r[c])

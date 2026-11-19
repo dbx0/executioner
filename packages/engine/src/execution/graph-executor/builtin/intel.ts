@@ -1,7 +1,7 @@
 import type { Target } from '@exe/protocol'
 import type { LoopContext, NodeOutput } from '../../../infra/template-scope.js'
 import { resolveNodeTarget, resolveSecretParam, scopeFor, writeBuiltinEvidence } from '../helpers.js'
-import { finishBuiltin, type BuiltinNodeDeps } from './shared.js'
+import { finishBuiltin, resultOwner, type BuiltinNodeDeps } from './shared.js'
 
 /** geoip: keyless geolocation lookup via ip-api.com; records a `geolocation` fact. */
 export async function runGeoip(
@@ -32,9 +32,10 @@ export async function runGeoip(
       finishBuiltin(deps, executionId, node.id, 'failed', String(data.message ?? 'geoip lookup failed'), [], stdoutPath)
       return
     }
-    if (target !== undefined) {
+    const owner = resultOwner(deps, node, target, value)
+    if (owner !== undefined) {
       deps.project.facts.record({
-        targetId: target.id,
+        targetId: owner.id,
         kind: 'geolocation',
         executionId,
         nodeId: node.id,
@@ -96,21 +97,21 @@ export async function runShodan(
       data?: Array<Record<string, unknown>>
     }
     const rows: Array<Record<string, unknown>> = []
-    if (target !== undefined) {
-      for (const item of host.data ?? []) {
-        const portRow: Record<string, unknown> = {
-          port: item.port,
-          transport: item.transport ?? 'tcp',
-        }
-        if (item.product !== undefined) portRow.service = item.product
-        if (item.version !== undefined) portRow.version = item.version
-        deps.project.facts.record({ targetId: target.id, kind: 'port', executionId, nodeId: node.id, data: portRow })
-        rows.push(portRow)
-        if (typeof item.product === 'string' && item.product !== '') {
-          const techRow: Record<string, unknown> = { name: item.product, source: 'shodan' }
-          if (item.version !== undefined) techRow.version = item.version
-          deps.project.facts.record({ targetId: target.id, kind: 'technology', executionId, nodeId: node.id, data: techRow })
-        }
+    const owner = resultOwner(deps, node, target, value)
+    for (const item of host.data ?? []) {
+      const portRow: Record<string, unknown> = {
+        port: item.port,
+        transport: item.transport ?? 'tcp',
+      }
+      if (item.product !== undefined) portRow.service = item.product
+      if (item.version !== undefined) portRow.version = item.version
+      rows.push(portRow)
+      if (owner === undefined) continue
+      deps.project.facts.record({ targetId: owner.id, kind: 'port', executionId, nodeId: node.id, data: portRow })
+      if (typeof item.product === 'string' && item.product !== '') {
+        const techRow: Record<string, unknown> = { name: item.product, source: 'shodan' }
+        if (item.version !== undefined) techRow.version = item.version
+        deps.project.facts.record({ targetId: owner.id, kind: 'technology', executionId, nodeId: node.id, data: techRow })
       }
     }
     const summary = {
@@ -177,23 +178,23 @@ export async function runCensys(
     const body = JSON.parse(text) as { result?: { resource?: { services?: Array<Record<string, unknown>> } } }
     const services = body.result?.resource?.services ?? []
     const rows: Array<Record<string, unknown>> = []
-    if (target !== undefined) {
-      for (const svc of services) {
-        // Censys labels services it could not identify as UNKNOWN; that is not a technology.
-        const protocol = typeof svc.protocol === 'string' && svc.protocol !== 'UNKNOWN' ? svc.protocol : ''
-        const portRow: Record<string, unknown> = { port: svc.port, transport: svc.transport_protocol ?? 'tcp' }
-        if (protocol !== '') portRow.service = protocol
-        deps.project.facts.record({ targetId: target.id, kind: 'port', executionId, nodeId: node.id, data: portRow })
-        rows.push(portRow)
-        if (protocol !== '') {
-          deps.project.facts.record({
-            targetId: target.id,
-            kind: 'technology',
-            executionId,
-            nodeId: node.id,
-            data: { name: protocol, source: 'censys' },
-          })
-        }
+    const owner = resultOwner(deps, node, target, value)
+    for (const svc of services) {
+      // Censys labels services it could not identify as UNKNOWN; that is not a technology.
+      const protocol = typeof svc.protocol === 'string' && svc.protocol !== 'UNKNOWN' ? svc.protocol : ''
+      const portRow: Record<string, unknown> = { port: svc.port, transport: svc.transport_protocol ?? 'tcp' }
+      if (protocol !== '') portRow.service = protocol
+      rows.push(portRow)
+      if (owner === undefined) continue
+      deps.project.facts.record({ targetId: owner.id, kind: 'port', executionId, nodeId: node.id, data: portRow })
+      if (protocol !== '') {
+        deps.project.facts.record({
+          targetId: owner.id,
+          kind: 'technology',
+          executionId,
+          nodeId: node.id,
+          data: { name: protocol, source: 'censys' },
+        })
       }
     }
     const outRows = rows.length > 0 ? rows : [{ ip: value, services: services.length }]

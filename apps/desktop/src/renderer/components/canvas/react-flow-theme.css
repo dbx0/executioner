@@ -1,0 +1,79 @@
+/*
+ * React Flow ships light-theme defaults in its own stylesheet. These rules map
+ * every surface it draws (edges, handles, the selection box, the minimap) onto
+ * the app tokens, so the canvas follows whichever theme is active. It must load
+ * after the library sheet: import `flow-styles.ts`, which orders the two.
+ */
+.react-flow {
+  background: transparent;
+}
+
+/* The dot colour arrives as an SVG attribute, where a token cannot resolve. */
+.react-flow__background circle {
+  fill: var(--glass-active);
+}
+
+.react-flow__edge-path,
+.react-flow__connection-path {
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path,
+.react-flow__edge:focus-visible .react-flow__edge-path {
+  stroke: var(--foreground);
+}
+
+/* A port is a small pill on the card edge rather than the library's dot. */
+.react-flow__handle {
+  width: 7px;
+  height: 14px;
+  border-radius: var(--radius-control);
+  border: 2px solid var(--background);
+  background: var(--muted-foreground);
+  transition: background-color 0.15s;
+}
+
+.react-flow__handle.connectionindicator:hover,
+.react-flow__handle.connecting {
+  background: var(--foreground);
+}
+
+.react-flow__selection,
+.react-flow__nodesselection-rect {
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  background: var(--glass);
+}
+
+.react-flow__selection:focus,
+.react-flow__selection:focus-visible,
+.react-flow__nodesselection-rect:focus,
+.react-flow__nodesselection-rect:focus-visible {
+  outline: none;
+}
+
+.react-flow__minimap {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--glass);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+  backdrop-filter: blur(24px);
+}
+
+.react-flow__minimap svg {
+  display: block;
+  background: transparent;
+}
+
+/* The mask colour arrives as an SVG attribute, where a token cannot resolve. */
+.react-flow__minimap-mask {
+  fill: var(--glass-strong);
+}
+
+.react-flow__attribution {
+  display: none;
+}

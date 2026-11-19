@@ -3,6 +3,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useApp } from '../../store.js'
 import { TOURS, tourIdFor, type TourId } from '../../lib/tours.js'
 import { Button } from '../ui/button.js'
+import { POPOVER_SURFACE } from '../ui/surface.js'
+import { cn } from '../../lib/utils.js'
 
 /** Breathing room between the highlighted element and the cutout around it. */
 const PAD = 6
@@ -170,7 +172,7 @@ export function PageTour(): JSX.Element | null {
       ) : (
         <div
           data-testid="tour-spotlight"
-          className="pointer-events-none absolute rounded-lg ring-2 ring-primary/70 transition-all duration-200"
+          className="pointer-events-none absolute rounded-[14px] ring-2 ring-primary/70 transition-all duration-200"
           style={{ ...box, boxShadow: '0 0 0 9999px rgb(0 0 0 / 0.6)' }}
         />
       )}
@@ -179,12 +181,12 @@ export function PageTour(): JSX.Element | null {
         role="dialog"
         aria-modal="true"
         aria-labelledby="tour-title"
-        className="absolute flex flex-col gap-3 rounded-xl border border-border bg-popover p-4 text-foreground shadow-floating"
+        className={cn(POPOVER_SURFACE, 'absolute flex flex-col gap-3 p-4')}
         style={{ width: CARD_WIDTH, top: pos.top, left: pos.left }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex flex-col gap-1.5">
-          <h2 id="tour-title" className="text-[14px] font-medium">
+          <h2 id="tour-title" className="text-[14px] font-semibold tracking-[-0.01em]">
             {current.title}
           </h2>
           <p className="text-[13px] leading-relaxed text-muted-foreground">{current.body}</p>

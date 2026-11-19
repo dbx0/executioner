@@ -133,6 +133,7 @@ export const useApp = create<AppState>((set, get) => {
     browsers: [],
     browserActivity: {},
     browserAsks: {},
+    expandedBrowserAsk: null,
     activeTab: null,
     tabMeta: {},
     editorAutoSave: loadEditorAutoSave(),

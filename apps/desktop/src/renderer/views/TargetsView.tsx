@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { RefreshCw, Plus, ShieldCheck, X } from 'lucide-react'
+import { RefreshCw, Plus, Search, ShieldCheck } from 'lucide-react'
 import { useApp } from '../store.js'
 import { useEngineChange } from '../lib/engine-changes.js'
 import { targetsApi, type TargetNode } from '../api/targets.js'
@@ -9,41 +9,24 @@ import { executionsApi } from '../api/executions.js'
 import { backendsApi } from '../api/backends.js'
 import { cn } from '../lib/utils.js'
 import { Button } from '../components/ui/button.js'
+import { GlassPanel } from '../components/ui/glass-panel.js'
 import { Input } from '../components/ui/input.js'
-import { Badge } from '../components/ui/badge.js'
+import { Page, PageBody, PageToolbar } from '../components/ui/page.js'
+import { Spinner } from '../components/ui/spinner.js'
 import { VirtualTargetTree, useFlashIds } from '../components/targets/VirtualTargetTree.js'
 import { TargetTreeSkeleton } from '../components/targets/TargetTreeSkeleton.js'
 import { TargetDetailPanel } from '../components/targets/TargetDetail.js'
 import { AddTargetModal } from '../components/modals/AddTargetModal.js'
+import { Banner } from '../components/targets/Banner.js'
 import { countByScope, filterTreeByScope, type ScopeFilter } from '../components/targets/ScopeBadge.js'
+import { ScopeFilterTabs } from '../components/targets/ScopeFilterTabs.js'
 import { TargetContextMenu } from '../components/targets/TargetContextMenu.js'
+import { collectIds, countTree, filterTreeByText, findInTree } from '../components/targets/tree-utils.js'
 import { LOCAL_BACKEND, type RunBackend } from '../lib/target-actions.js'
-
-function collectIds(nodes: TargetNode[], into: string[] = []): string[] {
-  for (const n of nodes) {
-    into.push(n.id)
-    collectIds(n.children, into)
-  }
-  return into
-}
-
-function countTree(nodes: TargetNode[]): number {
-  return nodes.reduce((acc, n) => acc + 1 + countTree(n.children), 0)
-}
-
-/** Depth-first lookup of a target by id in the (possibly nested) tree. */
-function findInTree(nodes: TargetNode[], id: string): TargetNode | null {
-  for (const n of nodes) {
-    if (n.id === id) return n
-    const hit = findInTree(n.children, id)
-    if (hit !== null) return hit
-  }
-  return null
-}
 
 export function TargetsView(): JSX.Element {
   const client = useApp((s) => s.client)
-  // Scalar selects only — deriving the node from the tree happens in the effect.
+  // Scalar selects only: deriving the node from the tree happens in the effect.
   const pendingTargetId = useApp((s) => s.pendingTargetId)
   const setPendingTargetId = useApp((s) => s.setPendingTargetId)
   const setActiveView = useApp((s) => s.setActiveView)
@@ -116,7 +99,7 @@ export function TargetsView(): JSX.Element {
 
   // Deep-link from the command palette: reveal the requested target's detail.
   // The tree is expanded-by-default, so selecting is enough to make ancestors
-  // visible. Fire once — clear the pending id whether or not the target still
+  // visible. Fire once: clear the pending id whether or not the target still
   // exists (guards against a stale request), but only after the tree has
   // actually been fetched so we don't clear before it has a chance to load.
   useEffect(() => {
@@ -130,16 +113,10 @@ export function TargetsView(): JSX.Element {
   }, [pendingTargetId, tree, loadedOnce, loading, setPendingTargetId])
 
   // Prune to matches (keeps a node if its value matches or a descendant survives).
-  const filtered = useMemo(() => {
-    const byScope = filterTreeByScope(tree, scopeFilter)
-    if (filter.trim() === '') return byScope
-    const q = filter.toLowerCase()
-    const prune = (nodes: TargetNode[]): TargetNode[] =>
-      nodes
-        .map((n) => ({ ...n, children: prune(n.children) }))
-        .filter((n) => n.value.toLowerCase().includes(q) || n.children.length > 0)
-    return prune(byScope)
-  }, [tree, filter, scopeFilter])
+  const filtered = useMemo(
+    () => filterTreeByText(filterTreeByScope(tree, scopeFilter), filter),
+    [tree, filter, scopeFilter],
+  )
 
   const total = useMemo(() => countTree(tree), [tree])
 
@@ -167,8 +144,8 @@ export function TargetsView(): JSX.Element {
   const runWorkflowOn = useCallback(
     (workflowId: string, targetId: string, backendId: string) => {
       if (client === null) return
-      // The backend came from the menu, which lists only connections that exist
-      // — so unlike a remembered id, it cannot name a profile that was deleted.
+      // The backend came from the menu, which lists only connections that exist,
+      // so unlike a remembered id it cannot name a profile that was deleted.
       void executionsApi(client)
         .runWorkflow(workflowId, {
           targetId,
@@ -199,109 +176,65 @@ export function TargetsView(): JSX.Element {
   )
   const scopeCounts = useMemo(() => countByScope(tree), [tree])
 
-  // The filter earns its row only when the verdicts actually differ. On an
-  // engagement whose boundary is settled every asset is in scope, and a control
-  // offering to hide nothing is just another thing to read past.
-  const scopeTabs = useMemo(() => {
-    const present = (['in', 'unknown', 'out'] as const).filter((key) => scopeCounts[key] > 0)
-    if (present.length < 2) return []
-    const label = { in: 'In scope', unknown: 'Unscoped', out: 'Out of scope' } as const
-    return [
-      { key: 'all' as const, label: 'All', count: total },
-      ...present.map((key) => ({ key, label: label[key], count: scopeCounts[key] })),
-    ]
-  }, [scopeCounts, total])
-
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
-        <span className="text-sm font-medium">Targets</span>
-        <Badge variant="outline">{total}</Badge>
-        <div className="ml-auto flex items-center gap-2">
-          <Input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter…"
-            data-tour="targets-filter"
-            className="h-8 w-44 text-[13px]"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={client === null}
-            onClick={() => setActiveView('scope')}
-            aria-label="Edit scope rules"
-          >
-            <ShieldCheck className="size-4" strokeWidth={1.75} />
-            Scope
-          </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => void refresh()} aria-label="Refresh">
-            <RefreshCw className={cn('size-4', loading && 'animate-[spin_1s_linear_infinite]')} strokeWidth={1.75} />
-          </Button>
-          <Button size="sm" data-tour="targets-add" disabled={client === null} onClick={() => setShowAdd(true)}>
-            <Plus className="size-4" strokeWidth={2} />
-            Add target
-          </Button>
-        </div>
-      </div>
-
-      {error !== null && (
-        <div className="shrink-0 border-b border-border bg-destructive/10 px-4 py-1.5 text-xs text-destructive">
-          {error}
-        </div>
-      )}
-
-      {error === null && notice !== null && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-1.5 text-xs text-muted-foreground">
-          <span className="truncate">{notice}</span>
-          <button
-            type="button"
-            aria-label="Dismiss"
-            className="ml-auto shrink-0 opacity-60 hover:opacity-100"
-            onClick={() => setNotice(null)}
-          >
-            <X className="size-3.5" strokeWidth={2} />
-          </button>
-        </div>
-      )}
-
-      {scopeTabs.length > 0 && (
-        <div
-          role="tablist"
-          aria-label="Filter by scope"
-          className="flex shrink-0 items-center gap-1 border-b border-border px-4 py-1.5"
-        >
-          {scopeTabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              aria-selected={scopeFilter === tab.key}
-              onClick={() => setScopeFilter(tab.key)}
-              className={cn(
-                'rounded-md px-2 py-1 text-xs',
-                scopeFilter === tab.key
-                  ? 'bg-surface-3 font-medium'
-                  : 'text-muted-foreground hover:bg-surface-2',
-              )}
+    <Page>
+      <PageToolbar
+        title="Targets"
+        meta={<span className="glass-capsule flex h-5 items-center px-2 text-[11px] text-foreground">{total}</span>}
+        actions={
+          <>
+            <div className="relative">
+              <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" strokeWidth={2} />
+              <Input
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Filter targets"
+                aria-label="Filter targets"
+                data-tour="targets-filter"
+                className="h-8 w-[220px] pl-8 text-[13px]"
+              />
+            </div>
+            <Button
+              variant="glass"
+              size="sm"
+              disabled={client === null}
+              onClick={() => setActiveView('scope')}
+              aria-label="Edit scope rules"
             >
-              {tab.label}
-              <span className="ml-1.5 tabular-nums opacity-60">{tab.count}</span>
-            </button>
-          ))}
-        </div>
+              <ShieldCheck strokeWidth={1.75} />
+              Scope
+            </Button>
+            <Button variant="glass" size="icon-sm" disabled={loading} onClick={() => void refresh()} aria-label="Refresh">
+              {loading ? <Spinner size="sm" /> : <RefreshCw strokeWidth={1.75} />}
+            </Button>
+            <Button size="sm" data-tour="targets-add" disabled={client === null} onClick={() => setShowAdd(true)}>
+              <Plus strokeWidth={2} />
+              Add target
+            </Button>
+          </>
+        }
+      />
+
+      {error !== null ? (
+        <Banner tone="error" className="mb-panel">
+          {error}
+        </Banner>
+      ) : (
+        notice !== null && (
+          <Banner tone="notice" className="mb-panel" onDismiss={() => setNotice(null)}>
+            {notice}
+          </Banner>
+        )
       )}
 
-      {/* Tree on the left; the detail pane joins it only once a target is picked,
+      {/* Tree on the left; the detail panel joins it only once a target is picked,
           so an unselected page gives the whole width to the list. */}
-      <div className="flex min-h-0 flex-1">
-        <div
+      <PageBody>
+        <GlassPanel
           data-tour="targets-tree"
-          className={cn(
-            'flex flex-col',
-            detailOpen ? 'w-96 shrink-0 border-r border-border' : 'min-w-0 flex-1',
-          )}
+          className={cn('flex flex-col', detailOpen ? 'w-[440px] shrink-0' : 'min-w-0 flex-1')}
         >
+          <ScopeFilterTabs counts={scopeCounts} total={total} value={scopeFilter} onChange={setScopeFilter} />
           {!loadedOnce ? (
             <TargetTreeSkeleton />
           ) : filtered.length === 0 ? (
@@ -326,17 +259,17 @@ export function TargetsView(): JSX.Element {
                   onRemoveFromScope={(pattern) => void changeScope('exclude', pattern)}
                   onRunWorkflow={(workflowId, backendId) => runWorkflowOn(workflowId, node.id, backendId)}
                   onRunTool={() => openTools(node.id)}
-                  onDelete={() => void deleteTarget(node)}
+                  onDelete={() => deleteTarget(node)}
                 >
                   {row}
                 </TargetContextMenu>
               )}
             />
           )}
-        </div>
+        </GlassPanel>
 
         {api !== null && selectedId !== null && (
-          <div className="min-w-0 flex-1">
+          <GlassPanel className="min-w-0 flex-1">
             <TargetDetailPanel
               api={api}
               targetId={selectedId}
@@ -347,14 +280,13 @@ export function TargetsView(): JSX.Element {
               }}
               onClose={() => setSelectedId(null)}
             />
-          </div>
+          </GlassPanel>
         )}
-      </div>
+      </PageBody>
 
       {showAdd && client !== null && (
         <AddTargetModal client={client} onClose={() => setShowAdd(false)} onCreated={() => void refresh()} />
       )}
-
-    </div>
+    </Page>
   )
 }

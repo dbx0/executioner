@@ -5,8 +5,11 @@ import type { BrowserState } from '../../../main/browser/page.js'
 import { useApp } from '../../store.js'
 import type { BrowserTab } from '../../store/types.js'
 import { Button } from '../../components/ui/button.js'
+import { Input } from '../../components/ui/input.js'
+import { Spinner } from '../../components/ui/spinner.js'
 import { cn } from '../../lib/utils.js'
 import { TabMenuItem } from './TabMenu.js'
+import { BrowserAskModal } from './BrowserAskModal.js'
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i
 
@@ -59,42 +62,44 @@ export function BrowserHandoffItems({ id, close }: { id: string; close: () => vo
 }
 
 /**
- * What the agent asked the operator for. Only Done answers it: the agent's
- * browser_ask_operator call stays blocked until then, and gets the reply.
+ * The amber trigger bar for what an agent asked the operator for. It only truncates the ask
+ * and opens the modal, where the full message and the reply box live: an agent's message can
+ * run long, and the inline box was too cramped to read or answer in. The agent's
+ * browser_ask_operator call stays blocked until the modal's Submit answers it.
  */
-function AskBanner({ id, message }: { id: string; message: string }): JSX.Element {
+function AskBanner({ id, who, message }: { id: string; who: string; message: string }): JSX.Element {
   const answerBrowserAsk = useApp((s) => s.answerBrowserAsk)
-  const [reply, setReply] = useState('')
-  const done = (): void => {
-    const text = reply.trim()
-    void answerBrowserAsk(id, text === '' ? undefined : text)
-  }
+  // The open state lives in the store so the attention notch can open this dialog too.
+  const open = useApp((s) => s.expandedBrowserAsk === id)
+  const setExpanded = useApp((s) => s.setBrowserAskExpanded)
   return (
     <div
       role="status"
       data-browser-ask
-      className="flex shrink-0 items-center gap-2 border-b border-amber-500/40 bg-amber-500/15 px-2 py-1 text-xs text-amber-700 dark:text-amber-300"
+      className="flex shrink-0 items-center gap-2 border-b border-glass-border bg-attention/15 py-1 pl-3.5 pr-1.5 text-xs text-attention"
     >
-      <span className="min-w-0 flex-1 truncate" title={message}>
-        {message}
-      </span>
-      <input
-        aria-label="Reply to the agent"
-        placeholder="Reply (optional), for example a code"
-        spellCheck={false}
-        value={reply}
-        onChange={(e) => setReply(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            done()
-          }
-        }}
-        className="h-6 w-56 min-w-0 shrink rounded-md border border-border bg-surface-2 px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-border-strong"
-      />
-      <Button variant="outline" size="sm" className="h-6 shrink-0 px-2 text-xs" onClick={done}>
-        Done
+      <button
+        type="button"
+        onClick={() => setExpanded(id)}
+        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-control text-left outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        <span className="font-medium">{who} needs you:</span>
+        <span className="min-w-0 flex-1 truncate font-normal opacity-90">{message}</span>
+      </button>
+      <Button variant="glass" size="xs" className="shrink-0" onClick={() => setExpanded(id)}>
+        Respond
       </Button>
+      {open && (
+        <BrowserAskModal
+          who={who}
+          message={message}
+          onClose={() => setExpanded(null)}
+          onSubmit={(reply) => {
+            setExpanded(null)
+            void answerBrowserAsk(id, reply)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -195,12 +200,12 @@ export function BrowserPane({
   }
 
   return (
-    <div data-browser-pane={id} data-active={active} className="flex h-full flex-col bg-card">
-      <div className="relative flex h-8 shrink-0 items-center gap-1 border-b border-border px-1.5">
-        <Button variant="ghost" size="icon-sm" className="size-6" aria-label="Back" disabled={!state.canGoBack} onClick={() => operate('back')}>
+    <div data-browser-pane={id} data-active={active} className="flex h-full flex-col">
+      <div className="relative flex h-10 shrink-0 items-center gap-1 border-b border-glass-border px-2">
+        <Button variant="ghost" size="icon-xs" className="size-7" aria-label="Back" disabled={!state.canGoBack} onClick={() => operate('back')}>
           <ArrowLeft className="size-3.5" strokeWidth={1.75} />
         </Button>
-        <Button variant="ghost" size="icon-sm" className="size-6" aria-label="Forward" disabled={!state.canGoForward} onClick={() => operate('forward')}>
+        <Button variant="ghost" size="icon-xs" className="size-7" aria-label="Forward" disabled={!state.canGoForward} onClick={() => operate('forward')}>
           <ArrowRight className="size-3.5" strokeWidth={1.75} />
         </Button>
         <Button
@@ -212,7 +217,7 @@ export function BrowserPane({
         >
           {state.loading ? <X className="size-3.5" strokeWidth={1.75} /> : <RotateCw className="size-3.5" strokeWidth={1.75} />}
         </Button>
-        <input
+        <Input
           aria-label="Address"
           spellCheck={false}
           value={draft ?? state.url}
@@ -227,10 +232,10 @@ export function BrowserPane({
               setDraft(null)
             }
           }}
-          className="h-6 min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2 text-xs text-foreground outline-none focus:border-border-strong"
+          className="h-7 min-w-0 flex-1 px-3 text-xs"
         />
         {error !== null && (
-          <span role="alert" className="max-w-[160px] truncate text-[11px] text-destructive" title={error}>
+          <span role="alert" className="max-w-[160px] truncate text-[11px] text-status-error" title={error}>
             {error}
           </span>
         )}
@@ -241,20 +246,25 @@ export function BrowserPane({
         )}
         {acting && ownerLabel !== null && (
           <span
-            className="min-w-0 max-w-[180px] shrink truncate rounded-full bg-surface-3 px-2 py-0.5 text-[11px] text-foreground"
+            className="min-w-0 max-w-[180px] shrink truncate rounded-control bg-glass-active px-2 py-0.5 text-[11px] text-foreground"
             title={`${ownerLabel} is using this page`}
           >
             {ownerLabel} is using this page
           </span>
         )}
-        {state.loading && <div className="absolute inset-x-0 bottom-0 h-px animate-pulse bg-muted-foreground" data-testid="browser-loading" />}
+        {state.loading && (
+          <>
+            <Spinner size="xs" className="text-muted-foreground" />
+            <div className="absolute inset-x-0 bottom-0 h-px animate-pulse bg-muted-foreground" data-testid="browser-loading" />
+          </>
+        )}
       </div>
-      {ask !== undefined && <AskBanner key={ask} id={id} message={ask} />}
+      {ask !== undefined && <AskBanner key={ask} id={id} who={ownerLabel ?? 'An agent'} message={ask} />}
       <div ref={pageRef} data-browser-page className={cn('relative min-h-0 flex-1')}>
         {crashed && (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
             <p>This page crashed.</p>
-            <Button variant="outline" size="sm" onClick={() => operate('reload')}>
+            <Button variant="glass" size="sm" onClick={() => operate('reload')}>
               Reload
             </Button>
           </div>

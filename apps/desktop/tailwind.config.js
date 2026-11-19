@@ -1,3 +1,10 @@
+/**
+ * A theme token as a Tailwind color. Tailwind cannot apply an opacity modifier
+ * (`bg-primary/90`, `ring-ring/50`) to a bare `var()`, and silently emits no
+ * rule at all, so every token goes through color-mix with the alpha slot.
+ */
+const token = (name) => `color-mix(in srgb, var(${name}) calc(<alpha-value> * 100%), transparent)`
+
 /** @type {import('tailwindcss').Config} */
 export default {
   darkMode: 'class',
@@ -5,48 +12,60 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
-        card: { DEFAULT: 'var(--card)', foreground: 'var(--card-foreground)' },
-        popover: { DEFAULT: 'var(--popover)', foreground: 'var(--popover-foreground)' },
-        primary: { DEFAULT: 'var(--primary)', foreground: 'var(--primary-foreground)' },
-        secondary: { DEFAULT: 'var(--secondary)', foreground: 'var(--secondary-foreground)' },
-        muted: { DEFAULT: 'var(--muted)', foreground: 'var(--muted-foreground)' },
-        accent: { DEFAULT: 'var(--accent)', foreground: 'var(--accent-foreground)' },
-        destructive: { DEFAULT: 'var(--destructive)', foreground: 'var(--destructive-foreground)' },
+        background: token('--background'),
+        foreground: token('--foreground'),
+        card: { DEFAULT: token('--card'), foreground: token('--card-foreground') },
+        popover: { DEFAULT: token('--popover'), foreground: token('--popover-foreground') },
+        primary: { DEFAULT: token('--primary'), foreground: token('--primary-foreground') },
+        secondary: { DEFAULT: token('--secondary'), foreground: token('--secondary-foreground') },
+        muted: { DEFAULT: token('--muted'), foreground: token('--muted-foreground') },
+        accent: { DEFAULT: token('--accent'), foreground: token('--accent-foreground') },
+        destructive: { DEFAULT: token('--destructive'), foreground: token('--destructive-foreground') },
         surface: {
-          1: 'var(--surface-1)',
-          2: 'var(--surface-2)',
-          3: 'var(--surface-3)',
+          1: token('--surface-1'),
+          2: token('--surface-2'),
+          3: token('--surface-3'),
         },
         border: {
-          DEFAULT: 'var(--border)',
-          subtle: 'var(--border-subtle)',
-          strong: 'var(--border-strong)',
+          DEFAULT: token('--border'),
+          subtle: token('--border-subtle'),
+          strong: token('--border-strong'),
         },
-        'tertiary-foreground': 'var(--tertiary-foreground)',
-        'disabled-foreground': 'var(--disabled-foreground)',
-        input: 'var(--input)',
-        ring: 'var(--ring)',
+        glass: {
+          DEFAULT: token('--glass'),
+          strong: token('--glass-strong'),
+          active: token('--glass-active'),
+          border: token('--glass-border'),
+          highlight: token('--glass-highlight'),
+        },
+        'tertiary-foreground': token('--tertiary-foreground'),
+        'disabled-foreground': token('--disabled-foreground'),
+        input: token('--input'),
+        ring: token('--ring'),
         sidebar: {
-          DEFAULT: 'var(--sidebar)',
-          foreground: 'var(--sidebar-foreground)',
-          accent: 'var(--sidebar-accent)',
-          'accent-foreground': 'var(--sidebar-accent-foreground)',
-          border: 'var(--sidebar-border)',
+          DEFAULT: token('--sidebar'),
+          foreground: token('--sidebar-foreground'),
+          accent: token('--sidebar-accent'),
+          'accent-foreground': token('--sidebar-accent-foreground'),
+          border: token('--sidebar-border'),
         },
-        ai: 'var(--ai)',
-        attention: 'var(--attention)',
-        activity: 'var(--activity)',
-        'status-success': 'var(--status-success)',
-        'status-running': 'var(--status-running)',
-        'status-error': 'var(--status-error)',
+        ai: token('--ai'),
+        attention: token('--attention'),
+        activity: token('--activity'),
+        'status-success': token('--status-success'),
+        'status-running': token('--status-running'),
+        'status-error': token('--status-error'),
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
         xl: 'calc(var(--radius) + 4px)',
+        panel: 'var(--radius-panel)',
+        control: 'var(--radius-control)',
+      },
+      spacing: {
+        panel: 'var(--panel-gap)',
       },
       fontFamily: {
         sans: ['var(--font-sans)'],
@@ -54,6 +73,7 @@ export default {
       },
       boxShadow: {
         floating: 'var(--shadow-floating)',
+        glass: 'inset 0 1px 0 var(--glass-highlight)',
       },
       keyframes: {
         'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },

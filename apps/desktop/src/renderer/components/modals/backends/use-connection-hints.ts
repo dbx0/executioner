@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { ConnectionHints, SshHostHint } from '../../../../main/connection-hints.js'
 import type { FormState } from './form-state.js'
 
-/** Images worth suggesting when nothing local fits — the usual offensive bases. */
+/** Images worth suggesting when nothing local fits: the usual offensive bases. */
 export const RECOMMENDED_IMAGES: { image: string; blurb: string }[] = [
-  { image: 'kalilinux/kali-rolling', blurb: 'Kali rolling — the usual toolbox' },
+  { image: 'kalilinux/kali-rolling', blurb: 'Kali rolling, the usual toolbox' },
   { image: 'parrotsec/security', blurb: 'Parrot Security' },
   { image: 'ubuntu:24.04', blurb: 'Plain Ubuntu to build on' },
 ]
@@ -14,7 +14,7 @@ const EMPTY: ConnectionHints = { sshHosts: [], sshKeys: [], defaultUser: '', doc
 /**
  * What this machine can tell us about how to connect: ~/.ssh hosts and keys, the
  * local username, and any docker images already pulled. Loaded once per mount and
- * degraded to empty on any failure — hints must never block the form.
+ * degraded to empty on any failure: hints must never block the form.
  */
 export function useConnectionHints(): ConnectionHints {
   const [hints, setHints] = useState<ConnectionHints>(EMPTY)
@@ -35,7 +35,7 @@ export function useConnectionHints(): ConnectionHints {
 /**
  * Fill the blanks once, the moment hints arrive: port 22, this machine's username,
  * and the most conventional key on disk. Only ever writes fields the user has left
- * empty, and only for a NEW profile — editing an existing one must not be rewritten
+ * empty, and only for a NEW profile: editing an existing one must not be rewritten
  * under the user's hands.
  */
 export function usePrefill(
@@ -64,7 +64,7 @@ export function usePrefill(
     const key = hints.sshKeys[0]
     if (f.identityFile.trim() === '' && key !== undefined) patch.identityFile = key
     // Prefer a recommended image already on disk (nothing to pull), else the
-    // first recommendation — either way the Docker field starts usable.
+    // first recommendation. Either way the Docker field starts usable.
     if (f.image.trim() === '') {
       const pulled = RECOMMENDED_IMAGES.find((r) => hints.dockerImages.includes(r.image))
       patch.image = pulled?.image ?? RECOMMENDED_IMAGES[0]?.image ?? ''
@@ -96,7 +96,7 @@ export function splitTarget(value: string): Partial<FormState> {
   const user = at === -1 ? undefined : trimmed.slice(0, at)
   const rest = at === -1 ? trimmed : trimmed.slice(at + 1)
   // A trailing :digits is only a port when what precedes it isn't itself an IPv6
-  // address — `fe80::1` is a host, `[fe80::1]:22` is a host and a port.
+  // address: `fe80::1` is a host, `[fe80::1]:22` is a host and a port.
   const portMatch = /^(.*):(\d{1,5})$/.exec(rest)
   const head = portMatch?.[1]
   const bracketed = head !== undefined && head.startsWith('[') && head.endsWith(']')

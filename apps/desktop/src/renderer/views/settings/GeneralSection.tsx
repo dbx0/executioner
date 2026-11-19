@@ -34,13 +34,13 @@ export function GeneralSection(): JSX.Element {
         />
       </Row>
       <Row label="Setup guide" description="Re-run the first-launch onboarding (agent, theme, execution).">
-        <Button variant="outline" size="sm" onClick={openOnboarding}>
+        <Button variant="glass" size="sm" onClick={openOnboarding}>
           <Sparkles className="size-4" strokeWidth={1.75} />
           Run setup
         </Button>
       </Row>
       <Row label="Page tours" description="Show each page's walkthrough again the next time you open it.">
-        <Button variant="outline" size="sm" disabled={toursSeen === 0} onClick={resetTours}>
+        <Button variant="glass" size="sm" disabled={toursSeen === 0} onClick={resetTours}>
           <Compass className="size-4" strokeWidth={1.75} />
           Replay tours
         </Button>

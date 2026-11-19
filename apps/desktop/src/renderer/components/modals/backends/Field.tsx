@@ -1,5 +1,6 @@
 import type { JSX } from 'react'
 import { Input } from '../../ui/input.js'
+import { FieldLabel } from '../field-label.js'
 
 export function Field({
   label,
@@ -14,8 +15,8 @@ export function Field({
 }): JSX.Element {
   return (
     <div>
-      <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">{label}</label>
-      <Input className="h-8" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      <FieldLabel>{label}</FieldLabel>
+      <Input aria-label={label} className="h-8" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </div>
   )
 }

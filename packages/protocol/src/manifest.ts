@@ -46,6 +46,12 @@ export const emitTargetRuleSchema = z.object({
 export const emitFactRuleSchema = z.object({
   kind: targetFactKindSchema,
   data: z.record(z.string(), z.string()),
+  /**
+   * Data fields that must resolve to something. A tool that says "asked, and
+   * there is none" with an empty value (dnsx reports a null MX as [""]) would
+   * otherwise file a record of nothing.
+   */
+  skip_if_empty: z.array(z.string()).default([]),
 })
 
 export const emitSchema = z

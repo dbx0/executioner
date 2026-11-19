@@ -1,7 +1,9 @@
 import type { JSX } from 'react'
 import { useState } from 'react'
-import { Loader2, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
+import { Input } from '../../components/ui/input.js'
+import { Spinner } from '../../components/ui/spinner.js'
 import { detectTargetKind } from '../../lib/detect-target.js'
 
 /** One example per target kind, for the field's placeholder. */
@@ -59,7 +61,7 @@ export function AddTargetInline({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1.5">
-        <input
+        <Input
           value={value}
           onChange={(e) => {
             setValue(e.target.value)
@@ -72,10 +74,10 @@ export function AddTargetInline({
           }}
           placeholder={kinds.map((k) => EXAMPLES[k] ?? k).join(' · ')}
           aria-label="New target"
-          className="h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 font-mono text-[12.5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="h-8 min-w-0 flex-1 font-mono text-[12.5px]"
         />
-        <Button variant="outline" size="sm" disabled={trimmed === '' || busy} onClick={add}>
-          {busy ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : <Plus className="mr-1 size-3.5" />}
+        <Button variant="glass" size="sm" disabled={trimmed === '' || busy} onClick={add}>
+          {busy ? <Spinner size="sm" /> : <Plus className="size-3.5" />}
           Add
         </Button>
       </div>

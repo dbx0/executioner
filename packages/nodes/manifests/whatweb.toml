@@ -7,6 +7,7 @@ accepts = ["url", "domain", "subdomain"]
 [params]
 wait = { type = "number", placeholder = "1", default = 0, label = "Wait", description = "Seconds to wait between connections (whatweb --wait). 0 means no wait." }
 max_threads = { type = "number", placeholder = "25", default = 0, label = "Max threads", description = "Cap concurrent connections (whatweb --max-threads). 0 leaves whatweb's default." }
+header = { type = "string", default = "", placeholder = "X-Bug-Hunter: yourname", label = "Request header", description = "One extra header sent with every request, as Name:value. Use it for the identifying header a programme asks for" }
 
 [command]
 program = "whatweb"
@@ -14,7 +15,7 @@ program = "whatweb"
 # into stdout, which would corrupt the JSON log written to `-`.
 # The paired `| --flag` / `?` tokens emit each pacing flag with its value only
 # when set, and drop out together when blank, so the default command is unchanged.
-args = ["--quiet", "--log-json", "-", "{{ params.wait | --wait }}", "{{ params.wait? }}", "{{ params.max_threads | --max-threads }}", "{{ params.max_threads? }}", "{{ target.value }}"]
+args = ["--quiet", "--log-json", "-", "{{ params.wait | --wait }}", "{{ params.wait? }}", "{{ params.max_threads | --max-threads }}", "{{ params.max_threads? }}", "{{ params.header | --header }}", "{{ params.header? }}", "{{ target.value }}"]
 timeout_ms = 120000
 
 # One record per detected plugin: `_key` is the technology name. (Version is

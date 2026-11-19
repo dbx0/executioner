@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 import type { SessionInfo } from '../../main/logging/session-log.js'
 import { Button } from './ui/button.js'
+import { Spinner } from './ui/spinner.js'
+import { POPOVER_SURFACE } from './ui/surface.js'
+import { cn } from '../lib/utils.js'
 import { errorFields, rlog } from '../lib/log.js'
 
 /**
@@ -47,18 +50,18 @@ export function CrashNotice(): JSX.Element | null {
     <div
       role="dialog"
       aria-label="Unexpected close"
-      className="fixed bottom-9 left-4 z-[60] w-[320px] animate-zoom-in rounded-lg border border-border bg-popover p-4 text-foreground shadow-floating"
+      className={cn(POPOVER_SURFACE, 'fixed bottom-4 left-4 z-[60] w-[320px] animate-zoom-in p-4')}
     >
       <button
         type="button"
         aria-label="Dismiss"
         onClick={() => setDismissed(true)}
-        className="absolute right-2 top-2 grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-surface-2 hover:text-foreground"
+        className="absolute right-2.5 top-2.5 grid size-6 place-items-center rounded-full text-muted-foreground outline-none transition-colors hover:bg-glass-strong hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <X className="size-3.5" />
       </button>
       <div className="flex gap-3 pr-5">
-        <AlertTriangle className="mt-0.5 size-5 shrink-0 text-status-warning" strokeWidth={1.75} />
+        <AlertTriangle aria-hidden className="mt-0.5 size-5 shrink-0 text-status-warning" strokeWidth={1.75} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Executioner closed unexpectedly last time.</p>
           <p className="mt-1 text-[13px] text-muted-foreground">Export its logs to include them in a bug report.</p>
@@ -66,6 +69,7 @@ export function CrashNotice(): JSX.Element | null {
       </div>
       <div className="mt-3 flex justify-end">
         <Button size="sm" onClick={onExport} disabled={busy}>
+          {busy && <Spinner size="sm" />}
           Export logs
         </Button>
       </div>

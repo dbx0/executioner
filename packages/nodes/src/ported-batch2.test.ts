@@ -91,8 +91,8 @@ describe('nuclei reads its findings from stdout', () => {
     const result = runGoldenCaseWithEmit(goldenCase, ctx)
     expect(result.records.map((r) => r['template-id'])).toEqual(['tech-detect', 'CVE-2021-44228'])
     expect(result.facts.map((f) => f.data)).toEqual([
-      { template: 'tech-detect', severity: 'info' },
-      { template: 'CVE-2021-44228', severity: 'critical' },
+      { template: 'tech-detect', severity: 'info', title: 'Wappalyzer Technology Detection', matched_at: 'https://example.com' },
+      { template: 'CVE-2021-44228', severity: 'critical', title: 'Apache Log4j RCE', matched_at: 'https://example.com/api' },
     ])
   })
 })

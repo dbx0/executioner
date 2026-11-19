@@ -10,6 +10,7 @@ import { AgentStatusDot } from '../../components/brand/AgentStatusDot.js'
 import { AgentIcon } from '../../components/brand/AgentIcon.js'
 import { SpawnMenu } from '../../components/SpawnMenu.js'
 import { SectionLabel } from './SectionLabel.js'
+import { SidebarRow, sidebarRowClass } from './SidebarRow.js'
 import { SubagentChildren } from './SubagentRows.js'
 
 function SessionRow({ id, label, icon: Icon }: { id: string; label: string; icon: LucideIcon }): JSX.Element {
@@ -18,23 +19,18 @@ function SessionRow({ id, label, icon: Icon }: { id: string; label: string; icon
   const setActiveSession = useApp((s) => s.setActiveSession)
   const setActiveView = useApp((s) => s.setActiveView)
   return (
-    <button
-      type="button"
+    <SidebarRow
+      active={isActive}
+      className="h-[30px]"
       onClick={() => {
         setActiveSession(id)
         setActiveView('terminals')
       }}
-      className={cn(
-        'group flex h-8 w-full items-center gap-2 rounded-md px-2 text-[13px] transition-colors',
-        isActive
-          ? 'selected-surface text-sidebar-accent-foreground'
-          : 'text-muted-foreground hover:bg-surface-2',
-      )}
     >
-      <Icon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+      <Icon className="size-4 shrink-0" strokeWidth={1.75} />
       <span className="truncate">{label}</span>
       {state === 'working' && <AgentStatusDot state="working" className="ml-auto" />}
-    </button>
+    </SidebarRow>
   )
 }
 
@@ -47,6 +43,8 @@ function AgentRow({ session }: { session: Session }): JSX.Element {
   const id = session.id
   const isActive = useApp((s) => s.activeSessionId === id)
   const leadState = useApp((s) => s.sessionState[id] ?? 'idle')
+  // This agent is waiting on the operator if a browser it owns has a pending ask.
+  const asking = useApp((s) => s.browsers.some((b) => b.owner === id && b.id in s.browserAsks))
   const subs = useApp((s) => s.subagents[id])
   const setActiveSession = useApp((s) => s.setActiveSession)
   const setActiveView = useApp((s) => s.setActiveView)
@@ -64,12 +62,7 @@ function AgentRow({ session }: { session: Session }): JSX.Element {
   return (
     <div>
       <div
-        className={cn(
-          'group flex h-8 w-full items-center gap-1 rounded-md px-2 text-[13px] transition-colors',
-          isActive
-            ? 'selected-surface text-sidebar-accent-foreground'
-            : 'text-muted-foreground hover:bg-surface-2',
-        )}
+        className={sidebarRowClass(isActive, 'h-[30px] gap-1 focus-within:ring-[3px] focus-within:ring-ring/50')}
       >
         <button
           type="button"
@@ -77,18 +70,27 @@ function AgentRow({ session }: { session: Session }): JSX.Element {
             setActiveSession(id)
             setActiveView('terminals')
           }}
-          className="flex min-w-0 flex-1 items-center gap-2"
+          className="flex h-full min-w-0 flex-1 items-center gap-2.5 outline-none"
         >
-          <AgentIcon agent={session.agent} className="size-4 shrink-0 text-muted-foreground" />
+          <AgentIcon agent={session.agent} className="size-4 shrink-0" />
           <span className="truncate">{session.title ?? session.label}</span>
-          <AgentStatusDot state={working ? 'working' : 'idle'} className="ml-auto" />
+          <span className="ml-auto flex items-center gap-1.5">
+            {asking && (
+              <span
+                data-session-ask
+                title="Waiting on you in the browser"
+                className="size-2 shrink-0 animate-pulse rounded-full bg-attention"
+              />
+            )}
+            <AgentStatusDot state={working ? 'working' : 'idle'} />
+          </span>
         </button>
         {hasSubs && (
           <button
             type="button"
             aria-label={collapsed ? 'Expand sub-agents' : 'Collapse sub-agents'}
             onClick={() => setCollapsed((c) => !c)}
-            className="-mr-1 grid size-5 shrink-0 place-items-center rounded text-muted-foreground hover:text-sidebar-foreground"
+            className="-mr-1 grid size-5 shrink-0 place-items-center rounded-full text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <ChevronRight className={cn('size-3.5 transition-transform', !collapsed && 'rotate-90')} strokeWidth={2} />
           </button>
@@ -124,16 +126,16 @@ export function SessionsSection(): JSX.Element {
           <Button
             variant="ghost"
             size="icon-xs"
-            className="mt-1 text-muted-foreground"
+            className="mt-2.5 text-tertiary-foreground hover:text-foreground"
             aria-label="New session"
             onClick={workspaceEmpty ? () => setActiveView('terminals') : undefined}
           >
-            <Plus className="size-4" strokeWidth={1.75} />
+            <Plus className="size-3.5" strokeWidth={2} />
           </Button>
         </SpawnMenu>
       </div>
       {sessions.length === 0 ? (
-        <p className="px-1 py-1 text-xs text-muted-foreground">No sessions running.</p>
+        <p className="px-2 py-1 text-xs text-tertiary-foreground">No sessions running.</p>
       ) : (
         <div className="flex flex-col gap-0.5">
           {agents.map((s) => (

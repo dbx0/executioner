@@ -1,8 +1,11 @@
-import type { JSX, RefObject } from 'react'
+import type { JSX, ReactNode, RefObject } from 'react'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { Search } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
+import { GlassPanel } from '../../components/ui/glass-panel.js'
+import { Skeleton } from '../../components/ui/skeleton.js'
 import { Switch } from '../../components/ui/switch.js'
+import { listRowClass, SECTION_LABEL } from './list-row.js'
+import { SearchField } from './SearchField.js'
 import type { NodeListing } from '../../api/nodes.js'
 
 /** Whether a tool's binary is present on the connection in view. */
@@ -51,12 +54,7 @@ function ToolRow({
       aria-label={node.name}
       aria-description={node.description !== '' ? node.description : undefined}
       title={`${node.name}: ${state}`}
-      className={cn(
-        'flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-[13px]',
-        selected
-          ? 'selected-surface text-sidebar-accent-foreground'
-          : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
-      )}
+      className={cn('flex w-full items-start gap-2 px-2.5 py-1.5 text-left text-[13px]', listRowClass(selected))}
     >
       <span className="mt-[7px] flex">
         <InstallDot state={state} />
@@ -79,11 +77,35 @@ function ToolRow({
   )
 }
 
+/** A named group of tools: Recent, or one category. */
+function ToolGroup({ label, children }: { label: string; children: ReactNode }): JSX.Element {
+  return (
+    <div className="mb-2">
+      <div className={cn('px-2.5 py-1', SECTION_LABEL)}>{label}</div>
+      {children}
+    </div>
+  )
+}
+
+/** Placeholder rows in the shape of a tool row, while the node list is on its way. */
+function CatalogSkeleton(): JSX.Element {
+  return (
+    <div role="status" aria-label="Loading tools" className="flex flex-col gap-3 px-2.5 py-2">
+      {['w-24', 'w-32', 'w-20', 'w-28', 'w-24', 'w-36'].map((width, i) => (
+        <div key={i} className="flex flex-col gap-1.5">
+          <Skeleton className={cn('h-3', width)} />
+          <Skeleton className="h-2.5 w-full" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /**
  * The tool catalog: every node, grouped by category and filtered by a search
  * box. Install state is per connection, so a tool missing on the selected
  * connection sorts below the installed ones in its group rather than
- * disappearing — you may still want to read its params or install it.
+ * disappearing: you may still want to read its params or install it.
  */
 export function CatalogPane({
   nodes,
@@ -95,6 +117,7 @@ export function CatalogPane({
   searchRef,
   recentIds = [],
   running,
+  loading = false,
 }: {
   nodes: NodeListing[]
   query: string
@@ -108,6 +131,8 @@ export function CatalogPane({
   recentIds?: string[]
   /** Tools with a run still going, marked so a run left in the background is easy to find. */
   running?: ReadonlySet<string>
+  /** The node list has not answered yet: show a skeleton, not "no tool matches". */
+  loading?: boolean
 }): JSX.Element {
   const list = useRef<HTMLDivElement>(null)
   // On by default: what can run here is what you came for. Hides only tools
@@ -173,13 +198,25 @@ export function CatalogPane({
     step(document.activeElement as HTMLElement | null, e.key === 'ArrowDown' ? 1 : -1)
   }
 
+  const row = (node: NodeListing): JSX.Element => (
+    <ToolRow
+      key={node.id}
+      node={node}
+      selected={selectedId === node.id}
+      state={installState(node)}
+      running={running?.has(node.id) ?? false}
+      onSelect={onSelect}
+    />
+  )
+
   return (
-    <div data-tour="tools-catalog" className="flex h-[260px] w-full shrink-0 flex-col border-b border-border min-[1100px]:h-full min-[1100px]:w-[260px] min-[1100px]:border-b-0 min-[1100px]:border-r">
-      <div className="relative shrink-0 border-b border-border p-2">
-        <Search className="pointer-events-none absolute left-4 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input
+    <GlassPanel
+      data-tour="tools-catalog"
+      className="flex h-[260px] w-full shrink-0 flex-col min-[1100px]:h-full min-[1100px]:w-[264px]"
+    >
+      <div className="shrink-0 px-2.5 pt-2.5">
+        <SearchField
           ref={searchRef}
-          type="search"
           value={query}
           onKeyDown={(e) => {
             if (e.key !== 'ArrowDown') return
@@ -189,25 +226,28 @@ export function CatalogPane({
           onChange={(e) => onQuery(e.target.value)}
           placeholder="Search tools"
           aria-label="Search tools"
-          className="peer h-8 w-full rounded-md border border-input bg-transparent pl-7 pr-7 text-[13px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          trailing={
+            <kbd
+              aria-hidden="true"
+              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[5px] border border-glass-border px-1 font-mono text-[10px] text-muted-foreground peer-focus:hidden"
+            >
+              /
+            </kbd>
+          }
         />
-        <kbd
-          aria-hidden="true"
-          className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 rounded border border-border px-1 font-mono text-[10px] text-muted-foreground peer-focus:hidden"
-        >
-          /
-        </kbd>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5 text-[12px] text-muted-foreground">
+      <div className="flex shrink-0 items-center gap-2 border-b border-glass-border px-3.5 py-2 text-[12px] text-muted-foreground">
         <span className="flex-1">Installed only</span>
         {missingCount > 0 && (
           <span className="text-[11px]">{installedOnly ? `${missingCount} hidden` : `${missingCount} missing`}</span>
         )}
         <Switch checked={installedOnly} onCheckedChange={setInstalledOnly} aria-label="Installed only" />
       </div>
-      <div ref={list} onKeyDown={onListKey} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek p-1.5">
-        {groups.length === 0 && recent.length === 0 ? (
+      <div ref={list} onKeyDown={onListKey} className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto p-1.5">
+        {loading ? (
+          <CatalogSkeleton />
+        ) : groups.length === 0 && recent.length === 0 ? (
           <p className="px-2 py-6 text-center text-[12px] text-muted-foreground">
             {query.trim() === '' && installedOnly && missingCount > 0
               ? 'Nothing is installed on this connection. Turn off Installed only to see every tool.'
@@ -215,43 +255,15 @@ export function CatalogPane({
           </p>
         ) : (
           <>
-            {recent.length > 0 && (
-              <div className="mb-2">
-                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Recent
-                </div>
-                {recent.map((node) => (
-                  <ToolRow
-                    key={node.id}
-                    node={node}
-                    selected={selectedId === node.id}
-                    state={installState(node)}
-                    running={running?.has(node.id) ?? false}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </div>
-            )}
+            {recent.length > 0 && <ToolGroup label="Recent">{recent.map(row)}</ToolGroup>}
             {groups.map((group) => (
-              <div key={group.category} className="mb-2">
-                <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {group.category}
-                </div>
-                {group.list.map((node) => (
-                  <ToolRow
-                    key={node.id}
-                    node={node}
-                    selected={selectedId === node.id}
-                    state={installState(node)}
-                    running={running?.has(node.id) ?? false}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </div>
+              <ToolGroup key={group.category} label={group.category}>
+                {group.list.map(row)}
+              </ToolGroup>
             ))}
           </>
         )}
       </div>
-    </div>
+    </GlassPanel>
   )
 }

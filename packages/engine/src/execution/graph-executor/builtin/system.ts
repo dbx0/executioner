@@ -12,7 +12,7 @@ import {
 } from '../helpers.js'
 import { buildRequestHeaders } from './http.js'
 import { cdpScreenshot } from './screenshot-driver.js'
-import { finishBuiltin, type BuiltinNodeDeps } from './shared.js'
+import { finishBuiltin, resultOwner, savesResults, type BuiltinNodeDeps } from './shared.js'
 
 /**
  * screenshot: capture a URL with the system headless Chrome, driven over CDP so
@@ -32,7 +32,8 @@ export async function runScreenshot(
 ): Promise<void> {
   deps.bus.publish({ type: 'status', executionId, nodeId: node.id, data: 'running' })
   const ctx = scopeFor(deps.project, target, executionId, nodeOutputs, vars, secrets, loop)
-  let url = resolveNodeTarget(node, target, ctx)
+  const named = resolveNodeTarget(node, target, ctx)
+  let url = named
   if (url === '') {
     finishBuiltin(deps, executionId, node.id, 'failed', 'no target to screenshot', [], null)
     return
@@ -58,8 +59,9 @@ export async function runScreenshot(
     const png = await capture({ url, headers, fullPage, timeoutMs })
     writeFileSync(outPath, png)
     const row: Record<string, unknown> = { url, path: outPath, full_page: fullPage }
-    if (target !== undefined) {
-      deps.project.facts.record({ targetId: target.id, kind: 'screenshot', executionId, nodeId: node.id, data: row })
+    const owner = resultOwner(deps, node, target, named)
+    if (owner !== undefined) {
+      deps.project.facts.record({ targetId: owner.id, kind: 'screenshot', executionId, nodeId: node.id, data: row })
     }
     nodeOutputs[node.id] = { output: outPath, rows: [row] }
     finishBuiltin(deps, executionId, node.id, 'succeeded', outPath, [row], null)
@@ -128,7 +130,7 @@ export async function runPythonScript(
       }
     }
     if (rows.length === 0) rows = [{ raw_output: stdout }]
-    if (target !== undefined) {
+    if (target !== undefined && savesResults(node)) {
       deps.project.facts.record({
         targetId: target.id,
         kind: 'raw_output',

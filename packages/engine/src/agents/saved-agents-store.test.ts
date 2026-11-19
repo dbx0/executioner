@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { SavedAgentsStore, rosterFingerprint, type StoreFs } from './saved-agents-store.js'
+import { SavedAgentsStore, rosterFingerprint, builtinAgentFingerprint, type StoreFs } from './saved-agents-store.js'
 import { BUILTIN_TEAMS } from './agent-team.js'
+import { BUILTIN_AGENTS } from './builtin-agents.js'
 
 // Expected failures below log a warn line to stderr; keep the test output clean.
 vi.mock('node:fs', async (importOriginal) => {
@@ -39,13 +40,93 @@ describe('SavedAgentsStore', () => {
     const agents = store.seedGlobalIfMissing()
 
     // One saved agent per team, each a `claude-team:<id>` launch carrying a roster.
-    expect(new Set(agents.map((a) => a.name))).toEqual(new Set(BUILTIN_TEAMS.map((t) => t.name)))
-    expect(new Set(agents.map((a) => a.agent))).toEqual(new Set(BUILTIN_TEAMS.map((t) => `claude-team:${t.id}`)))
+    const teamAgents = agents.filter((a) => a.agent.startsWith('claude-team:'))
+    expect(new Set(teamAgents.map((a) => a.name))).toEqual(new Set(BUILTIN_TEAMS.map((t) => t.name)))
+    expect(new Set(teamAgents.map((a) => a.agent))).toEqual(new Set(BUILTIN_TEAMS.map((t) => `claude-team:${t.id}`)))
     expect(agents.every((a) => a.scope === 'global')).toBe(true)
     expect(agents.every((a) => a.prompt.trim() !== '')).toBe(true)
-    expect(agents.every((a) => (a.members?.length ?? 0) > 0)).toBe(true)
+    expect(teamAgents.every((a) => (a.members?.length ?? 0) > 0)).toBe(true)
     // File now persisted.
     expect(fs.files.has(AGENTS_PATH)).toBe(true)
+  })
+
+  it('seeds the built-in single specialists alongside the teams', () => {
+    const agents = new SavedAgentsStore({ home: HOME, fs: memFs() }).seedGlobalIfMissing()
+
+    const specialists = agents.filter((a) => a.builtin !== undefined)
+    expect(new Set(specialists.map((a) => a.builtin))).toEqual(new Set(BUILTIN_AGENTS.map((d) => d.id)))
+    expect(new Set(specialists.map((a) => a.name))).toEqual(new Set(BUILTIN_AGENTS.map((d) => d.name)))
+    // Single agents, not teams: a base CLI launch with a prompt and no roster.
+    expect(specialists.every((a) => a.agent === 'claude')).toBe(true)
+    expect(specialists.every((a) => a.members === undefined)).toBe(true)
+    expect(specialists.every((a) => a.prompt.trim() !== '')).toBe(true)
+    expect(specialists.every((a) => a.seedHash === builtinAgentFingerprint(a))).toBe(true)
+  })
+
+  it('adds a newly shipped specialist to an existing file without disturbing the rest', () => {
+    // A file seeded with every built-in except the last specialist.
+    const seeded = new SavedAgentsStore({ home: HOME, fs: memFs() }).seedGlobalIfMissing()
+    const dropId = BUILTIN_AGENTS[BUILTIN_AGENTS.length - 1]!.id
+    const withoutOne = seeded.filter((a) => a.builtin !== dropId)
+    const fs = memFs({ [AGENTS_PATH]: JSON.stringify(withoutOne) })
+
+    const agents = new SavedAgentsStore({ home: HOME, fs }).list()
+    expect(agents.some((a) => a.builtin === dropId)).toBe(true)
+    // The ones already there keep their record ids.
+    for (const a of withoutOne.filter((x) => x.builtin !== undefined)) {
+      expect(agents.find((x) => x.builtin === a.builtin)?.id).toBe(a.id)
+    }
+  })
+
+  it('refreshes an untouched specialist when its shipped prompt changes, keeping the record id', () => {
+    const now = '2020-01-01T00:00:00.000Z'
+    const def = BUILTIN_AGENTS[0]!
+    // A seed written by an earlier version: an old prompt, stamped with that
+    // old content's fingerprint (so it reads as untouched).
+    const stale = {
+      id: 'keep-me',
+      name: def.name,
+      description: def.description,
+      agent: def.agent,
+      prompt: 'old prompt',
+      scope: 'global',
+      createdAt: now,
+      updatedAt: now,
+      builtin: def.id,
+    }
+    const seedHash = builtinAgentFingerprint(stale)
+    const fs = memFs({ [AGENTS_PATH]: JSON.stringify([{ ...stale, seedHash }]) })
+
+    const agents = new SavedAgentsStore({ home: HOME, fs }).list()
+    const refreshed = agents.find((a) => a.builtin === def.id)!
+    expect(refreshed.id).toBe('keep-me')
+    expect(refreshed.prompt).toBe(def.prompt)
+    expect(refreshed.seedHash).toBe(builtinAgentFingerprint(refreshed))
+    expect(refreshed.updatedAt).not.toBe(now)
+  })
+
+  it('leaves a specialist the user has edited exactly as they left it', () => {
+    const now = '2020-01-01T00:00:00.000Z'
+    const def = BUILTIN_AGENTS[0]!
+    // Edited content with no matching seedHash: the user's own work.
+    const edited = {
+      id: 'keep-me',
+      name: 'My Recon',
+      description: def.description,
+      agent: def.agent,
+      prompt: 'my own prompt',
+      scope: 'global',
+      createdAt: now,
+      updatedAt: now,
+      builtin: def.id,
+    }
+    const fs = memFs({ [AGENTS_PATH]: JSON.stringify([edited]) })
+
+    const agents = new SavedAgentsStore({ home: HOME, fs }).list()
+    const kept = agents.find((a) => a.builtin === def.id)!
+    expect(kept.name).toBe('My Recon')
+    expect(kept.prompt).toBe('my own prompt')
+    expect(kept.updatedAt).toBe(now)
   })
 
   it('refreshes an untouched built-in roster when the shipped prompts change, keeping the record id', () => {

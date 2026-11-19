@@ -13,7 +13,7 @@ function kindIcon(kind: BackendProfile['kind']): JSX.Element {
 
 /**
  * Where tools run: this machine or a saved connection. It sits in the page
- * header because it is page-wide state — the catalog's install marks and every
+ * header because it is page-wide state: the catalog's install marks and every
  * run started from the form both follow it.
  */
 export function ConnectionPicker({

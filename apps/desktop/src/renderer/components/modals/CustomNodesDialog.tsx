@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { AxiosInstance } from 'axios'
 import { customNodesApi, type CustomNode } from '../../api/custom-nodes.js'
 import { Button } from '../ui/button.js'
+import { Dialog, DialogHeader } from '../ui/dialog.js'
 import { CustomNodeEditor } from './custom-nodes/CustomNodeEditor.js'
 import { SavedNodesList } from './custom-nodes/SavedNodesList.js'
 import { apiError, empty, toForm, toInput, type FormState } from './custom-nodes/form-state.js'
@@ -17,7 +18,9 @@ export function CustomNodesDialog({
   onChanged?: (nodes: CustomNode[]) => void
 }): JSX.Element {
   const api = customNodesApi(client)
-  const [nodes, setNodes] = useState<CustomNode[]>([])
+  // Null until the first list arrives, so the rail shows a skeleton and not "none yet".
+  const [nodes, setNodes] = useState<CustomNode[] | null>(null)
+  const [removingId, setRemovingId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(empty)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -29,7 +32,7 @@ export function CustomNodesDialog({
         setNodes(list)
         onChanged?.(list)
       })
-      .catch(() => {})
+      .catch(() => setNodes((prev) => prev ?? []))
   }
   useEffect(refresh, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -59,43 +62,43 @@ export function CustomNodesDialog({
   }
 
   const remove = async (id: string): Promise<void> => {
+    setRemovingId(id)
     await api.remove(id).catch(() => {})
+    setRemovingId(null)
     if (form.editingId === id) setForm(empty)
     refresh()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
-      <div
-        className="flex max-h-[85vh] w-[640px] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-floating"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div className="text-[14px] font-medium">Custom nodes</div>
-          <Button variant="ghost" size="xs" onClick={onClose}>
+    <Dialog onClose={onClose} size="lg">
+      <DialogHeader
+        title="Custom nodes"
+        actions={
+          <Button variant="glass" size="sm" onClick={onClose}>
             Done
           </Button>
-        </div>
+        }
+      />
 
-        <div className="flex min-h-0 flex-1">
-          <SavedNodesList
-            nodes={nodes}
-            editingId={form.editingId}
-            onEdit={(n) => setForm(toForm(n))}
-            onRemove={(id) => void remove(id)}
-          />
+      <div className="flex min-h-0 flex-1">
+        <SavedNodesList
+          nodes={nodes}
+          editingId={form.editingId}
+          removingId={removingId}
+          onEdit={(n) => setForm(toForm(n))}
+          onRemove={(id) => void remove(id)}
+        />
 
-          <CustomNodeEditor
-            form={form}
-            set={set}
-            error={error}
-            valid={valid}
-            busy={busy}
-            onNew={() => setForm(empty)}
-            onSave={() => void save()}
-          />
-        </div>
+        <CustomNodeEditor
+          form={form}
+          set={set}
+          error={error}
+          valid={valid}
+          busy={busy}
+          onNew={() => setForm(empty)}
+          onSave={() => void save()}
+        />
       </div>
-    </div>
+    </Dialog>
   )
 }

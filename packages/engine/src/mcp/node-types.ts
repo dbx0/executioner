@@ -55,38 +55,12 @@ function param(p: {
 export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
   {
     type: 'manual',
-    label: 'Manual Trigger',
+    label: 'Start',
     kind: 'manual',
     category: 'trigger',
-    description: 'Entry point for a workflow started by hand. No parameters.',
+    description:
+      'Where the workflow begins. Every workflow has exactly one, wired to the first nodes. It takes no settings: when a workflow runs (by hand, on a schedule, when a target is added) is set on the Actions page, never in the graph.',
     params: [],
-  },
-  {
-    type: 'schedule',
-    label: 'Schedule Trigger',
-    kind: 'schedule',
-    category: 'trigger',
-    description: 'Entry point run on a recurring interval. Arm it per engagement in Schedules, which reads this interval.',
-    params: [
-      param({ name: 'interval_seconds', type: 'number', default: 3600, description: 'How often to run, in seconds.' }),
-      param({ name: 'cron', type: 'string', description: 'Optional cron expression (informational).' }),
-    ],
-  },
-  {
-    type: 'on_create',
-    label: 'On Create Trigger',
-    kind: 'on_create',
-    category: 'trigger',
-    description: 'Entry point fired when a matching target is created. Arm it per engagement in Schedules, which reads this kind.',
-    params: [
-      param({
-        name: 'target_kind',
-        type: 'enum',
-        oneOf: ['domain', 'subdomain', 'ip', 'cidr', 'url'],
-        default: 'domain',
-        description: 'Target kind whose creation fires this workflow.',
-      }),
-    ],
   },
   {
     type: 'if',
@@ -108,8 +82,12 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     label: 'Loop',
     kind: 'loop',
     category: 'control',
-    description: 'Iterate the body over a newline/JSON list resolved from a template.',
-    params: [param({ name: 'source', type: 'string' })],
+    description:
+      'Run every downstream node once per item. Set source to {{ nodes.<nodeId>.rows }} to walk the parsed rows of an upstream node; the body reads {{ loop.item.<field> }}. A source that resolves to a JSON array or to lines of text is walked item by item, read as {{ loop.item }}.',
+    params: [
+      param({ name: 'source', type: 'string', description: 'Usually {{ nodes.<nodeId>.rows }}.' }),
+      param({ name: 'max_items', type: 'number', description: 'Stop after this many items. Leave empty to walk them all.' }),
+    ],
   },
   {
     type: 'stop',
@@ -164,7 +142,8 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     label: 'Save to Target',
     kind: 'save_to_target',
     category: 'data',
-    description: 'Persist upstream rows to the workflow target as targets or facts.',
+    description:
+      'Persist a value from upstream rows to the workflow target. Only for values no node saved: tool and recon nodes already save their own results, so do not put this after one.',
     params: [
       param({ name: 'data_type', type: 'enum', oneOf: ['subdomain', 'open_port', 'technology', 'raw_output'], default: 'raw_output' }),
       param({ name: 'field', type: 'string', default: 'value', description: 'Row field holding the value to save.' }),
@@ -282,6 +261,61 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     ],
   },
   {
+    type: 'tls_cert',
+    label: 'TLS Certificate',
+    kind: 'tls_cert',
+    category: 'recon',
+    description: 'Read the certificate a host serves (issuer, names, expiry) with one TLS handshake. Records a certificate fact. No external tool.',
+    params: [
+      param({ name: 'target', type: 'string', description: 'Host, host:port or URL. Defaults to the run target.' }),
+      param({ name: 'port', type: 'number', description: 'Defaults to the port in the target, or 443.' }),
+      param({ name: 'timeout', type: 'number', default: 15000 }),
+    ],
+    outputs: ['host', 'port', 'subject_cn', 'issuer', 'not_before', 'not_after', 'sans', 'days_left', 'expired'],
+  },
+  {
+    type: 'dns_records',
+    label: 'DNS Records',
+    kind: 'dns_records',
+    category: 'recon',
+    description:
+      'Resolve a name and record each answer set as a dns_record fact; addresses become child ip targets. On an IP it reverse-resolves (PTR) and saves the names as targets. One output row per answer. No external tool.',
+    params: [
+      param({ name: 'target', type: 'string', description: 'Name or IP. Defaults to the run target.' }),
+      param({ name: 'record_types', type: 'string', default: 'A,AAAA,CNAME,MX,NS,TXT', description: 'Comma separated. Ignored for an IP.' }),
+    ],
+    outputs: ['name', 'type', 'value'],
+  },
+  {
+    type: 'asn',
+    label: 'ASN Ranges',
+    kind: 'asn',
+    category: 'recon',
+    description:
+      'Find the AS announcing an IP (or take an AS number) and list its announced ranges via RIPEstat (no API key). One output row per range. Ranges are saved as cidr targets only when there are at most max_prefixes.',
+    params: [
+      param({ name: 'target', type: 'string', description: 'IP or AS number such as AS15169. Defaults to the run target.' }),
+      param({ name: 'max_prefixes', type: 'number', default: 100 }),
+      param({ name: 'ipv6', type: 'boolean', default: false }),
+      param({ name: 'timeout', type: 'number', default: 30000 }),
+    ],
+    outputs: ['asn', 'holder', 'prefix'],
+  },
+  {
+    type: 'cloud_buckets',
+    label: 'Cloud Buckets',
+    kind: 'cloud_buckets',
+    category: 'recon',
+    description:
+      'Guess bucket names from a keyword and check which exist on S3, Google Cloud Storage and Azure. One output row per bucket found, with access = open or protected. Found buckets are saved as url targets.',
+    params: [
+      param({ name: 'keyword', type: 'string', description: 'Defaults to the registrable label of the run target (acme for acme.com).' }),
+      param({ name: 'wordlist', type: 'string', description: 'Extra words tried as <keyword>-<word>, one per line.' }),
+      param({ name: 'timeout', type: 'number', default: 10000 }),
+    ],
+    outputs: ['provider', 'bucket', 'url', 'access', 'status_code'],
+  },
+  {
     type: 'screenshot',
     label: 'Screenshot',
     kind: 'screenshot',
@@ -305,7 +339,7 @@ export const BUILTIN_NODE_TYPES: AssistantNodeType[] = [
     kind: 'python_script',
     category: 'logic',
     description:
-      'Run an arbitrary Python script (python3). Print a JSON dict/array for downstream rows. Put {{ }} placeholders inside a string literal: values are inserted escaped, as text.',
+      'Last resort, for a step no node or combination of nodes can do. Runs a Python script (python3); print a JSON dict/array for downstream rows. Put {{ }} placeholders inside a string literal: values are inserted escaped, as text.',
     params: [
       param({ name: 'script', type: 'string', default: 'import json\nprint(json.dumps({"status": "ok"}))' }),
       param({ name: 'timeout', type: 'number', default: 60000 }),

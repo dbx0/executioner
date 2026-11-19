@@ -4,9 +4,13 @@ description = "HTTP toolkit for probing web servers — extracts status, title, 
 category = "web"
 accepts = ["url", "domain", "subdomain"]
 
+[params]
+header = { type = "string", default = "", placeholder = "X-Bug-Hunter: yourname", label = "Request header", description = "One extra header sent with every request, as Name: value. Use it for the identifying header a programme asks for" }
+rate_limit = { type = "number", default = 0, placeholder = "1", label = "Rate limit", description = "Max requests per second (httpx -rl). 0 leaves the httpx default" }
+
 [command]
 program = "httpx"
-args = ["-u", "{{ target.value }}", "-json", "-silent", "-nc"]
+args = ["-u", "{{ target.value }}", "-json", "-silent", "-nc", "-tls-grab", "{{ params.header | -H }}", "{{ params.header? }}", "{{ params.rate_limit | -rl }}", "{{ params.rate_limit? }}"]
 timeout_ms = 120000
 
 [emit]
@@ -17,3 +21,9 @@ records = "$"
 [[emit.facts]]
 kind = "http_service"
 data = { url = "{{ record.url }}", status_code = "{{ record.status_code }}", title = "{{ record.title }}" }
+
+# Present only on an https row that completed a handshake; any other row has no
+# `tls` object, so the rule resolves nothing and is skipped.
+[[emit.facts]]
+kind = "certificate"
+data = { host = "{{ record.tls.host }}", port = "{{ record.tls.port }}", issuer = "{{ record.tls.issuer_cn }}", not_before = "{{ record.tls.not_before }}", not_after = "{{ record.tls.not_after }}", sans = "{{ record.tls.subject_an }}" }

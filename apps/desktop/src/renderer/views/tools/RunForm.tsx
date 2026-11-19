@@ -1,114 +1,19 @@
 import type { JSX, RefObject } from 'react'
-import { useMemo, useRef, useState } from 'react'
-import { Check, Download, Loader2, Play, Plus, RotateCcw, Search } from 'lucide-react'
+import { useMemo, useRef } from 'react'
+import { RotateCcw } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
-import { cn } from '../../lib/utils.js'
 import { ParamDrawer, toParamSpecs } from '../../components/canvas/ParamDrawer.js'
 import type { NodeListing } from '../../api/nodes.js'
 import type { TargetSummary } from '../../api/targets.js'
 import type { InstallState } from './CatalogPane.js'
 import { CommandPreview, type CommandPreviewState } from './CommandPreview.js'
-import { AddTargetInline } from './AddTargetInline.js'
-import { matchesPreset, type ParamPreset } from './presets.js'
+import { PresetBar } from './PresetBar.js'
+import { RunFooter } from './RunFooter.js'
+import { RunTargets } from './RunTargets.js'
+import type { ParamPreset } from './presets.js'
 
 /** Where the form's current params came from, so the form can say so. */
 export type ParamsOrigin = 'last-run' | 'replay' | 'preset' | 'edited' | null
-
-/** Saved param sets for this tool: pick one, save the form as one, or drop one. */
-function PresetBar({
-  presets,
-  params,
-  onApply,
-  onSave,
-  onDelete,
-}: {
-  presets: ParamPreset[]
-  params: Record<string, unknown>
-  onApply: (preset: ParamPreset) => void
-  onSave: (name: string) => void
-  onDelete: (name: string) => void
-}): JSX.Element {
-  const [naming, setNaming] = useState(false)
-  const [name, setName] = useState('')
-  // The defaults need no preset: there is nothing to save until a param changes.
-  const canSave = Object.keys(params).length > 0
-  const save = (): void => {
-    const trimmed = name.trim()
-    if (trimmed === '') return
-    onSave(trimmed)
-    setName('')
-    setNaming(false)
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 border-b border-border px-4 py-2">
-      <span className="mr-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Presets</span>
-      {presets.map((preset) => {
-        const on = matchesPreset(params, preset)
-        return (
-          <span
-            key={preset.name}
-            className={cn(
-              'inline-flex items-center rounded-md border text-[12px]',
-              on ? 'selected-surface border-transparent' : 'border-border',
-            )}
-          >
-            <button type="button" aria-pressed={on} onClick={() => onApply(preset)} className="py-0.5 pl-2 pr-1">
-              {preset.name}
-            </button>
-            <button
-              type="button"
-              aria-label={`Delete preset ${preset.name}`}
-              onClick={() => onDelete(preset.name)}
-              className="pr-1.5 text-muted-foreground hover:text-foreground"
-            >
-              ×
-            </button>
-          </span>
-        )
-      })}
-      {naming ? (
-        <form
-          className="inline-flex items-center gap-1"
-          onSubmit={(e) => {
-            e.preventDefault()
-            save()
-          }}
-        >
-          <input
-            // Opened by a click on Save preset, so taking focus is what was asked for.
-            autoFocus
-            aria-label="Preset name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== 'Escape') return
-              setNaming(false)
-              setName('')
-            }}
-            placeholder="Name"
-            className="h-6 w-28 rounded-md border border-input bg-transparent px-2 text-[12px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          />
-          <Button type="submit" variant="ghost" size="xs" disabled={name.trim() === ''}>
-            Save
-          </Button>
-        </form>
-      ) : (
-        <Button
-          variant="ghost"
-          size="xs"
-          disabled={!canSave}
-          title={canSave ? undefined : 'Change a param to save it as a preset'}
-          onClick={() => setNaming(true)}
-        >
-          <Plus className="mr-1 size-3" /> Save preset
-        </Button>
-      )}
-    </div>
-  )
-}
-
-/** How the run shortcut reads on this platform. */
-const RUN_SHORTCUT = /Mac/.test(navigator.userAgent) ? '⌘↵' : 'Ctrl+Enter'
 
 /** A value the user has not given: unset, or blank text. */
 function isBlank(value: unknown): boolean {
@@ -119,7 +24,7 @@ function isBlank(value: unknown): boolean {
  * The run form: which target, what params, and Run. The connection is picked
  * once for the whole page, in its header.
  *
- * Run is blocked with the reason stated rather than left enabled to fail — a
+ * Run is blocked with the reason stated rather than left enabled to fail: a
  * tool that is not on the chosen connection offers Install instead, because a
  * run that can only exit "command not found" teaches the user nothing.
  */
@@ -178,8 +83,6 @@ export function RunForm({
   /** Why the connection needs picking again, after loading a past run. */
   connectionNote: string | null
 }): JSX.Element {
-  const [targetQuery, setTargetQuery] = useState('')
-  const [adding, setAdding] = useState(false)
   const formRef = useRef<HTMLDivElement>(null)
 
   // Only targets of a kind this tool accepts; an empty `accepts` accepts all.
@@ -200,19 +103,6 @@ export function RunForm({
   }
 
   const specs = toParamSpecs(node.params)
-  const needle = targetQuery.trim().toLowerCase()
-  const shown = needle === '' ? eligible : eligible.filter((t) => t.value.toLowerCase().includes(needle))
-  const toggle = (id: string): void =>
-    onTargetIds(targetIds.includes(id) ? targetIds.filter((t) => t !== id) : [...targetIds, id])
-  // Select-all works on what the search shows, so "search, then select all" is
-  // how a batch gets picked.
-  const allShown = shown.length > 0 && shown.every((t) => targetIds.includes(t.id))
-  const toggleShown = (): void => {
-    const ids = new Set(shown.map((t) => t.id))
-    onTargetIds(
-      allShown ? targetIds.filter((t) => !ids.has(t)) : [...targetIds, ...shown.map((t) => t.id).filter((t) => !targetIds.includes(t))],
-    )
-  }
   const missing = installState === 'missing'
   // `required` is a promise the manifest makes about the tool: run without it
   // and the tool fails or does something useless, so do not offer the run. A
@@ -257,10 +147,10 @@ export function RunForm({
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <div ref={formRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
-        <div className="border-b border-border p-4">
+      <div ref={formRef} className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
+        <div className="border-b border-glass-border p-4">
           <div className="flex items-baseline gap-2">
-            <h2 className="text-[15px] font-medium">{node.name}</h2>
+            <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{node.name}</h2>
             {node.program !== undefined && (
               <span className="font-mono text-[11.5px] text-muted-foreground">{node.program}</span>
             )}
@@ -268,97 +158,13 @@ export function RunForm({
           <p className="mt-1 text-[12.5px] text-muted-foreground">{node.description}</p>
         </div>
 
-        <div className="flex flex-col gap-3 border-b border-border p-4">
-          <div className="flex flex-col gap-1 text-sm">
-            <div className="flex items-center gap-2">
-              <span>{targetIds.length > 1 ? `Targets (${targetIds.length})` : 'Target'}</span>
-              <span className="ml-auto flex items-center gap-1">
-                {eligible.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    aria-expanded={adding}
-                    onClick={() => setAdding((v) => !v)}
-                  >
-                    <Plus className="mr-1 size-3" /> Add
-                  </Button>
-                )}
-                {eligible.length > 1 && shown.length > 1 && (
-                  <Button variant="ghost" size="xs" onClick={toggleShown}>
-                    {allShown ? 'Deselect shown' : needle === '' ? 'Select all' : 'Select shown'}
-                  </Button>
-                )}
-                {targetIds.length > 0 && (
-                  <Button variant="ghost" size="xs" onClick={() => onTargetIds([])}>
-                    Clear
-                  </Button>
-                )}
-              </span>
-            </div>
-            {/* With no target this tool can take, adding one is the only way
-                forward, so the field is simply there. */}
-            {(adding || eligible.length === 0) && (
-              <AddTargetInline toolName={node.name} accepts={node.accepts} onAdd={onAddTarget} />
-            )}
-            {eligible.length === 0 ? (
-              <p className="text-[12px] text-muted-foreground">
-                No {node.accepts.join(', ')} target yet. Add one above.
-              </p>
-            ) : (
-              <>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    type="search"
-                    value={targetQuery}
-                    onChange={(e) => setTargetQuery(e.target.value)}
-                    placeholder="Search targets"
-                    aria-label="Search targets"
-                    className="h-8 w-full rounded-md border border-input bg-transparent pl-7 pr-2 text-[13px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  />
-                </div>
-                <div
-                  role="listbox"
-                  aria-label="Target"
-                  aria-multiselectable="true"
-                  className="max-h-40 overflow-y-auto scrollbar-sleek rounded-md border border-border p-1"
-                >
-                  {shown.length === 0 ? (
-                    <p className="px-1.5 py-2 text-[12px] text-muted-foreground">No target matches that.</p>
-                  ) : (
-                    shown.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        role="option"
-                        aria-selected={targetIds.includes(t.id)}
-                        onClick={() => toggle(t.id)}
-                        className={cn(
-                          'flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-[12.5px]',
-                          targetIds.includes(t.id) ? 'selected-surface' : 'hover:bg-surface-2',
-                        )}
-                      >
-                        <span
-                          aria-hidden="true"
-                          className={cn(
-                            'grid size-3.5 shrink-0 place-items-center rounded-[3px] border',
-                            targetIds.includes(t.id) ? 'border-foreground bg-foreground text-background' : 'border-input',
-                          )}
-                        >
-                          {targetIds.includes(t.id) && <Check className="size-2.5" strokeWidth={3} />}
-                        </span>
-                        <span className="min-w-0 flex-1 truncate">{t.value}</span>
-                        <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
-                          {t.kind}
-                        </span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <RunTargets
+          node={node}
+          eligible={eligible}
+          targetIds={targetIds}
+          onTargetIds={onTargetIds}
+          onAddTarget={onAddTarget}
+        />
 
         {specs.length > 0 && (
           <PresetBar
@@ -371,10 +177,10 @@ export function RunForm({
         )}
 
         {specs.length > 0 && originNote !== null && Object.keys(params).length > 0 && (
-          <div className="flex items-center gap-2 border-b border-border px-4 py-2 text-[12px] text-muted-foreground">
+          <div className="flex items-center gap-2 border-b border-glass-border px-4 py-2 text-[12px] text-muted-foreground">
             <span className="min-w-0 flex-1 truncate">{originNote}</span>
             <Button variant="ghost" size="xs" onClick={onResetParams}>
-              <RotateCcw className="mr-1 size-3" /> Reset to defaults
+              <RotateCcw className="size-3" /> Reset to defaults
             </Button>
           </div>
         )}
@@ -390,46 +196,20 @@ export function RunForm({
 
       <CommandPreview state={preview} more={Math.max(0, targetIds.length - 1)} />
 
-      <div className="flex shrink-0 items-center gap-3 border-t border-border p-3">
-        {missing ? (
-          <Button variant="outline" size="sm" onClick={onInstall}>
-            <Download className="mr-1.5 size-3.5" /> Install {node.program ?? node.id}
-          </Button>
-        ) : (
-          <Button
-            ref={runRef}
-            size="sm"
-            disabled={blocked || starting}
-            onClick={onRun}
-            title={`Run (${RUN_SHORTCUT})`}
-          >
-            {starting ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Play className="mr-1.5 size-3.5" />}
-            {targetIds.length > 1 ? `Run on ${targetIds.length} targets` : 'Run'}
-          </Button>
-        )}
-        {reason !== null && neededParam !== null ? (
-          <button
-            type="button"
-            onClick={focusNeeded}
-            className="min-w-0 truncate text-left text-[12px] text-destructive underline-offset-2 hover:underline"
-            title={reason}
-          >
-            {reason}
-          </button>
-        ) : reason !== null && (
-          <span
-            role={reason === startError ? 'alert' : undefined}
-            className={cn(
-              'min-w-0 truncate text-[12px]',
-              reason === startError ? 'text-status-error' : 'text-muted-foreground',
-            )}
-            title={reason}
-          >
-            {reason}
-          </span>
-        )}
-        <span className="ml-auto shrink-0 text-[11.5px] text-muted-foreground">on {runsOn}</span>
-      </div>
+      <RunFooter
+        program={node.program ?? node.id}
+        missing={missing}
+        blocked={blocked}
+        starting={starting}
+        targetCount={targetIds.length}
+        reason={reason}
+        isError={reason !== null && reason === startError}
+        onFocusNeeded={neededParam !== null ? focusNeeded : null}
+        onRun={onRun}
+        onInstall={onInstall}
+        runRef={runRef}
+        runsOn={runsOn}
+      />
     </div>
   )
 }

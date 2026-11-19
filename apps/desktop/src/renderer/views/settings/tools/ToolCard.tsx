@@ -1,6 +1,8 @@
 import type { JSX } from 'react'
-import { Check, Download, Loader2, Unplug, X } from 'lucide-react'
+import { Check, Download, Unplug, X } from 'lucide-react'
 import { Button } from '../../../components/ui/button.js'
+import { Spinner } from '../../../components/ui/spinner.js'
+import { SettingsCard, StatusPill, VersionChip } from '../parts.js'
 import type { ToolInfo } from '../../../api/tools.js'
 
 /**
@@ -9,42 +11,33 @@ import type { ToolInfo } from '../../../api/tools.js'
  */
 export type CardState = 'checking' | 'installed' | 'missing' | 'unreachable'
 
-/** The status badge — one consistent badge whose state is the card's state. */
+/** The status badge: one consistent badge whose state is the card's state. */
 export function StatusBadge({ state }: { state: CardState }): JSX.Element {
   if (state === 'checking') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-        <Loader2 className="size-3 animate-spin" /> Checking
-      </span>
+      <StatusPill tone="neutral" icon={<Spinner size="xs" />}>
+        Checking
+      </StatusPill>
     )
   }
   if (state === 'installed') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--status-success)_16%,transparent)] px-2 py-0.5 text-[11px] font-medium text-status-success">
-        <Check className="size-3" strokeWidth={2.5} /> Installed
-      </span>
+      <StatusPill tone="success" icon={<Check className="size-3" strokeWidth={2.5} />}>
+        Installed
+      </StatusPill>
     )
   }
   if (state === 'unreachable') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-        <Unplug className="size-3" strokeWidth={2.5} /> Unknown
-      </span>
+      <StatusPill tone="neutral" icon={<Unplug className="size-3" strokeWidth={2.5} />}>
+        Unknown
+      </StatusPill>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--destructive)_16%,transparent)] px-2 py-0.5 text-[11px] font-medium text-destructive">
-      <X className="size-3" strokeWidth={2.5} /> Missing
-    </span>
-  )
-}
-
-/** The version chip — a separate badge, shown only when a version is known. */
-export function VersionChip({ version }: { version: string }): JSX.Element {
-  return (
-    <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 font-mono text-[10.5px] text-muted-foreground">
-      {version}
-    </span>
+    <StatusPill tone="danger" icon={<X className="size-3" strokeWidth={2.5} />}>
+      Missing
+    </StatusPill>
   )
 }
 
@@ -69,7 +62,7 @@ export function ToolCard({
   onInstall: () => void
 }): JSX.Element {
   return (
-    <div className="rounded-lg border border-border bg-card p-3.5">
+    <SettingsCard className="p-3.5">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -80,11 +73,11 @@ export function ToolCard({
           <UsedBy names={tool.usedBy} />
         </div>
         {state === 'missing' && (
-          <Button variant="outline" size="sm" className="shrink-0" onClick={onInstall}>
-            <Download className="mr-1.5 size-3.5" /> Install
+          <Button variant="glass" size="sm" className="shrink-0" onClick={onInstall}>
+            <Download className="size-3.5" /> Install
           </Button>
         )}
       </div>
-    </div>
+    </SettingsCard>
   )
 }

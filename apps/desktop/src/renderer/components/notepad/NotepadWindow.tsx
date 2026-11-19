@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { StickyNote, Plus, X } from 'lucide-react'
 import { Button } from '../ui/button.js'
+import { Textarea } from '../ui/textarea.js'
 import { TabTitle } from './TabTitle.js'
 import {
   createEmptyScratchpad,
@@ -124,24 +125,23 @@ export function NotepadWindow({ onClose }: { onClose: () => void }): JSX.Element
 
   return (
     <div
-      className="fixed z-[60] flex flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-floating"
+      className="fixed z-[60] flex max-h-[90vh] max-w-[96vw] flex-col overflow-hidden rounded-panel border border-glass-border bg-popover text-popover-foreground shadow-floating"
+      // Geometry is data: the dragged position and the pad's fixed size.
       style={{
         left: pos.x,
         top: pos.y,
         width: SCRATCHPAD_WINDOW_SIZE.width,
         height: SCRATCHPAD_WINDOW_SIZE.height,
-        maxWidth: '96vw',
-        maxHeight: '90vh',
       }}
       role="dialog"
       aria-label="Scratchpad"
     >
       <div
         onMouseDown={onHeaderMouseDown}
-        className="flex cursor-move select-none items-center gap-2 border-b border-border px-4 py-3"
+        className="flex shrink-0 cursor-move select-none items-center gap-2 border-b border-glass-border py-2.5 pl-5 pr-2.5"
       >
         <StickyNote className="size-4 text-muted-foreground" strokeWidth={1.75} />
-        <span className="text-[14px] font-medium">Scratchpad</span>
+        <span className="text-[14px] font-semibold tracking-[-0.01em]">Scratchpad</span>
         <Button
           variant="ghost"
           size="icon-sm"
@@ -153,7 +153,8 @@ export function NotepadWindow({ onClose }: { onClose: () => void }): JSX.Element
         </Button>
       </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-sleek border-b border-border px-2 py-1.5">
+        <div className="flex shrink-0 items-center gap-1.5 px-3 py-2">
+          <div className="glass-capsule scrollbar-none flex h-8 min-w-0 items-center gap-0.5 overflow-x-auto p-[3px]">
           {state.notes.map((note) => (
             <TabTitle
               key={note.id}
@@ -164,8 +165,9 @@ export function NotepadWindow({ onClose }: { onClose: () => void }): JSX.Element
               onClose={() => closeNote(note.id)}
             />
           ))}
+          </div>
           <Button
-            variant="ghost"
+            variant="glass"
             size="icon-sm"
             className="shrink-0"
             onClick={addNote}
@@ -175,16 +177,17 @@ export function NotepadWindow({ onClose }: { onClose: () => void }): JSX.Element
           </Button>
         </div>
 
-        <textarea
+        <Textarea
           ref={textareaRef}
+          aria-label="Note"
           value={active.content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Paste or type anything…"
           spellCheck={false}
-          className="min-h-0 flex-1 resize-none bg-transparent p-4 font-mono text-[13px] leading-relaxed text-foreground outline-none scrollbar-sleek placeholder:text-muted-foreground"
+          className="min-h-0 flex-1 rounded-none border-0 bg-background px-5 py-4 font-mono text-[13px] leading-relaxed text-foreground focus-visible:ring-0"
         />
 
-        <div className="shrink-0 border-t border-border px-3 py-1.5 text-right text-[11px] text-muted-foreground">
+        <div className="shrink-0 border-t border-glass-border px-5 py-2 text-right text-[11px] text-muted-foreground">
           Saved automatically. Your notes stay here even after you close the app.
         </div>
     </div>

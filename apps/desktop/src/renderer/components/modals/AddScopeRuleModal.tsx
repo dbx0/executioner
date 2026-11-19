@@ -1,21 +1,18 @@
 import type { JSX } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Loader2, Plus, Sparkles, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { targetsApi, type Rejudge } from '../../api/targets.js'
 import { scopeApi, type ScopeProposal } from '../../api/scope.js'
-import { stagger } from '../../lib/motion.js'
-import { cn } from '../../lib/utils.js'
 import { Button } from '../ui/button.js'
-import { Input } from '../ui/input.js'
-import { TEXTAREA_CLASS } from './new-engagement/constants.js'
-import { FieldLabel } from './new-engagement/fields.js'
+import { Dialog, DialogBody, DialogHeader } from '../ui/dialog.js'
+import { ScopeRuleFooter, type Phase, type Tab } from './add-scope-rule/footer.js'
+import { AiScopeForm, ManualRuleForm, type Effect } from './add-scope-rule/forms.js'
+import { DoneSummary, ProposalReview } from './add-scope-rule/results.js'
+import { ModeTabs, type ModeTab } from './mode-tabs.js'
 import { RunningPage } from './new-engagement/result-pages.js'
 
-type Tab = 'manual' | 'ai'
-type Phase = 'form' | 'running' | 'review' | 'done'
-
-const TABS: { id: Tab; label: string }[] = [
+const TABS: ModeTab<Tab>[] = [
   { id: 'manual', label: 'Manual' },
   { id: 'ai', label: 'Start with AI' },
 ]
@@ -46,7 +43,7 @@ export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps
 
   const [tab, setTab] = useState<Tab>('manual')
   const [step, setStep] = useState<Phase>('form')
-  const [effect, setEffect] = useState<'include' | 'exclude'>('include')
+  const [effect, setEffect] = useState<Effect>('include')
   const [pattern, setPattern] = useState('')
   const [note, setNote] = useState('')
   const [scope, setScope] = useState('')
@@ -154,228 +151,74 @@ export function AddScopeRuleModal({ onClose, onApplied }: AddScopeRuleModalProps
   const emptyProposal = proposal !== undefined && proposal.rules.length === 0 && proposal.targets.length === 0
   const canSubmit = tab === 'manual' ? pattern.trim() !== '' : scope.trim() !== ''
 
+  // A run in flight or a write in progress cannot be dismissed from under itself.
+  const locked = busy || phase === 'running'
+
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-6 backdrop-blur-[2px]"
-      onClick={() => phase !== 'running' && !busy && onClose()}
-    >
-      <div
-        className="flex max-h-[88vh] w-[560px] max-w-[95vw] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-floating"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Add scope rule"
-      >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-          <div className="text-[15px] font-medium">Add to scope</div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Close"
-            onClick={onClose}
-            disabled={busy || phase === 'running'}
-          >
+    <Dialog onClose={onClose} dismissable={!locked} label="Add scope rule" className="w-[560px]">
+      <DialogHeader
+        title="Add to scope"
+        actions={
+          <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={onClose} disabled={locked}>
             <X className="size-4" strokeWidth={1.75} />
           </Button>
-        </div>
+        }
+      />
 
-        {phase === 'form' && (
-          <div
-            className="flex shrink-0 items-center gap-1 border-b border-border px-5 py-2.5"
-            role="tablist"
-            aria-label="Add scope rule mode"
-          >
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.id}
-                onClick={() => {
-                  setTab(t.id)
-                  setError(null)
-                }}
-                className={cn(
-                  'rounded-md px-3 py-1.5 text-[13px] transition-colors',
-                  tab === t.id ? 'selected-surface' : 'text-muted-foreground hover:bg-surface-2 hover:text-foreground',
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+      {phase === 'form' && (
+        <div className="flex shrink-0 items-center border-b border-glass-border px-5 py-2.5">
+          <ModeTabs
+            tabs={TABS}
+            value={tab}
+            onSelect={(id) => {
+              setTab(id)
+              setError(null)
+            }}
+            label="Add scope rule mode"
+          />
+        </div>
+      )}
+
+      <DialogBody className="py-5">
+        {phase === 'running' ? (
+          <RunningPage scopeRun={scopeRun} />
+        ) : phase === 'review' && proposal !== undefined ? (
+          emptyProposal ? (
+            <p className="text-[13px] text-muted-foreground">The agent didn&apos;t find any rules in that text.</p>
+          ) : (
+            <ProposalReview proposal={proposal} error={error} />
+          )
+        ) : phase === 'done' ? (
+          <DoneSummary rulesAdded={rulesAdded} targetsAdded={targetsAdded} unfinished={scopeRun?.error === true} />
+        ) : tab === 'manual' ? (
+          <ManualRuleForm
+            effect={effect}
+            setEffect={setEffect}
+            pattern={pattern}
+            setPattern={setPattern}
+            note={note}
+            setNote={setNote}
+            patternRef={patternRef}
+            onSubmit={() => void submitManual()}
+          />
+        ) : (
+          <AiScopeForm scope={scope} setScope={setScope} />
         )}
 
-        <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto p-5">
-          {phase === 'running' ? (
-            <RunningPage scopeRun={scopeRun} />
-          ) : phase === 'review' && proposal !== undefined ? (
-            emptyProposal ? (
-              <p className="text-[13px] text-muted-foreground">The agent didn't find any rules in that text.</p>
-            ) : (
-              <>
-                <div className="mb-2 text-[13px] font-medium">Review what the agent found</div>
-                <ul className="flex flex-col gap-1.5">
-                  {proposal.rules.map((r, i) => (
-                    <li
-                      key={`${r.effect}:${r.pattern}`}
-                      className="flex items-baseline gap-2.5 rounded-md border border-border bg-surface-1 px-3 py-2 motion-safe:animate-enter"
-                      style={stagger(i, 140)}
-                    >
-                      <span
-                        className={cn(
-                          'shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium capitalize',
-                          r.effect === 'include' ? 'bg-primary/15 text-primary' : 'bg-status-error/15 text-status-error',
-                        )}
-                      >
-                        {r.effect}
-                      </span>
-                      <span className="font-mono text-[13px]">{r.pattern}</span>
-                      {r.note !== undefined && r.note !== '' && (
-                        <span className="min-w-0 truncate text-[12px] text-muted-foreground">{r.note}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-3 text-[12px] text-muted-foreground">
-                  {proposal.targets.length} {proposal.targets.length === 1 ? 'target' : 'targets'} to record. Nothing
-                  is saved until you add it.
-                </p>
-                {error !== null && <p className="mt-3 text-[12px] text-status-error">{error}</p>}
-              </>
-            )
-          ) : phase === 'done' ? (
-            <div className="flex items-start gap-3">
-              <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
-                <Check className="size-4" strokeWidth={2.5} />
-              </div>
-              <div>
-                <div className="text-[14px] font-medium">
-                  {rulesAdded} {rulesAdded === 1 ? 'rule' : 'rules'} added
-                </div>
-                <div className="text-[12.5px] text-muted-foreground">
-                  {targetsAdded} {targetsAdded === 1 ? 'target' : 'targets'} recorded from the same paste
-                  {scopeRun?.error === true ? ' · the agent did not finish' : ''}
-                </div>
-              </div>
-            </div>
-          ) : tab === 'manual' ? (
-            <>
-              <FieldLabel>Effect</FieldLabel>
-              <div
-                role="group"
-                aria-label="Effect"
-                className="mb-3 flex w-fit overflow-hidden rounded-md border border-border"
-              >
-                {(['include', 'exclude'] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={effect === value}
-                    onClick={() => setEffect(value)}
-                    className={cn(
-                      'px-3 py-1.5 text-[13px] capitalize',
-                      effect === value ? 'bg-surface-3 font-medium' : 'text-muted-foreground hover:bg-surface-2',
-                    )}
-                  >
-                    {value}
-                  </button>
-                ))}
-              </div>
+        {error !== null && phase === 'form' && <p className="mt-3 text-[12px] text-status-error">{error}</p>}
+      </DialogBody>
 
-              <FieldLabel htmlFor="scope-pattern">Pattern</FieldLabel>
-              <Input
-                id="scope-pattern"
-                ref={patternRef}
-                value={pattern}
-                onChange={(e) => setPattern(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && void submitManual()}
-                placeholder="*.example.com · example.com · 10.0.0.0/8 · */admin/*"
-                className="mb-3 font-mono text-[13px]"
-              />
-
-              <FieldLabel htmlFor="scope-note">Note</FieldLabel>
-              <Input
-                id="scope-note"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && void submitManual()}
-                placeholder="Why this rule exists, quoted from the program if you can"
-                className="text-[13px]"
-              />
-              <p className="mt-1.5 text-[11.5px] text-muted-foreground">
-                An exclusion always wins over an inclusion that also matches.
-              </p>
-            </>
-          ) : (
-            <>
-              <FieldLabel htmlFor="scope-paste">Scope</FieldLabel>
-              <textarea
-                id="scope-paste"
-                className={TEXTAREA_CLASS}
-                rows={9}
-                value={scope}
-                onChange={(e) => setScope(e.target.value)}
-                placeholder={'*.example.com\napi.example.com\n10.0.0.0/24\n\nOut of scope: shop.example.com (third party)'}
-              />
-              <p className="mt-1.5 text-[11.5px] text-muted-foreground">
-                Paste the scope from HackerOne/Bugcrowd/etc. The agent writes the include and exclude rules, then
-                records the hosts it lists.
-              </p>
-            </>
-          )}
-
-          {error !== null && phase === 'form' && <p className="mt-3 text-[12px] text-status-error">{error}</p>}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
-          {phase === 'done' ? (
-            <Button size="sm" onClick={onClose}>
-              Done
-            </Button>
-          ) : phase === 'review' ? (
-            emptyProposal || proposal === undefined ? (
-              <Button size="sm" onClick={onClose}>
-                Close
-              </Button>
-            ) : (
-              <>
-                <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
-                  Cancel
-                </Button>
-                <Button size="sm" disabled={busy} onClick={() => void applyProposal(proposal)}>
-                  {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" strokeWidth={2} />}
-                  Add
-                </Button>
-              </>
-            )
-          ) : phase === 'running' ? (
-            <Button size="sm" variant="ghost" disabled>
-              <Loader2 className="size-4 animate-spin" /> Working…
-            </Button>
-          ) : (
-            <>
-              <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
-                Cancel
-              </Button>
-              {tab === 'manual' ? (
-                <Button size="sm" disabled={busy || !canSubmit} onClick={() => void submitManual()}>
-                  {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" strokeWidth={2} />}
-                  Add rule
-                </Button>
-              ) : (
-                <Button size="sm" disabled={busy || !canSubmit} onClick={() => void submitAi()}>
-                  {busy ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="size-4" strokeWidth={1.75} />
-                  )}
-                  Parse with AI
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+      <ScopeRuleFooter
+        phase={phase}
+        tab={tab}
+        busy={busy}
+        canSubmit={canSubmit}
+        canApply={proposal !== undefined && !emptyProposal}
+        onClose={onClose}
+        onSubmitManual={() => void submitManual()}
+        onSubmitAi={() => void submitAi()}
+        onApply={() => proposal !== undefined && void applyProposal(proposal)}
+      />
+    </Dialog>
   )
 }

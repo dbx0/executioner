@@ -8,10 +8,12 @@ accepts = ["url", "domain", "ip"]
 tags = { type = "string", placeholder = "cve,xss,sqli", default = "", label = "Tags", description = "Comma-separated template tags to include (e.g. 'cve,xss,sqli')" }
 severity = { type = "string", placeholder = "high,critical", default = "", label = "Severity", description = "Comma-separated severity levels (info,low,medium,high,critical)" }
 templates = { type = "string", placeholder = "/root/nuclei-templates", default = "", label = "Templates", description = "Path to a custom template directory or file; leave empty for the templates nuclei installed" }
+header = { type = "string", default = "", placeholder = "X-Bug-Hunter: yourname", label = "Request header", description = "One extra header sent with every request, as Name: value. Use it for the identifying header a programme asks for" }
+rate_limit = { type = "number", default = 0, placeholder = "1", label = "Rate limit", description = "Max requests per second (nuclei -rl). 0 leaves the nuclei default" }
 
 [command]
 program = "nuclei"
-args = ["-u", "{{ target.value }}", "-jsonl", "{{ params.tags | -tags }}", "{{ params.tags? }}", "{{ params.severity | -severity }}", "{{ params.severity? }}", "{{ params.templates | -t }}", "{{ params.templates? }}"]
+args = ["-u", "{{ target.value }}", "-jsonl", "{{ params.tags | -tags }}", "{{ params.tags? }}", "{{ params.severity | -severity }}", "{{ params.severity? }}", "{{ params.templates | -t }}", "{{ params.templates? }}", "{{ params.header | -H }}", "{{ params.header? }}", "{{ params.rate_limit | -rl }}", "{{ params.rate_limit? }}"]
 timeout_ms = 120000
 
 # Results go to stdout rather than a file (-o), so the scan can run on a remote
@@ -22,4 +24,6 @@ source = "stdout"
 
 [[emit.facts]]
 kind = "vulnerability"
-data = { template = "{{ record.template-id }}", severity = "{{ record.info.severity }}" }
+# The name and where it matched are what make a row readable on the target
+# without opening the raw output.
+data = { template = "{{ record.template-id }}", severity = "{{ record.info.severity }}", title = "{{ record.info.name }}", matched_at = "{{ record.matched-at }}" }

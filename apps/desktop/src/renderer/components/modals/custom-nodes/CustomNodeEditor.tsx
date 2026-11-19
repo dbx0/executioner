@@ -1,7 +1,15 @@
 import type { JSX } from 'react'
 import { Button } from '../../ui/button.js'
+import { Spinner } from '../../ui/spinner.js'
 import { Field, SelectField, TextareaField } from './fields.js'
 import type { FormState, Parser } from './form-state.js'
+
+/** The heading over a group of fields in the form. */
+function SectionTitle({ children }: { children: string }): JSX.Element {
+  return (
+    <div className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{children}</div>
+  )
+}
 
 /** The right pane: the whole custom-node form, from identity down to the emit spec. */
 export function CustomNodeEditor({
@@ -22,7 +30,7 @@ export function CustomNodeEditor({
   onSave: () => void
 }): JSX.Element {
   return (
-    <div className="min-w-0 flex-1 overflow-y-auto scrollbar-sleek p-4">
+    <div className="scrollbar-sleek min-w-0 flex-1 overflow-y-auto px-5 py-4">
       <div className="mb-3 text-[13px] font-medium">
         {form.editingId === undefined ? 'New custom node' : 'Edit custom node'}
       </div>
@@ -53,7 +61,7 @@ export function CustomNodeEditor({
         />
       </div>
 
-      <div className="mt-4 mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Command</div>
+      <SectionTitle>Command</SectionTitle>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Program" value={form.program} onChange={(v) => set({ program: v })} placeholder="nmap" />
         <Field label="Timeout (ms)" value={form.timeout} onChange={(v) => set({ timeout: v })} placeholder="120000" />
@@ -66,9 +74,9 @@ export function CustomNodeEditor({
         rows={4}
       />
 
-      <div className="mt-4 mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Params (JSON, optional)</div>
+      <SectionTitle>Params (JSON, optional)</SectionTitle>
       <TextareaField
-        label={'A JSON map of name → param spec, e.g. {"ports": {"type": "string", "default": "1-1000"}}'}
+        label={'A JSON map of name to param spec, e.g. {"ports": {"type": "string", "default": "1-1000"}}'}
         value={form.params}
         onChange={(v) => set({ params: v })}
         placeholder={'{\n  "ports": { "type": "string", "default": "1-1000" }\n}'}
@@ -76,7 +84,7 @@ export function CustomNodeEditor({
         mono
       />
 
-      <div className="mt-4 mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Output parser (emit)</div>
+      <SectionTitle>Output parser (emit)</SectionTitle>
       <div className="grid grid-cols-2 gap-2">
         <SelectField
           label="Parser"
@@ -111,11 +119,12 @@ export function CustomNodeEditor({
 
       <div className="mt-4 flex justify-end gap-2">
         {form.editingId !== undefined && (
-          <Button variant="ghost" size="xs" onClick={onNew}>
+          <Button variant="ghost" size="sm" onClick={onNew}>
             New
           </Button>
         )}
-        <Button size="xs" disabled={!valid || busy} onClick={onSave}>
+        <Button size="sm" disabled={!valid || busy} onClick={onSave}>
+          {busy && <Spinner size="sm" />}
           {form.editingId === undefined ? 'Create node' : 'Save changes'}
         </Button>
       </div>

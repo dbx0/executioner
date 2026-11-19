@@ -1,16 +1,17 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import type { AxiosInstance } from 'axios'
-import { Loader2, RefreshCw, Check, X, Zap } from 'lucide-react'
+import { RefreshCw, Check, X } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { AgentIcon } from '../../components/brand/AgentIcon.js'
 import { Button } from '../../components/ui/button.js'
+import { Spinner } from '../../components/ui/spinner.js'
 import { agentsApi, type AgentStatus } from '../../api/agents.js'
 import { agentMcpApi, isWired, type AgentMcpWiring } from '../../api/agent-mcp.js'
 import { Switch } from '../../components/ui/switch.js'
-import { usageLimitsApi, type ProviderLimits, type UsageLimits } from '../../api/usage-limits.js'
-import { clampPercent, meterFillColor, formatResetCountdown } from '../../app-shell/UsagePanel.js'
-import { PageHeading } from './parts.js'
+import { usageLimitsApi, type UsageLimits } from '../../api/usage-limits.js'
+import { UsageStrip } from './AgentUsageStrip.js'
+import { IconTile, PageHeading, SettingsCard, SettingsNote, StatusPill, VersionChip } from './parts.js'
 
 /** The agents the app can launch, rendered immediately (before validation). */
 interface AgentInfo {
@@ -32,99 +33,26 @@ const AGENTS: AgentInfo[] = [
 
 type CardState = 'checking' | 'working' | 'missing'
 
-/** A single labeled usage meter (color-mix fill — tokens are hex). */
-function Meter({ label, percent }: { label: string; percent: number }): JSX.Element {
-  const width = clampPercent(percent)
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-1.5">
-      <span className="relative block h-[5px] min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-        <span
-          className="absolute inset-y-0 left-0 rounded-full"
-          style={{ width: `${width}%`, backgroundColor: meterFillColor(percent) }}
-        />
-      </span>
-      <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-        {label} {Math.round(percent)}%
-      </span>
-    </div>
-  )
-}
-
-/** The account-usage strip inside the Claude/Codex cards. */
-function UsageStrip({ p, onRetry, retrying }: { p: ProviderLimits; onRetry: () => void; retrying: boolean }): JSX.Element {
-  const now = Date.now()
-  const meters = [
-    p.five_hour ? { key: '5h', label: '5h', percent: p.five_hour.percent } : null,
-    p.weekly ? { key: 'wk', label: 'wk', percent: p.weekly.percent } : null,
-    p.fable ? { key: 'fable', label: 'Fable', percent: p.fable.percent } : null,
-  ].filter((m): m is { key: string; label: string; percent: number } => m !== null)
-  // The engine serves the last-known numbers on a transient failure, so meters
-  // may be present even with an error set — show the numbers, note the error.
-  const reset = formatResetCountdown(p.five_hour?.resetsAt ?? null, now)
-
-  return (
-    <div className="mt-3 flex flex-col gap-1.5 rounded-md border border-border bg-surface-1 px-2.5 py-2">
-      <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        Account usage
-        {reset !== null && (
-          <span className="ml-auto flex items-center gap-1 normal-case tracking-normal text-muted-foreground">
-            <Zap className="size-3" /> {reset}
-          </span>
-        )}
-      </div>
-      {meters.length > 0 ? (
-        <div className="flex items-center gap-3">
-          {meters.map((m) => (
-            <Meter key={m.key} label={m.label} percent={m.percent} />
-          ))}
-        </div>
-      ) : null}
-      {p.error !== null && (
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-          <span className="min-w-0 flex-1 truncate">{p.error}</span>
-          <button
-            type="button"
-            onClick={onRetry}
-            disabled={retrying}
-            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-muted-foreground hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
-          >
-            {retrying ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />} Retry
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** The status badge — one consistent badge whose state is checking/working/missing. */
+/** The status badge: one consistent badge whose state is checking/working/missing. */
 function StatusBadge({ state }: { state: CardState }): JSX.Element {
   if (state === 'checking') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-surface-3 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-        <Loader2 className="size-3 animate-spin" /> Checking
-      </span>
+      <StatusPill tone="neutral" icon={<Spinner size="xs" />}>
+        Checking
+      </StatusPill>
     )
   }
   if (state === 'working') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--status-success)_16%,transparent)] px-2 py-0.5 text-[11px] font-medium text-status-success">
-        <Check className="size-3" strokeWidth={2.5} /> Working
-      </span>
+      <StatusPill tone="success" icon={<Check className="size-3" strokeWidth={2.5} />}>
+        Working
+      </StatusPill>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--destructive)_16%,transparent)] px-2 py-0.5 text-[11px] font-medium text-destructive">
-      <X className="size-3" strokeWidth={2.5} /> Not found
-    </span>
-  )
-}
-
-/** The version chip — a SEPARATE badge, shown only when a version is known. */
-function VersionChip({ version }: { version: string }): JSX.Element {
-  return (
-    <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 font-mono text-[10.5px] text-muted-foreground">
-      {version}
-    </span>
+    <StatusPill tone="danger" icon={<X className="size-3" strokeWidth={2.5} />}>
+      Not found
+    </StatusPill>
   )
 }
 
@@ -155,11 +83,11 @@ function AgentCard({
   onToggleMcp: (value: boolean) => void
 }): JSX.Element {
   return (
-    <div className="rounded-lg border border-border bg-card p-3.5">
+    <SettingsCard className="p-3.5">
       <div className="flex items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-md bg-surface-2">
+        <IconTile>
           <AgentIcon agent={info.id} className="size-5" />
-        </span>
+        </IconTile>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[14px] font-semibold">{info.name}</span>
@@ -169,15 +97,22 @@ function AgentCard({
           <div className="mt-0.5 text-xs text-muted-foreground">{info.blurb}</div>
           <div className="mt-1 text-[11px] text-muted-foreground">
             <span className="font-mono">{info.binary}</span>
-            {state === 'missing' && <span className="text-muted-foreground"> — {status?.error ?? 'not on PATH'}</span>}
+            {state === 'missing' && <span className="text-muted-foreground">: {status?.error ?? 'not on PATH'}</span>}
           </div>
         </div>
-        <Button variant="outline" size="sm" className="shrink-0" disabled={state === 'checking'} onClick={onVerify}>
-          {state === 'checking' ? <Loader2 className="size-3.5 animate-spin" /> : 'Verify'}
+        <Button
+          variant="glass"
+          size="sm"
+          className="shrink-0"
+          disabled={state === 'checking'}
+          onClick={onVerify}
+        >
+          {state === 'checking' && <Spinner size="sm" />}
+          Verify
         </Button>
       </div>
       {mcpCapable && (
-        <div className="mt-3 flex items-center gap-3 rounded-md border border-border bg-surface-1 px-2.5 py-2">
+        <div className="mt-3 flex items-center gap-3 rounded-[10px] border border-glass-border bg-glass px-3 py-2">
           <div className="min-w-0 flex-1">
             <div className="text-[11px] font-medium">Project MCP</div>
             <div className="text-[11px] text-muted-foreground">
@@ -194,7 +129,7 @@ function AgentCard({
       {info.usage !== undefined && limits !== null && (
         <UsageStrip p={limits[info.usage]} onRetry={onRetryUsage} retrying={retryingUsage} />
       )}
-    </div>
+    </SettingsCard>
   )
 }
 
@@ -285,8 +220,8 @@ function AgentsList({ client }: { client: AxiosInstance }): JSX.Element {
   return (
     <>
       <div className="mb-3 flex items-center justify-end">
-        <Button variant="outline" size="sm" disabled={anyChecking} onClick={() => AGENTS.forEach((a) => verifyOne(a.id))}>
-          {anyChecking ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 size-3.5" />}
+        <Button variant="glass" size="sm" disabled={anyChecking} onClick={() => AGENTS.forEach((a) => verifyOne(a.id))}>
+          {anyChecking ? <Spinner size="sm" /> : <RefreshCw className="size-3.5" />}
           Verify all
         </Button>
       </div>
@@ -318,7 +253,7 @@ export function AgentsSection(): JSX.Element {
     <div>
       <PageHeading title="Agents" description="The coding-agent CLIs the app can launch." />
       {client === null ? (
-        <p className="text-xs text-muted-foreground">Open an engagement to check agents.</p>
+        <SettingsNote>Open an engagement to check agents.</SettingsNote>
       ) : (
         <AgentsList client={client} />
       )}

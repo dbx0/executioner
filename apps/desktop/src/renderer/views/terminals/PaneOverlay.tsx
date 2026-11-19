@@ -6,7 +6,9 @@ import { cn } from '../../lib/utils.js'
 import type { Layout } from '../../store/types.js'
 import { PanePicker } from './PanePicker.js'
 import { BrowserHandoffItems } from './BrowserPane.js'
-import { TabMenuItem, TabMenuSeparator } from './TabMenu.js'
+import { GlassPanel } from '../../components/ui/glass-panel.js'
+import { paneBox, paneCardClass } from './pane-box.js'
+import { TabMenuItem, TabMenuSeparator, TabMenuSurface } from './TabMenu.js'
 
 const pct = (n: number): string => `${n * 100}%`
 
@@ -90,40 +92,28 @@ export function PaneMenu({
     fn()
   }
   return (
-    <div
-      className="pointer-events-auto fixed inset-0 z-[70]"
-      onClick={onClose}
-      onContextMenu={(e) => {
-        e.preventDefault()
-        onClose()
-      }}
-    >
-      <div
-        style={{ left: x, top: y }}
-        onClick={(e) => e.stopPropagation()}
-        className="fixed z-[71] min-w-[192px] rounded-md border border-border bg-popover p-1 text-[13px] text-foreground shadow-floating"
-      >
-        <TabMenuItem onClick={run(() => splitPane(leafId, 'row'))}>Split right</TabMenuItem>
-        <TabMenuItem onClick={run(() => splitPane(leafId, 'col'))}>Split down</TabMenuItem>
-        {multi && <TabMenuItem onClick={run(() => movePaneToNewTab(leafId))}>Move pane to new tab</TabMenuItem>}
-        {browserId !== undefined && (
-          <>
-            <TabMenuSeparator />
-            <BrowserHandoffItems id={browserId} close={onClose} />
-          </>
-        )}
-        <TabMenuSeparator />
-        <TabMenuItem disabled={pinned} onClick={run(() => closePane(leafId))}>
-          Close pane
-        </TabMenuItem>
-      </div>
-    </div>
+    <TabMenuSurface x={x} y={y} onClose={onClose}>
+      <TabMenuItem onClick={run(() => splitPane(leafId, 'row'))}>Split right</TabMenuItem>
+      <TabMenuItem onClick={run(() => splitPane(leafId, 'col'))}>Split down</TabMenuItem>
+      {multi && <TabMenuItem onClick={run(() => movePaneToNewTab(leafId))}>Move pane to new tab</TabMenuItem>}
+      {browserId !== undefined && (
+        <>
+          <TabMenuSeparator />
+          <BrowserHandoffItems id={browserId} close={onClose} />
+        </>
+      )}
+      <TabMenuSeparator />
+      <TabMenuItem disabled={pinned} onClick={run(() => closePane(leafId))}>
+        Close pane
+      </TabMenuItem>
+    </TabMenuSurface>
   )
 }
 
 /**
- * Drawn over the pane bodies of the active layout: the draggable dividers, the focus ring
- * (only once there are two panes) and the picker slot of each empty pane. Dragging posts at
+ * Drawn over the pane cards of the active layout: the draggable dividers in the gutters
+ * between them, the card (with its picker) of each empty pane, and the drop zones while a
+ * tab is dragged. A pane card marks its own focus, so there is no ring here. Dragging posts at
  * most one ratio per frame, so the terminals refit once per frame instead of once per event.
  */
 export function PaneOverlay({ layout }: { layout: Layout }): JSX.Element {
@@ -205,12 +195,13 @@ export function PaneOverlay({ layout }: { layout: Layout }): JSX.Element {
         if (r === undefined) return null
         if (p.item === null) {
           return (
-            <div
+            <GlassPanel
               key={p.id}
+              tone="ink"
               data-testid={`empty-pane-${p.id}`}
               data-pane-leaf={p.id}
-              className="pointer-events-auto absolute bg-card p-px"
-              style={place(r)}
+              className={cn('pointer-events-auto', paneCardClass(multi && p.id === layout.focusedLeafId))}
+              style={paneBox(r)}
               onMouseDownCapture={() => focusPane(layout.id, p.id)}
               onContextMenu={(e) => {
                 e.preventDefault()
@@ -218,24 +209,11 @@ export function PaneOverlay({ layout }: { layout: Layout }): JSX.Element {
               }}
             >
               <PanePicker leafId={p.id} />
-            </div>
+            </GlassPanel>
           )
         }
         return null
       })}
-      {multi &&
-        panes.map((p) => {
-          const r = all.get(p.id)
-          if (r === undefined || p.id !== layout.focusedLeafId) return null
-          return (
-            <div
-              key={`ring-${p.id}`}
-              data-testid="focus-ring"
-              className="absolute rounded-[2px] ring-1 ring-inset ring-border-strong"
-              style={place(r)}
-            />
-          )
-        })}
       {dividers(layout.root).map((d) => (
         <div
           key={`div-${d.leafIdInA}`}
@@ -244,23 +222,22 @@ export function PaneOverlay({ layout }: { layout: Layout }): JSX.Element {
           className="pointer-events-none absolute"
           style={place(d.rect)}
         >
-          {/* The visible 1px line on the seam; the wider hit area below only catches the drag. */}
+          {/* The hit area is the whole gutter between the two cards; the 1px line in its middle only shows while it is hovered. */}
           <div
-            data-testid="divider-line"
-            className={
-              d.dir === 'row'
-                ? 'pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border'
-                : 'pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border'
-            }
-          />
-          <div
-            className={
-              d.dir === 'row'
-                ? 'pointer-events-auto absolute inset-y-0 -inset-x-[3px] cursor-col-resize touch-none hover:bg-border-strong/60'
-                : 'pointer-events-auto absolute inset-x-0 -inset-y-[3px] cursor-row-resize touch-none hover:bg-border-strong/60'
-            }
+            className={cn(
+              'group pointer-events-auto absolute touch-none',
+              d.dir === 'row' ? 'inset-y-0 -inset-x-1 cursor-col-resize' : 'inset-x-0 -inset-y-1 cursor-row-resize',
+            )}
             onPointerDown={(e) => startDrag(e, d.leafIdInA, d.dir)}
-          />
+          >
+            <div
+              data-testid="divider-line"
+              className={cn(
+                'pointer-events-none absolute rounded-full bg-border-strong opacity-0 transition-opacity group-hover:opacity-100',
+                d.dir === 'row' ? 'inset-y-3 left-1/2 w-px -translate-x-1/2' : 'inset-x-3 top-1/2 h-px -translate-y-1/2',
+              )}
+            />
+          </div>
         </div>
       ))}
       {dragging &&
@@ -268,7 +245,7 @@ export function PaneOverlay({ layout }: { layout: Layout }): JSX.Element {
           const r = all.get(p.id)
           if (r === undefined) return null
           return (
-            <div key={`drop-${p.id}`} className="pointer-events-none absolute" style={place(r)}>
+            <div key={`drop-${p.id}`} className="pointer-events-none absolute overflow-hidden rounded-panel" style={paneBox(r)}>
               {(Object.keys(EDGE_BAND) as Edge[]).map((edge) => {
                 const zone = `${p.id}:${edge}`
                 return (
@@ -277,7 +254,7 @@ export function PaneOverlay({ layout }: { layout: Layout }): JSX.Element {
                     data-testid={`drop-${edge}-${p.id}`}
                     className={cn(
                       'pointer-events-auto absolute border-2 transition-colors',
-                      overZone === zone ? 'border-border-strong bg-surface-3' : 'border-transparent',
+                      overZone === zone ? 'border-border-strong bg-glass-active' : 'border-transparent',
                     )}
                     style={EDGE_BAND[edge]}
                     onDragOver={(e) => {

@@ -19,6 +19,7 @@ import {
   saveSessions,
 } from '../persistence.js'
 import type { ActiveTab, AppState, BrowserTab, FileTab, OpenEngagement, Session } from '../types.js'
+import { engagementOpenError } from '../../lib/engagement-error.js'
 import type { SliceCtx } from './context.js'
 import { reconcileLayouts, syncActive } from './layouts.js'
 
@@ -351,7 +352,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
       const engagements: OpenEngagement[] = []
       const failures: string[] = []
       built.forEach((r, i) => {
-        if (r.status === 'rejected') failures.push(`${basename(roots[i]!)}: ${(r.reason as Error).message}`)
+        if (r.status === 'rejected') failures.push(engagementOpenError(r.reason, roots[i]))
         else if (!engagements.some((x) => x.root === r.value.root)) engagements.push(r.value)
       })
       if (engagements.length === 0) {
@@ -395,7 +396,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
         await openInto(dir, create)
       } catch (e) {
         rlog.error('engagements', 'Could not open the engagement', errorFields(e))
-        set({ error: (e as Error).message })
+        set({ error: engagementOpenError(e) })
       } finally {
         set({ busy: false })
       }
@@ -458,7 +459,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
         return connection.projectRoot
       } catch (e) {
         rlog.error('engagements', 'Could not open the engagement', errorFields(e))
-        set({ error: (e as Error).message })
+        set({ error: engagementOpenError(e) })
         return null
       } finally {
         set({ busy: false })
@@ -472,7 +473,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
         return get().activeRoot
       } catch (e) {
         rlog.error('engagements', 'Could not open the engagement', errorFields(e))
-        set({ error: (e as Error).message })
+        set({ error: engagementOpenError(e) })
         return null
       } finally {
         set({ busy: false })
@@ -528,7 +529,7 @@ export function createEngagementsSlice(ctx: SliceCtx): Pick<AppState, 'restoreSe
         await openInto(root, false)
       } catch (e) {
         rlog.error('engagements', 'Could not open the engagement', errorFields(e))
-        set({ error: (e as Error).message })
+        set({ error: engagementOpenError(e) })
       } finally {
         set({ busy: false })
       }

@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
+import { Tip } from '../../components/ui/tip.js'
 import type { Argv } from '../../api/nodes.js'
 
 /** What the preview shows: the argv, the reason there is none yet, or nothing. */
@@ -33,7 +34,7 @@ export function CommandPreview({ state, more }: { state: CommandPreviewState; mo
 
   if ('error' in state) {
     return (
-      <div className="border-t border-border px-3 py-2 text-[11.5px] text-muted-foreground">
+      <div className="border-t border-glass-border px-4 py-2 text-[11.5px] text-muted-foreground">
         Command not ready: {state.error}
       </div>
     )
@@ -53,10 +54,10 @@ export function CommandPreview({ state, more }: { state: CommandPreviewState; mo
   }
 
   return (
-    <div className="flex items-start gap-2 border-t border-border bg-surface-1 px-3 py-2">
+    <div className="flex items-start gap-2 border-t border-glass-border bg-glass px-4 py-2">
       <code
         aria-label="Command"
-        className="max-h-[4.5rem] min-w-0 flex-1 overflow-y-auto scrollbar-sleek whitespace-pre-wrap break-all font-mono text-[11.5px] leading-relaxed"
+        className="scrollbar-sleek max-h-[4.5rem] min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11.5px] leading-relaxed"
       >
         <span className="select-none text-muted-foreground">$ </span>
         {line}
@@ -66,9 +67,11 @@ export function CommandPreview({ state, more }: { state: CommandPreviewState; mo
           and {more} more {more === 1 ? 'target' : 'targets'}
         </span>
       )}
-      <Button variant="ghost" size="icon-xs" aria-label="Copy command" onClick={copy}>
-        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-      </Button>
+      <Tip label={copied ? 'Copied' : 'Copy command'}>
+        <Button variant="ghost" size="icon-xs" aria-label="Copy command" onClick={copy}>
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        </Button>
+      </Tip>
     </div>
   )
 }

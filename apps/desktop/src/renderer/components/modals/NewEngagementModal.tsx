@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { Button } from '../ui/button.js'
+import { Dialog, DialogBody, DialogHeader } from '../ui/dialog.js'
 import { scopeApi } from '../../api/scope.js'
 import { targetsApi } from '../../api/targets.js'
 import { normalizeManualTarget, type NormalizedTarget } from '../../lib/target-input.js'
@@ -175,111 +176,120 @@ export function NewEngagementModal(): JSX.Element | null {
     if (root !== null) close()
   }
 
+  // On "Open existing" the folder is the whole answer, so picking one opens it
+  // right away: a folder that is not an engagement says so at once, instead of
+  // looking accepted until Open is pressed.
+  const pickAndOpen = (): void => {
+    void pickFolder().then((chosen) => {
+      if (chosen === undefined) return
+      setDir(chosen)
+      return submitOpen(chosen)
+    })
+  }
+
   const error = localError ?? storeError
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-6 backdrop-blur-[2px]" onClick={() => !busy && close()}>
-      <div
-        className="flex max-h-[88vh] w-[640px] max-w-[95vw] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-floating"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-          <div className="text-[15px] font-medium">New engagement</div>
+    // Nothing dismisses the modal while the store is creating or opening.
+    <Dialog onClose={() => close()} dismissable={!busy} size="lg">
+      <DialogHeader
+        title="New engagement"
+        actions={
           <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={() => close()} disabled={busy}>
             <X className="size-4" strokeWidth={1.75} />
           </Button>
-        </div>
+        }
+      />
 
-        {phase === 'form' && (
-          <ModeTabs
+      {phase === 'form' && (
+        <ModeTabs
+          tab={tab}
+          onSelect={(id) => {
+            setTab(id)
+            setLocalError(null)
+          }}
+        />
+      )}
+
+      <DialogBody className="py-5">
+        {phase === 'done' ? (
+          <ConfirmationPage
             tab={tab}
-            onSelect={(id) => {
-              setTab(id)
+            scopeRun={scopeRun}
+            manualSummary={manualSummary}
+            name={name.trim()}
+            icon={icon}
+            photo={photo}
+          />
+        ) : phase === 'running' ? (
+          <RunningPage scopeRun={scopeRun} />
+        ) : tab === 'ai' ? (
+          <AiTab
+            name={name}
+            setName={setName}
+            icon={icon}
+            setIcon={setIcon}
+            photo={photo}
+            setPhoto={setPhoto}
+            dir={dir}
+            onPickFolder={pickInto}
+            busy={busy}
+            description={description}
+            setDescription={setDescription}
+            scope={scope}
+            setScope={setScope}
+          />
+        ) : tab === 'manual' ? (
+          <ManualTab
+            name={name}
+            setName={setName}
+            icon={icon}
+            setIcon={setIcon}
+            photo={photo}
+            setPhoto={setPhoto}
+            dir={dir}
+            onPickFolder={pickInto}
+            busy={busy}
+            description={description}
+            setDescription={setDescription}
+            targetInput={targetInput}
+            setTargetInput={setTargetInput}
+            onAddTarget={addTarget}
+            targets={targets}
+            onRemoveTarget={removeTarget}
+          />
+        ) : (
+          <OpenTab
+            dir={dir}
+            onPickFolder={pickAndOpen}
+            busy={busy}
+            recents={recents}
+            openRoots={openRoots}
+            onSelectRecent={(root) => {
               setLocalError(null)
+              setDir(root)
+            }}
+            onOpenRecent={(root) => {
+              setDir(root)
+              void submitOpen(root)
             }}
           />
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek p-5">
-          {phase === 'done' ? (
-            <ConfirmationPage
-              tab={tab}
-              scopeRun={scopeRun}
-              manualSummary={manualSummary}
-              name={name.trim()}
-              icon={icon}
-              photo={photo}
-            />
-          ) : phase === 'running' ? (
-            <RunningPage scopeRun={scopeRun} />
-          ) : tab === 'ai' ? (
-            <AiTab
-              name={name}
-              setName={setName}
-              icon={icon}
-              setIcon={setIcon}
-              photo={photo}
-              setPhoto={setPhoto}
-              dir={dir}
-              onPickFolder={pickInto}
-              busy={busy}
-              description={description}
-              setDescription={setDescription}
-              scope={scope}
-              setScope={setScope}
-            />
-          ) : tab === 'manual' ? (
-            <ManualTab
-              name={name}
-              setName={setName}
-              icon={icon}
-              setIcon={setIcon}
-              photo={photo}
-              setPhoto={setPhoto}
-              dir={dir}
-              onPickFolder={pickInto}
-              busy={busy}
-              description={description}
-              setDescription={setDescription}
-              targetInput={targetInput}
-              setTargetInput={setTargetInput}
-              onAddTarget={addTarget}
-              targets={targets}
-              onRemoveTarget={removeTarget}
-            />
-          ) : (
-            <OpenTab
-              dir={dir}
-              onPickFolder={pickInto}
-              busy={busy}
-              recents={recents}
-              openRoots={openRoots}
-              onSelectRecent={(root) => {
-                setLocalError(null)
-                setDir(root)
-              }}
-              onOpenRecent={(root) => {
-                setDir(root)
-                void submitOpen(root)
-              }}
-            />
-          )}
+        {error !== null && phase === 'form' && <p className="mt-3 text-[12px] text-status-error">{error}</p>}
+      </DialogBody>
 
-          {error !== null && phase === 'form' && <p className="mt-3 text-[12px] text-status-error">{error}</p>}
-        </div>
-
-        <ModalFooter
-          phase={phase}
-          tab={tab}
-          busy={busy}
-          canCreate={canCreate}
-          dir={dir}
-          onClose={() => close()}
-          onSubmitAi={() => void submitAi()}
-          onSubmitManual={() => void submitManual()}
-          onSubmitOpen={() => void submitOpen()}
-        />
-      </div>
-    </div>
+      <ModalFooter
+        phase={phase}
+        tab={tab}
+        busy={busy}
+        canCreate={canCreate}
+        dir={dir}
+        onClose={() => close()}
+        onSubmitAi={() => void submitAi()}
+        onSubmitManual={() => void submitManual()}
+        onSubmitOpen={() => void submitOpen()}
+      />
+    </Dialog>
   )
 }

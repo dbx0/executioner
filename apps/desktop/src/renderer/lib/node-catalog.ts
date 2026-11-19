@@ -5,8 +5,6 @@ export type NodeKind =
   | 'tool'
   | 'agent'
   | 'manual'
-  | 'schedule'
-  | 'on_create'
   | 'if'
   | 'loop'
   | 'stop'
@@ -19,6 +17,10 @@ export type NodeKind =
   | 'geoip'
   | 'shodan'
   | 'censys'
+  | 'tls_cert'
+  | 'dns_records'
+  | 'asn'
+  | 'cloud_buckets'
   | 'screenshot'
   | 'python_script'
 
@@ -59,38 +61,11 @@ export function categoryColor(category: string): string {
 export const CONTROL_ENTRIES: CatalogEntry[] = [
   {
     type: 'manual',
-    label: 'Manual Trigger',
+    label: 'Start',
     kind: 'manual',
     category: 'trigger',
-    description: 'Entry point for a workflow started by hand. No parameters.',
+    description: 'Where the workflow begins. When it runs (by hand, on a schedule, when a target is added) is set on the Actions page.',
     params: [],
-  },
-  {
-    type: 'schedule',
-    label: 'Schedule Trigger',
-    kind: 'schedule',
-    category: 'trigger',
-    description: 'Entry point run on a recurring interval. Arm it per engagement in Schedules, which reads this interval.',
-    params: [
-      { name: 'interval_seconds', type: 'number', default: 3600, description: 'How often to run, in seconds.' },
-      { name: 'cron', type: 'string', description: 'Optional cron expression (informational; interval_seconds drives runs).' },
-    ],
-  },
-  {
-    type: 'on_create',
-    label: 'On Create Trigger',
-    kind: 'on_create',
-    category: 'trigger',
-    description: 'Entry point fired when a matching target is created. Arm it per engagement in Schedules, which reads this kind.',
-    params: [
-      {
-        name: 'target_kind',
-        type: 'string',
-        oneOf: ['domain', 'subdomain', 'ip', 'cidr', 'url'],
-        default: 'domain',
-        description: 'Target kind whose creation fires this workflow.',
-      },
-    ],
   },
   {
     type: 'if',
@@ -112,8 +87,16 @@ export const CONTROL_ENTRIES: CatalogEntry[] = [
     label: 'Loop',
     kind: 'loop',
     category: 'control',
-    description: 'Iterate the body over a newline/JSON list resolved from a template.',
-    params: [{ name: 'source', type: 'string' }],
+    description: 'Run every downstream node once per item, for example once per result of another node.',
+    params: [
+      {
+        name: 'source',
+        type: 'string',
+        description:
+          'What to walk. Use {{ nodes.<node id>.rows }} for the results of another node, then read a field in the body with {{ loop.item.<field> }}. A JSON list or lines of text also work, read as {{ loop.item }}.',
+      },
+      { name: 'max_items', type: 'number', description: 'Stop after this many items. Leave empty to walk them all.' },
+    ],
   },
   {
     type: 'stop',
@@ -296,6 +279,67 @@ export const CONTROL_ENTRIES: CatalogEntry[] = [
       { name: 'api_token', type: 'string', default: '{{ secrets.CENSYS_API_TOKEN }}', description: 'Personal access token. Defaults to the CENSYS_API_TOKEN secret.' },
       { name: 'org_id', type: 'string', default: '{{ secrets.CENSYS_ORG_ID }}', description: 'Organization ID for paid plans. Defaults to the CENSYS_ORG_ID secret; leave empty on Free.' },
     ],
+  },
+  {
+    type: 'tls_cert',
+    label: 'TLS Certificate',
+    kind: 'tls_cert',
+    category: 'recon',
+    description: 'Read the certificate a host serves: issuer, names and expiry. Records a certificate fact. No tool to install.',
+    accepts: ['domain', 'subdomain', 'ip', 'url'],
+    params: [
+      { name: 'target', type: 'string', description: 'Host, host:port or URL. Defaults to the run target.' },
+      { name: 'port', type: 'number', description: 'Port to connect to. Defaults to the port in the target, or 443.' },
+      { name: 'timeout', type: 'number', default: 15000, description: 'Handshake timeout in milliseconds.' },
+    ],
+    outputs: ['host', 'port', 'subject_cn', 'issuer', 'not_before', 'not_after', 'sans', 'days_left', 'expired'],
+  },
+  {
+    type: 'dns_records',
+    label: 'DNS Records',
+    kind: 'dns_records',
+    category: 'recon',
+    description: 'Resolve a name and record each answer as a DNS record fact. On an IP it does a reverse lookup and saves the names it finds as targets. No tool to install.',
+    accepts: ['domain', 'subdomain', 'ip'],
+    params: [
+      { name: 'target', type: 'string', description: 'Name or IP to look up. Defaults to the run target.' },
+      { name: 'record_types', type: 'string', default: 'A,AAAA,CNAME,MX,NS,TXT', description: 'Comma separated record types to ask for. Ignored for an IP.' },
+    ],
+    outputs: ['name', 'type', 'value'],
+  },
+  {
+    type: 'asn',
+    label: 'ASN Ranges',
+    kind: 'asn',
+    category: 'recon',
+    description: 'Find the network (AS) that announces an IP and list its IP ranges via RIPEstat (no API key). Saves the ranges as targets.',
+    accepts: ['ip'],
+    params: [
+      { name: 'target', type: 'string', description: 'IP or AS number such as AS15169. Defaults to the run target.' },
+      {
+        name: 'max_prefixes',
+        type: 'number',
+        default: 100,
+        description: 'Ranges are saved as targets only when the network has at most this many. A cloud or CDN network has thousands that belong to other customers.',
+      },
+      { name: 'ipv6', type: 'boolean', default: false, description: 'Include IPv6 ranges.' },
+      { name: 'timeout', type: 'number', default: 30000, description: 'Request timeout in milliseconds.' },
+    ],
+    outputs: ['asn', 'holder', 'prefix'],
+  },
+  {
+    type: 'cloud_buckets',
+    label: 'Cloud Buckets',
+    kind: 'cloud_buckets',
+    category: 'recon',
+    description: 'Guess bucket names from a keyword and check which exist on Amazon S3, Google Cloud Storage and Azure. Saves the ones it finds as targets and marks open listings.',
+    accepts: ['domain', 'subdomain', 'url'],
+    params: [
+      { name: 'keyword', type: 'string', description: 'Name to build bucket names from, e.g. acme. Defaults to the target domain without its ending.' },
+      { name: 'wordlist', type: 'string', ui: 'textarea', description: 'Extra words to try as <keyword>-<word>, one per line.' },
+      { name: 'timeout', type: 'number', default: 10000, description: 'Timeout per request in milliseconds.' },
+    ],
+    outputs: ['provider', 'bucket', 'url', 'access', 'status_code'],
   },
   {
     type: 'screenshot',

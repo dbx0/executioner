@@ -40,10 +40,10 @@ export function RunAgentCards(): JSX.Element | null {
             key={a.id}
             type="button"
             onClick={() => setRunFor(a)}
-            className="flex min-h-[72px] flex-col gap-1.5 rounded-lg border border-border bg-card p-3 text-left transition-all hover:border-border-strong hover:shadow-sm"
+            className="glass-panel flex min-h-[72px] flex-col gap-1.5 p-3 text-left outline-none transition-colors hover:bg-glass-strong focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <div className="flex items-center gap-2">
-              <span className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-2">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-glass-strong">
                 <AgentIcon agent={a.agent} className="size-3.5" />
               </span>
               <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{a.name}</span>

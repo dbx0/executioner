@@ -1,12 +1,13 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { friendlyError } from '../../lib/api-error.js'
-import { ChevronRight, File, Folder, FolderOpen, RotateCw } from 'lucide-react'
+import { File, Folder, FolderOpen } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { filesApi, type FileEntry } from '../../api/files.js'
-import { cn } from '../../lib/utils.js'
-import { Button } from '../ui/button.js'
 import { ScrollArea } from '../ui/scroll-area.js'
+import { Panel, PanelNote, PanelRefresh, PanelRow, PanelRowsSkeleton } from './panel-parts.js'
+
+const ICON = 'size-3.5 shrink-0'
 
 /** Join a child name onto its parent directory path (root parent is ''). */
 function joinPath(parent: string, name: string): string {
@@ -150,39 +151,20 @@ export function FileExplorer(): JSX.Element {
       const isDir = entry.type === 'dir'
       const isExpanded = expanded.has(path)
       const isSelected = selected === path && !isDir
+      const Icon = !isDir ? File : isExpanded ? FolderOpen : Folder
       return (
         <div key={path}>
-          <button
-            type="button"
+          <PanelRow
+            depth={depth}
+            selected={isSelected}
+            chevron={!isDir ? 'none' : isExpanded ? 'open' : 'closed'}
+            icon={<Icon className={ICON} strokeWidth={1.75} />}
+            label={entry.name}
+            className="font-mono text-[11.5px]"
+            aria-expanded={isDir ? isExpanded : undefined}
             onClick={() => (isDir ? toggleDir(path) : openFilePreview(path, entry.name))}
             onDoubleClick={() => (isDir ? undefined : openFilePermanent(path, entry.name))}
-            style={{ paddingLeft: 6 + depth * 12 }}
-            className={cn(
-              'flex h-7 w-full items-center gap-1 rounded-md pr-2 text-left text-[12.5px] transition-colors',
-              isSelected
-                ? 'selected-surface text-sidebar-accent-foreground'
-                : 'text-muted-foreground hover:bg-surface-2',
-            )}
-          >
-            {isDir ? (
-              <ChevronRight
-                className={cn('size-3 shrink-0 text-muted-foreground transition-transform', isExpanded && 'rotate-90')}
-                strokeWidth={2}
-              />
-            ) : (
-              <span className="size-3 shrink-0" />
-            )}
-            {isDir ? (
-              isExpanded ? (
-                <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-              ) : (
-                <Folder className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-              )
-            ) : (
-              <File className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-            )}
-            <span className="truncate">{entry.name}</span>
-          </button>
+          />
           {isDir && isExpanded ? renderEntries(path, depth + 1) : null}
         </div>
       )
@@ -191,39 +173,22 @@ export function FileExplorer(): JSX.Element {
 
   if (client === null) {
     return (
-      <div className="flex h-full items-center justify-center p-4 text-center text-[12px] text-muted-foreground">
-        Open an engagement
-      </div>
+      <Panel title="Explorer">
+        <PanelNote fill>Open an engagement</PanelNote>
+      </Panel>
     )
   }
 
   const rootEntries = dirs['']
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-8 shrink-0 items-center justify-between px-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Explorer</span>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground"
-          onClick={reload}
-          aria-label="Refresh explorer"
-        >
-          <RotateCw className="size-3.5" strokeWidth={1.75} />
-        </Button>
-      </div>
-
-      <ScrollArea className="min-h-0 flex-1 px-1 pb-2">
-        {error !== null && <p className="px-2 py-1 text-[12px] text-muted-foreground">{error}</p>}
-        {loading && rootEntries === undefined && (
-          <p className="px-2 py-1 text-[12px] text-muted-foreground">Loading files…</p>
-        )}
-        {rootEntries !== undefined && rootEntries.length === 0 && (
-          <p className="px-2 py-1 text-[12px] text-muted-foreground">Empty directory</p>
-        )}
+    <Panel title="Explorer" actions={<PanelRefresh label="Refresh explorer" loading={loading} onClick={reload} />}>
+      <ScrollArea className="min-h-0 flex-1 px-1.5 pb-2">
+        {error !== null && <PanelNote tone="error">{error}</PanelNote>}
+        {loading && rootEntries === undefined && <PanelRowsSkeleton label="Loading files" />}
+        {rootEntries !== undefined && rootEntries.length === 0 && <PanelNote>Empty directory</PanelNote>}
         {renderEntries('', 0)}
       </ScrollArea>
-    </div>
+    </Panel>
   )
 }

@@ -1,23 +1,20 @@
 import type { JSX } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { FileText, Plus, RefreshCw } from 'lucide-react'
 import { useApp } from '../store.js'
 import { useEngineChange } from '../lib/engine-changes.js'
-import { findingsApi, statusLabel, STATUSES, type Finding, type FindingInput } from '../api/findings.js'
+import { findingsApi, statusLabel, type Finding, type FindingInput } from '../api/findings.js'
 import { targetsApi } from '../api/targets.js'
-import { Button } from '../components/ui/button.js'
-import { Select } from '../components/ui/select.js'
+import { GlassPanel } from '../components/ui/glass-panel.js'
+import { Page, PageBody } from '../components/ui/page.js'
+import { TooltipProvider } from '../components/ui/tooltip.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
 import { notify } from '../lib/toast.js'
 import { useFlashIds } from '../components/targets/VirtualTargetTree.js'
 import { FindingList } from './findings/FindingList.js'
 import { FindingListSkeleton } from './findings/FindingListSkeleton.js'
+import { FindingsToolbar } from './findings/FindingsToolbar.js'
 import { FindingDetail } from './findings/FindingDetail.js'
-
-const statusFilterOptions = [
-  { value: 'all', label: 'All statuses' },
-  ...STATUSES.map((s) => ({ value: s, label: statusLabel(s) })),
-]
+import { FindingDetailSkeleton } from './findings/FindingDetailSkeleton.js'
 
 /** Matches the 1600ms enter-down-flash-red animation, so the highlight is not cut off mid-fade. */
 const NEW_FLASH_MS = 1600
@@ -43,6 +40,7 @@ export function FindingsView(): JSX.Element {
   const [targetValues, setTargetValues] = useState<Record<string, string>>({})
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState('all')
+  const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
   /** First load done (success or failure). Until then the list shows placeholders
    *  rather than the empty state, which otherwise claims there is nothing here. */
@@ -50,12 +48,15 @@ export function FindingsView(): JSX.Element {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Finding | null>(null)
-  /** Give the open finding the whole page, list column and all — a full write-up
-   *  is a document, and reading one in a 384px-narrower column is the worse half
+  /** Give the open finding the whole page, list column and all. A full write-up
+   *  is a document, and reading one in a 400px-narrower column is the worse half
    *  of the trade. Only honoured while a finding is open, or expanding would
    *  leave the page with nothing on it and no way back. */
   const [expanded, setExpanded] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [creating, setCreating] = useState(false)
+  /** The finding whose delete is in flight, so its button can say so. */
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const refresh = useCallback(async (silent = false) => {
     if (api === null) return
@@ -123,15 +124,39 @@ export function FindingsView(): JSX.Element {
   const selected = findings.find((f) => f.id === selectedId) ?? null
   const listHidden = expanded && selected !== null
 
+  // Client-side search over the loaded (status-filtered) findings: title, the two
+  // text bodies, severity, status and the target's name. It narrows the list the
+  // operator is already looking at, so it stays instant and needs no round-trip.
+  const trimmedQuery = query.trim().toLowerCase()
+  const visibleFindings = useMemo(() => {
+    if (trimmedQuery === '') return findings
+    return findings.filter((f) => {
+      const target = f.targetId === null ? '' : (targetValues[f.targetId] ?? '')
+      return (
+        f.title.toLowerCase().includes(trimmedQuery) ||
+        f.description.toLowerCase().includes(trimmedQuery) ||
+        f.details.toLowerCase().includes(trimmedQuery) ||
+        f.severity.toLowerCase().includes(trimmedQuery) ||
+        statusLabel(f.status).toLowerCase().includes(trimmedQuery) ||
+        target.toLowerCase().includes(trimmedQuery)
+      )
+    })
+  }, [findings, trimmedQuery, targetValues])
+
   const create = async (): Promise<void> => {
     if (api === null) return
-    const created = await api.create({ title: 'New finding', severity: 'medium' }).catch(() => null)
-    if (created === null) {
-      setError('Could not create the finding.')
-      return
+    setCreating(true)
+    try {
+      const created = await api.create({ title: 'New finding', severity: 'medium' }).catch(() => null)
+      if (created === null) {
+        setError('Could not create the finding.')
+        return
+      }
+      await refresh()
+      setSelectedId(created.id)
+    } finally {
+      setCreating(false)
     }
-    await refresh()
-    setSelectedId(created.id)
   }
 
   const save = async (id: string, patch: Partial<FindingInput>): Promise<void> => {
@@ -164,89 +189,102 @@ export function FindingsView(): JSX.Element {
 
   const remove = async (id: string): Promise<void> => {
     if (api === null) return
-    await api.remove(id).catch(() => setError('Could not delete the finding.'))
-    if (selectedId === id) setSelectedId(null)
-    await refresh()
+    setDeletingId(id)
+    try {
+      await api.remove(id).catch(() => setError('Could not delete the finding.'))
+      if (selectedId === id) setSelectedId(null)
+      await refresh()
+    } finally {
+      setDeletingId(null)
+    }
   }
 
+  const pending = selectedId !== null && selected === null && (!loadedOnce || loading)
+
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
-        <span className="text-[13px] font-medium">Findings</span>
-        <span className="text-[11px] text-muted-foreground">{findings.length}</span>
-        <div className="ml-auto flex items-center gap-2">
-          <Select
-            value={statusFilter}
-            onValueChange={setStatusFilter}
-            options={statusFilterOptions}
-            ariaLabel="Filter by status"
-            className="h-8 w-40"
-          />
-          <Button variant="ghost" size="icon-sm" aria-label="Refresh findings" onClick={() => void refresh()}>
-            <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} strokeWidth={1.75} />
-          </Button>
-          <Button variant="outline" size="sm" data-tour="findings-export" disabled={exporting} onClick={() => void exportReport()}>
-            <FileText className="mr-1 size-3.5" strokeWidth={2} /> {exporting ? 'Exporting…' : 'Export report'}
-          </Button>
-          <Button size="sm" data-tour="findings-new" onClick={() => void create()}>
-            <Plus className="mr-1 size-3.5" strokeWidth={2} /> New finding
-          </Button>
-        </div>
-      </div>
-
-      {error !== null && (
-        <p className="border-b border-border px-4 py-2 text-[12px] text-status-error break-words">{error}</p>
-      )}
-
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {!listHidden && (
-          <div data-tour="findings-list" className="flex w-96 shrink-0 flex-col overflow-hidden border-r border-border">
-            {loadedOnce ? (
-              <FindingList
-                findings={findings}
-                selectedId={selectedId}
-                targetValues={targetValues}
-                newIds={newIds}
-                onSelect={setSelectedId}
-              />
-            ) : (
-              <FindingListSkeleton />
-            )}
-          </div>
-        )}
-
-        {selected === null ? (
-          <div className="flex flex-1 items-center justify-center">
-            <p className="text-sm text-muted-foreground">Select a finding to read it.</p>
-          </div>
-        ) : (
-          <FindingDetail
-            key={selected.id}
-            finding={selected}
-            targetValue={selected.targetId === null ? null : (targetValues[selected.targetId] ?? selected.targetId)}
-            saving={saving}
-            expanded={expanded}
-            onToggleExpand={() => setExpanded(!expanded)}
-            onSave={(patch) => void save(selected.id, patch)}
-            onDelete={() => setConfirmDelete(selected)}
-          />
-        )}
-      </div>
-
-      {confirmDelete !== null && (
-        <ConfirmModal
-          title="Delete finding"
-          message={`Delete "${confirmDelete.title}"? This cannot be undone.`}
-          confirmLabel="Delete"
-          destructive
-          onCancel={() => setConfirmDelete(null)}
-          onConfirm={() => {
-            const id = confirmDelete.id
-            setConfirmDelete(null)
-            void remove(id)
-          }}
+    // The shell provides tooltips too; this one keeps the page renderable on its own.
+    <TooltipProvider delayDuration={300}>
+      <Page>
+        <FindingsToolbar
+          count={trimmedQuery === '' ? String(findings.length) : `${visibleFindings.length} of ${findings.length}`}
+          query={query}
+          onQueryChange={setQuery}
+          statusFilter={statusFilter}
+          loading={loading}
+          exporting={exporting}
+          creating={creating}
+          onStatusFilterChange={setStatusFilter}
+          onRefresh={() => void refresh()}
+          onExport={() => void exportReport()}
+          onCreate={() => void create()}
         />
-      )}
-    </div>
+
+        {error !== null && (
+          <p
+            role="alert"
+            className="mb-panel break-words rounded-panel border border-glass-border bg-[color-mix(in_srgb,var(--status-error)_10%,transparent)] px-4 py-2 text-[12px] text-status-error"
+          >
+            {error}
+          </p>
+        )}
+
+        <PageBody>
+          {!listHidden && (
+            <GlassPanel data-tour="findings-list" className="flex w-[400px] shrink-0 flex-col">
+              {loadedOnce ? (
+                trimmedQuery !== '' && visibleFindings.length === 0 && findings.length > 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">No findings match “{query.trim()}”.</p>
+                ) : (
+                  <FindingList
+                    findings={visibleFindings}
+                    selectedId={selectedId}
+                    targetValues={targetValues}
+                    newIds={newIds}
+                    onSelect={setSelectedId}
+                  />
+                )
+              ) : (
+                <FindingListSkeleton />
+              )}
+            </GlassPanel>
+          )}
+
+          {selected !== null ? (
+            <FindingDetail
+              key={selected.id}
+              finding={selected}
+              targetValue={selected.targetId === null ? null : (targetValues[selected.targetId] ?? selected.targetId)}
+              saving={saving}
+              deleting={deletingId === selected.id}
+              expanded={expanded}
+              onToggleExpand={() => setExpanded(!expanded)}
+              onSave={(patch) => void save(selected.id, patch)}
+              onDelete={() => setConfirmDelete(selected)}
+            />
+          ) : pending ? (
+            <FindingDetailSkeleton />
+          ) : (
+            <GlassPanel className="flex min-w-0 flex-1 items-center justify-center">
+              <p className="text-[13px] text-muted-foreground">Select a finding to read it.</p>
+            </GlassPanel>
+          )}
+        </PageBody>
+
+        {confirmDelete !== null && (
+          <ConfirmModal
+            title="Delete finding"
+            message={`Delete "${confirmDelete.title}"? This cannot be undone.`}
+            confirmLabel="Delete"
+            destructive
+            onCancel={() => setConfirmDelete(null)}
+            onConfirm={() => {
+              const id = confirmDelete.id
+              setConfirmDelete(null)
+              void remove(id)
+            }}
+          />
+        )}
+      </Page>
+    </TooltipProvider>
   )
 }

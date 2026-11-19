@@ -1,9 +1,13 @@
 import type { JSX } from 'react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { cn } from '../../lib/utils.js'
 
-export function SectionLabel({ children }: { children: React.ReactNode }): JSX.Element {
+/** The small caps heading over a hub section. */
+export function SectionLabel({ className, children }: { className?: string; children: ReactNode }): JSX.Element {
   return (
-    <div className="px-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{children}</div>
+    <div className={cn('px-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground', className)}>
+      {children}
+    </div>
   )
 }
 
@@ -61,6 +65,7 @@ export function ResizableRows({
 
   return (
     <div ref={containerRef} className="flex min-h-0 flex-1 flex-col">
+      {/* The split is a dragged ratio, so the two shares are computed styles. */}
       <div className="flex min-h-0 flex-col" style={{ flex: `${ratio} 1 0%` }}>
         {top}
       </div>
@@ -71,9 +76,9 @@ export function ResizableRows({
           e.preventDefault()
           dragging.current = true
         }}
-        className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center"
+        className="group flex h-3 shrink-0 cursor-row-resize items-center justify-center"
       >
-        <div className="h-[3px] w-10 rounded-full bg-border transition-colors group-hover:bg-border-strong" />
+        <div className="h-[3px] w-10 rounded-full bg-glass-active transition-colors group-hover:bg-border-strong" />
       </div>
       <div className="flex min-h-0 flex-col" style={{ flex: `${1 - ratio} 1 0%` }}>
         {bottom}

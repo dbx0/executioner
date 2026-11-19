@@ -35,6 +35,35 @@ describe('seedStarterWorkflows', () => {
     }
   })
 
+  it('starts every starter from the one start node, with no settings on it', () => {
+    // When a workflow runs is an action's business; the retired schedule and
+    // on_create trigger nodes only looked as if they decided it.
+    for (const starter of STARTER_WORKFLOWS) {
+      const nodes = starter.graph.nodes as Array<{ type: string; data: Record<string, unknown> }>
+      expect(nodes.filter((n) => n.type === 'manual')).toEqual([expect.objectContaining({ data: {} })])
+      expect(nodes.some((n) => n.type === 'schedule' || n.type === 'on_create')).toBe(false)
+    }
+  })
+
+  it('ships a recon workflow built from nodes alone', () => {
+    const recon = STARTER_WORKFLOWS.find((s) => s.id === 'starter-recon')
+    expect(recon?.name).toBe('Recon')
+    const types = (recon?.graph.nodes ?? []).map((n) => (n as { type: string }).type)
+    expect(types).toContain('manual')
+    // A node saves its own results and a loop walks another node's rows, so a
+    // starter has no reason to script, to re-save, or to ask an LLM.
+    for (const banned of ['python_script', 'save_to_target', 'agent']) expect(types).not.toContain(banned)
+  })
+
+  it('does not walk an unbounded list of subdomains by default', () => {
+    // A wildcard domain can return tens of thousands of names; the loop a starter
+    // ships with has to say how many it will act on.
+    const recon = STARTER_WORKFLOWS.find((s) => s.id === 'starter-recon')
+    const loops = (recon?.graph.nodes ?? []).filter((n) => (n as { type: string }).type === 'loop') as Array<{ data: { max_items?: number } }>
+    expect(loops.length).toBeGreaterThan(0)
+    for (const loop of loops) expect(loop.data.max_items).toBeGreaterThan(0)
+  })
+
   it('does not bring back a starter the user deleted', () => {
     const path = join(home, 'global.sqlite')
     const first = openGlobalDatabase(path)

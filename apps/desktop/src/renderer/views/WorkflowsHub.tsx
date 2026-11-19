@@ -6,11 +6,12 @@ import { savedAgentsApi, isTeamSavedAgent, type SavedAgent } from '../api/saved-
 import { WorkflowPreviewModal } from '../components/modals/WorkflowPreviewModal.js'
 import { RunWorkflowModal } from '../components/modals/RunWorkflowModal.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
-import { SchedulesDialog } from '../components/modals/SchedulesDialog.js'
 import { SavedAgentModal } from '../components/modals/SavedAgentModal.js'
+import { RunAgentModal } from '../components/modals/RunAgentModal.js'
 import { HubHeader } from './workflows-hub/HubHeader.js'
 import { WorkflowsPanel } from './workflows-hub/WorkflowsPanel.js'
 import { AgentsPanel } from './workflows-hub/AgentsPanel.js'
+import { Page } from '../components/ui/page.js'
 
 /**
  * The Workflows/Agents hub: the landing page for the two sidebar sections. It
@@ -34,13 +35,18 @@ export function WorkflowsHub({
   const [preview, setPreview] = useState<{ id: string; name: string } | null>(null)
   const [runFor, setRunFor] = useState<{ id: string; name: string } | null>(null)
   const [deleteFor, setDeleteFor] = useState<{ id: string; name: string } | null>(null)
-  const [showSchedules, setShowSchedules] = useState(false)
+  const setActiveView = useApp((s) => s.setActiveView)
   const tab = useApp((s) => s.hubTab)
 
   const agentsApi = useMemo(() => savedAgentsApi(client), [client])
   const [agents, setAgents] = useState<SavedAgent[]>([])
+  const [agentsLoaded, setAgentsLoaded] = useState(false)
+  // The card whose async action is in flight, so it can show a spinner.
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   // `kind` seeds the modal when creating (Add agent vs Add team).
   const [agentModal, setAgentModal] = useState<{ agent: SavedAgent | null; kind?: 'agent' | 'team' } | null>(null)
+  const [runAgentFor, setRunAgentFor] = useState<SavedAgent | null>(null)
   const [deleteAgentFor, setDeleteAgentFor] = useState<SavedAgent | null>(null)
 
   const teams = useMemo(() => agents.filter((a) => isTeamSavedAgent(a)), [agents])
@@ -51,6 +57,7 @@ export function WorkflowsHub({
       .list()
       .then(setAgents)
       .catch(() => setAgents([]))
+      .finally(() => setAgentsLoaded(true))
   }, [agentsApi])
 
   const refresh = useCallback(() => {
@@ -67,26 +74,32 @@ export function WorkflowsHub({
   }, [refresh, refreshAgents])
 
   const removeAgent = async (id: string): Promise<void> => {
+    setDeletingId(id)
     await agentsApi.remove(id).catch(() => {})
+    setDeletingId(null)
     refreshAgents()
   }
 
   const remove = async (id: string, keepHistory: boolean): Promise<void> => {
+    setDeletingId(id)
     await api.remove(id, keepHistory).catch(() => {})
+    setDeletingId(null)
     refresh()
   }
 
   const duplicate = async (id: string): Promise<void> => {
+    setDuplicatingId(id)
     await api.duplicate(id).catch(() => {})
+    setDuplicatingId(null)
     refresh()
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <Page>
       <HubHeader
         tab={tab}
         onCreateWorkflow={onCreate}
-        onShowSchedules={() => setShowSchedules(true)}
+        onOpenActions={() => setActiveView('actions')}
         onAddTeam={() => setAgentModal({ agent: null, kind: 'team' })}
         onAddAgent={() => setAgentModal({ agent: null, kind: 'agent' })}
       />
@@ -94,6 +107,8 @@ export function WorkflowsHub({
       {tab === 'workflows' && (
         <WorkflowsPanel
           loading={!loadedOnce}
+          duplicatingId={duplicatingId}
+          deletingId={deletingId}
           workflows={workflows}
           onCreate={onCreate}
           onPreview={(w) => setPreview({ id: w.id, name: w.name })}
@@ -106,8 +121,11 @@ export function WorkflowsHub({
         <AgentsPanel
           teams={teams}
           singleAgents={singleAgents}
+          loading={!agentsLoaded}
+          deletingId={deletingId}
           onAddTeam={() => setAgentModal({ agent: null, kind: 'team' })}
           onAddAgent={() => setAgentModal({ agent: null, kind: 'agent' })}
+          onRun={(a) => setRunAgentFor(a)}
           onEdit={(a) => setAgentModal({ agent: a })}
           onDelete={(a) => setDeleteAgentFor(a)}
         />
@@ -138,8 +156,6 @@ export function WorkflowsHub({
         />
       )}
 
-      {showSchedules && <SchedulesDialog client={client} onClose={() => setShowSchedules(false)} />}
-
       {deleteFor !== null && (
         <ConfirmModal
           title="Delete workflow"
@@ -154,6 +170,13 @@ export function WorkflowsHub({
             setDeleteFor(null)
             void remove(id, keepHistory)
           }}
+        />
+      )}
+
+      {runAgentFor !== null && (
+        <RunAgentModal
+          agent={{ name: runAgentFor.name, agent: runAgentFor.agent, prompt: runAgentFor.prompt }}
+          onClose={() => setRunAgentFor(null)}
         />
       )}
 
@@ -181,6 +204,6 @@ export function WorkflowsHub({
           }}
         />
       )}
-    </div>
+    </Page>
   )
 }

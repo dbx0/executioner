@@ -1,8 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AxiosInstance } from 'axios'
 import { useApp } from '../store.js'
 import type { WorkflowSummary } from '../api/workflows.js'
+import type { SavedAgent } from '../api/saved-agents.js'
 
 const workflows: WorkflowSummary[] = [
   { id: 'wf-1', name: 'Recon sweep', updated_at: '2026-01-01T00:00:00.000Z' } as WorkflowSummary,
@@ -14,7 +15,7 @@ const fakeWorkflows = {
   duplicate: vi.fn(() => Promise.resolve({ id: 'wf-2' })),
 }
 const fakeAgents = {
-  list: vi.fn(() => Promise.resolve([])),
+  list: vi.fn((): Promise<SavedAgent[]> => Promise.resolve([])),
   remove: vi.fn(() => Promise.resolve({ ok: true })),
 }
 
@@ -76,5 +77,33 @@ describe('WorkflowsHub loading state', () => {
 
     expect(await screen.findByText('Recon sweep')).toBeTruthy()
     expect(screen.queryByRole('status', { name: /loading workflows/i })).toBeNull()
+  })
+
+  it('runs an agent from its card, opening the run dialog preset to that agent', async () => {
+    useApp.setState({ hubTab: 'agents' })
+    fakeAgents.list.mockReturnValueOnce(
+      Promise.resolve([
+        {
+          id: 'a1',
+          name: 'Recon Scout',
+          description: 'maps',
+          agent: 'claude',
+          prompt: 'p',
+          scope: 'global',
+          createdAt: '',
+          updatedAt: '',
+        },
+      ]),
+    )
+
+    render(<WorkflowsHub onCreate={() => {}} onOpen={() => {}} />)
+
+    await screen.findByText('Recon Scout')
+    // The only Run action on the agents tab is this card's (no teams here).
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
+
+    // The run dialog opens already pinned to this agent (no agent picker shown).
+    expect(await screen.findByText('Run “Recon Scout”')).toBeTruthy()
+    expect(screen.queryByRole('combobox', { name: /agent/i })).toBeNull()
   })
 })

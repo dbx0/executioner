@@ -9,7 +9,7 @@ export interface WorkflowIssue {
   severity: 'error' | 'warning'
 }
 
-const TRIGGER_KINDS = new Set(['manual', 'schedule', 'on_create'])
+const TRIGGER_KINDS = new Set(['manual'])
 
 /** True when a param value counts as "provided" (not missing / undefined / empty string). */
 function hasValue(value: unknown): boolean {
@@ -82,7 +82,7 @@ export function validateWorkflow(nodes: Node<GraphNodeData>[], edges: Edge[]): W
   const hasTrigger = nodes.some((n) => n.data !== undefined && TRIGGER_KINDS.has(n.data.kind))
   if (!hasTrigger) {
     issues.push({
-      message: 'No trigger node — this workflow can only be run manually',
+      message: 'No Start node. Add one so it is clear where the workflow begins.',
       severity: 'warning',
     })
   }

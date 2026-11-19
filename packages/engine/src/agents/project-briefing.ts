@@ -61,7 +61,7 @@ const TOOL_BRIEFS: Record<ToolName, string> = {
   browser_mouse: 'move, click, press or scroll the mouse at viewport coordinates',
   browser_drag: 'drag from one element or point to another',
   browser_emulate: 'override the user agent, geolocation, locale or timezone',
-  browser_ask_operator: 'ask the operator for a CAPTCHA, an MFA code or anything only they can do',
+  browser_ask_operator: 'ask the operator to do one short thing only they can do in the browser, like a CAPTCHA or MFA code — never for questions, decisions, credentials or setting up accounts',
 }
 
 /** Targets listed inline before the briefing switches to "call list_targets". */

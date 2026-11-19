@@ -89,11 +89,10 @@ export function FloatingNotepad(): JSX.Element {
         aria-pressed={open}
         style={{ left: pos.x, top: pos.y }}
         className={cn(
-          'fixed z-[55] grid size-10 cursor-grab place-items-center rounded-lg select-none active:cursor-grabbing',
-          'border-transparent bg-card text-foreground',
-          'shadow-[0_4px_12px_rgb(0_0_0_/_0.22),0_0_0_1px_var(--border-subtle)]',
-          'hover:bg-accent',
-          'dark:bg-accent dark:shadow-[0_6px_16px_rgb(0_0_0_/_0.55),0_0_0_1px_rgb(255_255_255_/_0.22)]',
+          'fixed z-[55] grid size-10 cursor-grab select-none place-items-center rounded-full active:cursor-grabbing',
+          'border border-glass-border bg-popover shadow-floating outline-none transition-colors',
+          'hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
+          open ? 'text-foreground' : 'text-muted-foreground',
         )}
       >
         <StickyNote className="size-4" strokeWidth={1.75} />

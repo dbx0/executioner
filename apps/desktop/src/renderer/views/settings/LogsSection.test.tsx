@@ -118,10 +118,10 @@ describe('LogsSection', () => {
     await mount()
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
     const dialog = screen.getByRole('dialog')
-    const targets = within(dialog).getByRole('checkbox', { name: 'Include target details' }) as HTMLInputElement
-    const all = within(dialog).getByRole('checkbox', { name: 'Include all recent sessions' }) as HTMLInputElement
-    expect(targets.checked).toBe(false)
-    expect(all.checked).toBe(false)
+    const targets = within(dialog).getByRole('checkbox', { name: 'Include target details' })
+    const all = within(dialog).getByRole('checkbox', { name: 'Include all recent sessions' })
+    expect(targets.getAttribute('aria-checked')).toBe('false')
+    expect(all.getAttribute('aria-checked')).toBe('false')
     expect(within(dialog).getByText('Also includes crash dumps, which can contain unscrubbed data. Only send this privately.')).toBeTruthy()
     fireEvent.click(targets)
     fireEvent.click(within(dialog).getByRole('button', { name: 'Export' }))

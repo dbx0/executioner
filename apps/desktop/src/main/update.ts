@@ -13,9 +13,12 @@ import type { ReadableStream as WebReadableStream } from 'node:stream/web'
  * serves for /releases/latest (no API call, so no rate limit), the same way the
  * install scripts resolve it. The app downloads the release asset itself, with
  * progress, and checks it against SHA256SUMS.txt. Restarting hands off to the
- * install script of the new tag: the app quits, a detached shell waits for it
- * to exit, runs install.sh / install.ps1 on the files already downloaded, and
- * opens the app again.
+ * install script of the new tag: the app quits, a helper waits for it to exit,
+ * runs install.sh / install.ps1 on the files already downloaded, and opens the
+ * app again. The helper is a detached bash on Linux, a launchd job on macOS
+ * (see macInstallCommand), and an attached PowerShell launcher on Windows (see
+ * windowsInstallCommand) because a detached PowerShell has no console and never
+ * runs.
  */
 
 export const REPO = 'dbx0/executioner'
@@ -205,6 +208,26 @@ export function relaunchTarget(kind: InstallKind, execPath: string): string {
   return execPath
 }
 
+/**
+ * The powershell.exe argv that starts the installer on Windows. It must be
+ * spawned WITHOUT detached:true (see startInstall): on Windows detached:true
+ * means DETACHED_PROCESS, which leaves powershell.exe with no console, and
+ * Windows PowerShell 5.1 then exits 0 without running a single line of the
+ * script. So this is an attached launcher that runs normally and uses
+ * Start-Process to hand the real script to a hidden PowerShell with its own
+ * console. libuv's job object for non-detached children allows silent
+ * breakaway, so that grandchild outlives the app, and it inherits the env
+ * (EXE_PID, EXE_RELAUNCH, EXECUTIONER_DOWNLOAD_DIR, ...) the launcher was
+ * given. The script is passed base64 (utf16le) via -EncodedCommand; base64
+ * has no single quote, so interpolating it inside '...' cannot break out, and
+ * no env value is interpolated (the script reads everything from $env:).
+ */
+export function windowsInstallCommand(): string[] {
+  const encoded = Buffer.from(WINDOWS_SCRIPT, 'utf16le').toString('base64')
+  const launcher = `Start-Process -FilePath powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'`
+  return ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', launcher]
+}
+
 export const MAC_INSTALL_LABEL = 'sh.executioner.updater'
 
 // The variables the install script and the relaunched app need from the app's
@@ -264,14 +287,16 @@ export function startInstall(opts: { kind: InstallKind; tag: string; dir: string
     if (res.status !== 0) throw new Error('could not start the installer')
     return
   }
-  const child =
-    opts.kind === 'windows'
-      ? spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', WINDOWS_SCRIPT], {
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: true,
-          env,
-        })
-      : spawn('/bin/bash', ['-c', POSIX_SCRIPT], { detached: true, stdio: 'ignore', env, cwd: homedir() })
+  if (opts.kind === 'windows') {
+    // Not detached: DETACHED_PROCESS gives powershell.exe no console and it
+    // exits 0 without running anything. The attached launcher starts the real
+    // script in a hidden PowerShell that libuv's job lets break away, so it
+    // outlives the app. Wait-Process on EXE_PID still holds the install until
+    // the app has quit.
+    const child = spawn('powershell.exe', windowsInstallCommand(), { stdio: 'ignore', windowsHide: true, env })
+    child.unref()
+    return
+  }
+  const child = spawn('/bin/bash', ['-c', POSIX_SCRIPT], { detached: true, stdio: 'ignore', env, cwd: homedir() })
   child.unref()
 }

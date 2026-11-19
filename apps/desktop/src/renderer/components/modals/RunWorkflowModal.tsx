@@ -1,13 +1,16 @@
 import type { JSX } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Play, Search, X, Globe, Network, Boxes, Link2 } from 'lucide-react'
+import { Play, Search, Globe, Network, Boxes, Link2 } from 'lucide-react'
 import { useApp } from '../../store.js'
 import { targetsApi, type TargetSummary } from '../../api/targets.js'
 import { backendsApi, type BackendProfile } from '../../api/backends.js'
 import { executionsApi } from '../../api/executions.js'
 import { loadRunBackend, saveRunBackend } from '../../store/persistence.js'
 import { Button } from '../ui/button.js'
+import { Dialog, DialogFooter, DialogHeader } from '../ui/dialog.js'
 import { Input } from '../ui/input.js'
+import { Skeleton } from '../ui/skeleton.js'
+import { Spinner } from '../ui/spinner.js'
 import { Select, type SelectOption } from '../ui/select.js'
 import { cn } from '../../lib/utils.js'
 
@@ -44,6 +47,8 @@ export function RunWorkflowModal({
   const client = useApp((s) => s.client)!
   const activeRoot = useApp((s) => s.activeRoot)
   const [targets, setTargets] = useState<TargetSummary[]>([])
+  // False until the target list has answered, so the list shows placeholders rather than "No targets yet".
+  const [targetsLoaded, setTargetsLoaded] = useState(false)
   const [profiles, setProfiles] = useState<BackendProfile[]>([])
   const [backendId, setBackendId] = useState<string>(() => loadRunBackend(activeRoot))
   const [query, setQuery] = useState('')
@@ -57,6 +62,7 @@ export function RunWorkflowModal({
       .list()
       .then((list) => alive && setTargets(list))
       .catch(() => {})
+      .finally(() => alive && setTargetsLoaded(true))
     void backendsApi(client)
       .list()
       .then((list) => {
@@ -99,92 +105,102 @@ export function RunWorkflowModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" onClick={onClose}>
-      <div
-        className="flex max-h-[72vh] w-[460px] max-w-[92vw] flex-col overflow-hidden rounded-xl border border-border bg-popover shadow-floating"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
-          <span className="truncate text-[14px] font-medium">Run “{name}”</span>
-          <Button variant="ghost" size="icon-sm" className="ml-auto" onClick={onClose} aria-label="Close">
-            <X className="size-4" strokeWidth={1.75} />
-          </Button>
-        </div>
+    <Dialog onClose={onClose} size="sm" className="max-h-[72vh] w-[460px]">
+      <DialogHeader title={`Run “${name}”`} closeButton />
 
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="border-b border-border p-3">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                ref={inputRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && selectedId === undefined && results[0] !== undefined) setSelectedId(results[0].id)
-                  else if (e.key === 'Enter' && selectedId !== undefined) run()
-                }}
-                placeholder="Search targets…"
-                className="h-9 pl-8 font-mono text-[13px]"
-              />
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek p-1.5">
-            {targets.length === 0 ? (
-              <p className="px-2 py-3 text-[13px] text-muted-foreground">No targets yet. Add one on the Targets page.</p>
-            ) : results.length === 0 ? (
-              <p className="px-2 py-3 text-[13px] text-muted-foreground">No targets match “{query}”.</p>
-            ) : (
-              results.map((t) => {
-                const Icon = KIND_ICON[t.kind] ?? Globe
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setSelectedId(t.id)}
-                    onDoubleClick={() => {
-                      setSelectedId(t.id)
-                      run()
-                    }}
-                    className={cn(
-                      'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px]',
-                      t.id === selectedId
-                        ? 'selected-surface'
-                        : 'hover:bg-surface-2',
-                    )}
-                  >
-                    <Icon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-                    <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]">{t.value}</span>
-                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{t.kind}</span>
-                  </button>
-                )
-              })
-            )}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="p-3">
+          <div className="relative">
+            <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && selectedId === undefined && results[0] !== undefined) setSelectedId(results[0].id)
+                else if (e.key === 'Enter' && selectedId !== undefined) run()
+              }}
+              placeholder="Search targets…"
+              aria-label="Search targets"
+              className="pl-9 font-mono text-[13px]"
+            />
           </div>
         </div>
 
-        <div className="border-t border-border px-4 py-3">
-          <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">Run on</label>
-          <Select
-            value={backendId}
-            onValueChange={chooseBackend}
-            options={[
-              { value: 'local', label: 'Local machine' },
-              ...profiles.map((p): SelectOption => ({ value: p.id, label: `${p.name} (${p.kind})` })),
-            ]}
-          />
-        </div>
-
-        <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" disabled={selectedId === undefined || running} onClick={run}>
-            <Play className="size-4" strokeWidth={2} />
-            Run
-          </Button>
+        <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+          {!targetsLoaded ? (
+            <TargetRowsSkeleton />
+          ) : targets.length === 0 ? (
+            <p className="px-2 py-3 text-[13px] text-muted-foreground">No targets yet. Add one on the Targets page.</p>
+          ) : results.length === 0 ? (
+            <p className="px-2 py-3 text-[13px] text-muted-foreground">No targets match “{query}”.</p>
+          ) : (
+            results.map((t) => {
+              const Icon = KIND_ICON[t.kind] ?? Globe
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  aria-pressed={t.id === selectedId}
+                  onClick={() => setSelectedId(t.id)}
+                  onDoubleClick={() => {
+                    setSelectedId(t.id)
+                    run()
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                    t.id === selectedId ? 'bg-glass-active' : 'hover:bg-glass-strong',
+                  )}
+                >
+                  <Icon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+                  <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]">{t.value}</span>
+                  <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{t.kind}</span>
+                </button>
+              )
+            })
+          )}
         </div>
       </div>
+
+      <div className="border-t border-glass-border px-5 py-3.5">
+        <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Run on</label>
+        <Select
+          value={backendId}
+          onValueChange={chooseBackend}
+          ariaLabel="Run on"
+          options={[
+            { value: 'local', label: 'Local machine' },
+            ...profiles.map((p): SelectOption => ({ value: p.id, label: `${p.name} (${p.kind})` })),
+          ]}
+        />
+      </div>
+
+      <DialogFooter>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button size="sm" disabled={selectedId === undefined || running} onClick={run}>
+          {running ? <Spinner size="sm" /> : <Play className="size-3 fill-current" strokeWidth={2} />}
+          Run
+        </Button>
+      </DialogFooter>
+    </Dialog>
+  )
+}
+
+const SKELETON_WIDTHS = ['w-[52%]', 'w-[38%]', 'w-[64%]', 'w-[45%]'] as const
+
+/** The target list while it loads, in the shape of the real rows. */
+function TargetRowsSkeleton(): JSX.Element {
+  return (
+    <div role="status" aria-label="Loading targets">
+      {SKELETON_WIDTHS.map((width, i) => (
+        <div key={i} className="flex items-center gap-2.5 px-2.5 py-2">
+          <Skeleton className="size-4 shrink-0 rounded-full" />
+          <Skeleton className={cn('h-3', width)} />
+          <Skeleton className="ml-auto h-2.5 w-10" />
+        </div>
+      ))}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import type { ExternalMutation } from '../../../store/types.js'
+import { Button } from '../../ui/button.js'
 
 /**
  * The recovery UI for a file that changed underneath an unsaved buffer.
@@ -25,22 +26,18 @@ export function ExternalFileChangeBanner({
   if (mutation === null) {
     if (undoReload === undefined) return null
     return (
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5 text-[11px]">
+      <div className="flex shrink-0 items-center gap-2 border-b border-glass-border bg-glass px-3 py-1.5 text-[11px]">
         <span className="text-muted-foreground">Reloaded from disk.</span>
-        <button
-          type="button"
-          onClick={undoReload}
-          className="rounded border border-border px-1.5 py-0.5 text-foreground hover:bg-accent"
-        >
+        <Button variant="glass" size="xs" onClick={undoReload}>
           Undo
-        </button>
+        </Button>
       </div>
     )
   }
 
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-border bg-destructive/10 px-3 py-1.5 text-[11px]">
-      <TriangleAlert className="size-3.5 shrink-0 text-destructive" strokeWidth={1.75} />
+    <div className="flex shrink-0 items-center gap-2 border-b border-glass-border bg-status-error/10 px-3 py-1.5 text-[11px]">
+      <TriangleAlert className="size-3.5 shrink-0 text-status-error" strokeWidth={1.75} />
       <span className="text-foreground">
         {mutation === 'deleted'
           ? 'This file was deleted on disk. Your unsaved edits are still here.'
@@ -49,29 +46,17 @@ export function ExternalFileChangeBanner({
       <div className="ml-auto flex items-center gap-1">
         {mutation === 'changed' && (
           <>
-            <button
-              type="button"
-              onClick={onCompare}
-              className="rounded border border-border px-1.5 py-0.5 hover:bg-accent"
-            >
-              Compare
-            </button>
-            <button
-              type="button"
-              onClick={onReload}
-              className="rounded border border-border px-1.5 py-0.5 hover:bg-accent"
-            >
-              Reload from disk
-            </button>
+            <Button variant="glass" size="xs" onClick={onCompare}>
+          Compare
+        </Button>
+            <Button variant="glass" size="xs" onClick={onReload}>
+          Reload from disk
+        </Button>
           </>
         )}
-        <button
-          type="button"
-          onClick={onKeepEdits}
-          className="rounded border border-border px-1.5 py-0.5 hover:bg-accent"
-        >
+        <Button variant="glass" size="xs" onClick={onKeepEdits}>
           Keep my edits
-        </button>
+        </Button>
       </div>
     </div>
   )

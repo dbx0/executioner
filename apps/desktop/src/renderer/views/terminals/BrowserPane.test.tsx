@@ -41,6 +41,7 @@ beforeEach(() => {
     sessions: [{ id: 's1', label: 'Claude 1', agent: 'claude' }] as never,
     browserActivity: {},
     browserAsks: {},
+    expandedBrowserAsk: null,
     open: [],
     activeRoot: null,
   })
@@ -104,15 +105,21 @@ describe('BrowserPane', () => {
     expect(screen.getByText('Claude 1 is using this page')).toBeTruthy()
   })
 
-  it('the pane shows the ask banner and Done answers it', () => {
+  it('the pane shows the ask bar, and Respond opens the modal where Submit answers it', () => {
     const answer = vi.fn(async () => undefined)
     useApp.setState({ answerBrowserAsk: answer })
     render(<BrowserPane root="/r" browser={browser} active visible />)
     expect(screen.queryByText('Solve the captcha')).toBeNull()
     setAsk('Solve the captcha')
     expect(screen.getByText('Solve the captcha')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    // The reply box lives in the modal, not on the bar, until Respond opens it.
+    expect(screen.queryByLabelText('Reply to the agent')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Respond' }))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     expect(answer).toHaveBeenCalledWith('b1', undefined)
+    // Submitting closes the modal.
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('the ask banner pushes the page down: the reported bounds start below it, and go back after', () => {
@@ -134,18 +141,35 @@ describe('BrowserPane', () => {
     expect(api.place).toHaveBeenLastCalledWith({ root: '/r', id: 'b1', bounds: { x: 10, y: 40, width: 600, height: 300 } })
   })
 
-  it('Done sends the typed reply, and Enter in the reply does too', () => {
+  it('Submit sends the typed reply, and Enter in the reply does too', () => {
     const answer = vi.fn(async () => undefined)
     useApp.setState({ answerBrowserAsk: answer })
     render(<BrowserPane root="/r" browser={browser} active visible />)
     setAsk('MFA code')
+    fireEvent.click(screen.getByRole('button', { name: 'Respond' }))
     const reply = screen.getByLabelText('Reply to the agent')
     fireEvent.change(reply, { target: { value: ' 123456 ' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
     expect(answer).toHaveBeenLastCalledWith('b1', '123456')
-    fireEvent.change(reply, { target: { value: '654321' } })
-    fireEvent.keyDown(reply, { key: 'Enter' })
+    // Reopen and submit by pressing Enter in the reply.
+    fireEvent.click(screen.getByRole('button', { name: 'Respond' }))
+    const reply2 = screen.getByLabelText('Reply to the agent')
+    fireEvent.change(reply2, { target: { value: '654321' } })
+    fireEvent.keyDown(reply2, { key: 'Enter' })
     expect(answer).toHaveBeenLastCalledWith('b1', '654321')
+  })
+
+  it('Answer later closes the modal but leaves the ask pending', () => {
+    const answer = vi.fn(async () => undefined)
+    useApp.setState({ answerBrowserAsk: answer })
+    render(<BrowserPane root="/r" browser={browser} active visible />)
+    setAsk('Solve the captcha')
+    fireEvent.click(screen.getByRole('button', { name: 'Respond' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Answer later' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(answer).not.toHaveBeenCalled()
+    // The bar is still there to reopen.
+    expect(screen.getByText('Solve the captcha')).toBeTruthy()
   })
 
   it('the address bar and operator actions leave the ask in place', () => {

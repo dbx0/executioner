@@ -23,14 +23,13 @@ export function AppearanceSection(): JSX.Element {
               onClick={() => setTheme(t.id)}
               aria-pressed={selected}
               className={cn(
-                'group flex flex-col gap-2 rounded-lg border p-2.5 text-left transition-colors',
-                selected
-                  ? 'selected-surface border-transparent'
-                  : 'border-border hover:bg-surface-1',
+                'group flex flex-col gap-2 rounded-[14px] border border-glass-border p-2.5 text-left outline-none transition-colors',
+                'focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                selected ? 'bg-glass-active' : 'bg-glass hover:bg-glass-strong',
               )}
             >
               <div
-                className="relative h-14 w-full overflow-hidden rounded-md border border-border"
+                className="relative h-14 w-full overflow-hidden rounded-[9px] border border-glass-border"
                 style={{ background: t.swatch.bg }}
               >
                 <span

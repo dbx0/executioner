@@ -33,7 +33,7 @@ export function remarkStripComments() {
  * The rendered-markdown pane (GitHub-flavoured, raw HTML disabled for safety).
  *
  * `className` replaces the page-like layout the file viewer wants, so a caller
- * rendering markdown into a narrow panel — a finding's description — can drop
+ * rendering markdown into a narrow panel (a finding's description) can drop
  * the centred column and the wide gutters without restyling the prose itself.
  */
 export function MarkdownRender({ source, className }: { source: string; className?: string }): JSX.Element {

@@ -3,6 +3,7 @@ import * as React from 'react'
 import * as SelectPrimitive from '@radix-ui/react-select'
 import { Check, ChevronDown } from 'lucide-react'
 import { cn } from '../../lib/utils.js'
+import { POPOVER_ITEM, POPOVER_SURFACE } from './surface.js'
 
 export interface SelectOption {
   value: string
@@ -24,10 +25,9 @@ export interface SelectProps {
 
 /**
  * A styled dropdown built on `@radix-ui/react-select` (proper listbox
- * semantics, typeahead, keyboard nav, trigger-width matching). The trigger
- * mirrors the app's Input shape; the content mirrors the dropdown-menu surface.
- * Colors use only near-monochrome tokens and the color-mix idiom the rest of
- * the app relies on (hex tokens, so no `bg-foreground/NN` opacity utilities).
+ * semantics, typeahead, keyboard nav, trigger-width matching). The trigger is
+ * a pill on glass, the same shape as the app's Input; the content is the shared
+ * popover surface, and the chosen row keeps the brighter selected fill.
  */
 export function Select({
   value,
@@ -49,8 +49,9 @@ export function Select({
       <SelectPrimitive.Trigger
         {...(ariaLabel === undefined ? {} : { 'aria-label': ariaLabel })}
         className={cn(
-          'flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-2.5 text-[13px] outline-none',
-          'focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+          'flex h-9 w-full items-center justify-between gap-2 rounded-control border border-glass-border bg-glass px-3.5 text-[13px] outline-none transition-colors',
+          'hover:bg-glass-strong data-[state=open]:bg-glass-strong',
+          'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
           'data-[placeholder]:text-muted-foreground [&_svg]:size-4 [&_svg]:shrink-0',
           className,
         )}
@@ -68,7 +69,8 @@ export function Select({
           position="popper"
           sideOffset={4}
           className={cn(
-            'z-50 overflow-hidden rounded-md border border-border bg-popover p-1 text-[13px] text-popover-foreground shadow-floating',
+            POPOVER_SURFACE,
+            'z-[80] animate-fade-in overflow-hidden p-1 text-[13px]',
             '[min-width:var(--radix-select-trigger-width)]',
             contentClassName,
           )}
@@ -80,10 +82,8 @@ export function Select({
                 value={opt.value}
                 {...(opt.disabled === undefined ? {} : { disabled: opt.disabled })}
                 className={cn(
-                  'flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 outline-none',
-                  'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-                  'data-[highlighted]:bg-surface-2 data-[state=checked]:font-medium',
-                  '[&_svg]:size-4 [&_svg]:shrink-0',
+                  POPOVER_ITEM,
+                  'data-[state=checked]:bg-glass-active data-[state=checked]:font-medium [&_svg]:size-4',
                 )}
               >
                 {opt.icon}

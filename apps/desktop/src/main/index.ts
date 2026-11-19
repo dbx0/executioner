@@ -337,8 +337,9 @@ function createWindow(splash?: Splash): void {
     // Hidden until its first paint, so the splash (or nothing) shows meanwhile
     // instead of a blank frame.
     show: false,
-    // Frameless window with a renderer-drawn 36px titlebar (see Titlebar.tsx).
-    // macOS 'hiddenInset' keeps the native traffic lights over our custom bar;
+    // Frameless window with no title bar at all: the renderer's sidebar header
+    // and page toolbars drag the window (see app-shell/Sidebar.tsx).
+    // macOS 'hiddenInset' keeps the native traffic lights over that header;
     // Windows 'hidden' removes the OS title bar so it doesn't double up.
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset' as const }
@@ -346,12 +347,13 @@ function createWindow(splash?: Splash): void {
         ? { titleBarStyle: 'hidden' as const }
         : {}),
     // Linux ignores titleBarStyle; frame:false drops the native frame so the
-    // renderer's own titlebar isn't stacked under a native one.
+    // renderer's own chrome isn't stacked under a native one.
     ...(process.platform === 'linux' ? { frame: false } : {}),
-    // Position the traffic lights vertically centered in the 36px bar
-    // (center 18 - radius 6 = 12), left inset 16.
+    // Position the traffic lights inside the sidebar header row: the sidebar
+    // panel floats 8px in from the window edge and its header is 44px tall, so
+    // the row's center is 30px down (30 - radius 6 = 24), left inset 22.
     ...(process.platform === 'darwin'
-      ? { trafficLightPosition: { x: 16, y: 12 } }
+      ? { trafficLightPosition: { x: 22, y: 24 } }
       : {}),
     webPreferences: {
       preload: join(here, '..', 'preload', 'index.cjs'),
@@ -551,7 +553,20 @@ handle('pick-folder', () => handlers.pickFolder())
 /** The argument an IPC handler takes, as the renderer sends it. */
 type Req<K extends keyof typeof handlers> = Parameters<(typeof handlers)[K]>[0]
 
-handle('open-project', (req: Req<'openProject'>) => handlers.openProject(req))
+// A folder that will not open is an ordinary answer, not a crash: the commonest
+// cause is a folder that was never set up as an engagement. A rejected handler
+// makes Electron print the whole stack to the terminal and prefix the message
+// with "Error invoking remote method", so the failure travels as a value and the
+// preload turns it back into a plain Error for the renderer.
+handle('open-project', async (req: Req<'openProject'>) => {
+  try {
+    return await handlers.openProject(req)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.warn('main', 'Could not open the project', { dir: req.dir, reason: message })
+    return { error: message }
+  }
+})
 listen('close-project', (req: { dir: string }) => handlers.closeProject(req))
 handle('check-agents', () => handlers.checkAgents())
 handle('test-backend', (req: Req<'testBackend'>) => handlers.testBackend(req))

@@ -8,7 +8,9 @@ import { projectApi } from '../../api/project.js'
 import { AddBackendModal } from '../../components/modals/BackendsDialog.js'
 import { Button } from '../../components/ui/button.js'
 import { Select } from '../../components/ui/select.js'
-import { PageHeading } from './parts.js'
+import { Skeleton } from '../../components/ui/skeleton.js'
+import { Tip } from '../../components/ui/tip.js'
+import { IconTile, PageHeading, SettingsCard, SettingsNote } from './parts.js'
 import { refreshLogMasks } from '../../lib/log.js'
 
 // Radix Select forbids an empty-string item value, so "run locally" carries this
@@ -47,34 +49,38 @@ function BackendCard({
   onDelete: () => void
 }): JSX.Element {
   return (
-    <div className="group flex flex-col gap-2 rounded-lg border border-border p-3">
+    <SettingsCard className="group flex flex-col gap-2 p-3">
       <div className="flex items-center gap-2">
-        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-surface-2">
+        <IconTile size="sm">
           <KindIcon kind={profile.kind} />
-        </span>
+        </IconTile>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-medium">{profile.name}</div>
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{kindLabel(profile.kind)}</div>
         </div>
-        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <Button variant="ghost" size="icon-xs" aria-label="Edit" onClick={onEdit}>
-            <Pencil className="size-3.5 text-muted-foreground" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Delete"
-            className="hover:text-status-error"
-            onClick={onDelete}
-          >
-            <Trash2 className="size-3.5 text-muted-foreground" />
-          </Button>
+        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          <Tip label="Edit">
+            <Button variant="ghost" size="icon-xs" aria-label="Edit" onClick={onEdit}>
+              <Pencil className="size-3.5 text-muted-foreground" />
+            </Button>
+          </Tip>
+          <Tip label="Delete">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Delete"
+              className="hover:text-status-error"
+              onClick={onDelete}
+            >
+              <Trash2 className="size-3.5 text-muted-foreground" />
+            </Button>
+          </Tip>
         </div>
       </div>
       <div className="truncate font-mono text-[11px] text-muted-foreground" title={summary(profile)}>
         {summary(profile)}
       </div>
-    </div>
+    </SettingsCard>
   )
 }
 
@@ -82,6 +88,8 @@ function BackendCard({
 function BackendsManager({ client }: { client: AxiosInstance }): JSX.Element {
   const api = backendsApi(client)
   const [profiles, setProfiles] = useState<BackendProfile[]>([])
+  // False until the first list settles, so the empty state is not shown over a fetch in flight.
+  const [loaded, setLoaded] = useState(false)
   const [defaultId, setDefaultId] = useState(LOCAL)
   const [modal, setModal] = useState<{ mode: 'new' } | { mode: 'edit'; profile: BackendProfile } | null>(null)
 
@@ -90,6 +98,7 @@ function BackendsManager({ client }: { client: AxiosInstance }): JSX.Element {
       .list()
       .then(setProfiles)
       .catch(() => {})
+      .finally(() => setLoaded(true))
   }
   useEffect(() => {
     refresh()
@@ -119,17 +128,17 @@ function BackendsManager({ client }: { client: AxiosInstance }): JSX.Element {
     <div>
       <div className="mb-3 flex items-center justify-between">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Backends</div>
-        <Button variant="outline" size="sm" onClick={() => setModal({ mode: 'new' })}>
+        <Button variant="glass" size="sm" onClick={() => setModal({ mode: 'new' })}>
           <Plus className="size-4" strokeWidth={2} />
           Add backend
         </Button>
       </div>
 
       {profiles.length > 0 && (
-        <div className="mb-4 rounded-lg border border-border p-3">
-          <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
+        <SettingsCard className="mb-4 overflow-visible p-3">
+          <div className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
             Default backend for this engagement
-          </label>
+          </div>
           <Select
             ariaLabel="Default backend"
             value={defaultId}
@@ -143,11 +152,26 @@ function BackendsManager({ client }: { client: AxiosInstance }): JSX.Element {
             For this engagement only: where its scheduled runs and the assistant run a workflow when they
             don&apos;t name a backend of their own. Other engagements keep their own default.
           </p>
-        </div>
+        </SettingsCard>
       )}
 
-      {profiles.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border p-6 text-center">
+      {!loaded ? (
+        <div role="status" aria-label="Loading backends" className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {[0, 1].map((i) => (
+            <SettingsCard key={i} className="flex flex-col gap-2 p-3">
+              <div className="flex items-center gap-2">
+                <Skeleton className="size-8 rounded-[10px]" />
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Skeleton className="h-3.5 w-28" />
+                  <Skeleton className="h-2.5 w-12" />
+                </div>
+              </div>
+              <Skeleton className="h-3 w-3/4" />
+            </SettingsCard>
+          ))}
+        </div>
+      ) : profiles.length === 0 ? (
+        <div className="rounded-[14px] border border-dashed border-glass-border p-6 text-center">
           <p className="text-[13px] text-muted-foreground">No backends yet.</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Add an SSH host or Docker image to run commands somewhere other than this machine.
@@ -193,10 +217,10 @@ export function ConnectionsSection(): JSX.Element {
         description="Where commands run: the local engine, and any SSH or Docker backends. Saved connections follow you into every engagement."
       />
 
-      <div className="mb-6 flex items-center gap-3 rounded-lg border border-border p-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-md bg-surface-2">
+      <SettingsCard className="mb-6 flex items-center gap-3 p-3">
+        <IconTile>
           <Plug className="size-4 text-muted-foreground" strokeWidth={1.75} />
-        </span>
+        </IconTile>
         <div className="min-w-0 flex-1">
           <div className="text-[13px] font-medium">Engine</div>
           <div className="text-xs text-muted-foreground">
@@ -204,12 +228,12 @@ export function ConnectionsSection(): JSX.Element {
           </div>
         </div>
         <div className="shrink-0 text-right font-mono text-[12px] text-muted-foreground">
-          {connection === null ? '—' : `127.0.0.1:${connection.port}`}
+          {connection === null ? 'offline' : `127.0.0.1:${connection.port}`}
         </div>
-      </div>
+      </SettingsCard>
 
       {client === null ? (
-        <p className="text-xs text-muted-foreground">Open an engagement to configure backends.</p>
+        <SettingsNote>Open an engagement to configure backends.</SettingsNote>
       ) : (
         <BackendsManager client={client} />
       )}

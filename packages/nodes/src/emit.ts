@@ -32,6 +32,7 @@ export interface EmitResult {
  * Turn parsed records into target upserts and fact records. Placeholders resolve
  * against record, target and params. A rule whose value (or any fact field)
  * cannot resolve is skipped, not fatal: tools emit partial rows all the time.
+ * A fact rule can also name fields in `skip_if_empty` that must not be blank.
  */
 export function applyEmit(
   records: Record<string, unknown>[],
@@ -67,6 +68,7 @@ export function applyEmit(
         data[key] = resolved
       }
       if (missing) continue
+      if (rule.skip_if_empty.some((key) => data[key] === undefined || data[key] === '')) continue
       facts.push({
         targetId: ctx.target.id,
         kind: rule.kind,

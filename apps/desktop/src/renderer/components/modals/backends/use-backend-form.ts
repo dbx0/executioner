@@ -93,7 +93,7 @@ export function useBackendForm({
   /**
    * Password auth: generate a keypair, install its public key on the host with
    * the one-time password, verify key-auth works, then save a normal SSH profile
-   * pointing at the generated identity file. The password is discarded — never
+   * pointing at the generated identity file. The password is discarded and never
    * sent to the profile create/update. A successful enroll IS the gate: there is
    * no "save anyway" here because you cannot save without a working key.
    */
