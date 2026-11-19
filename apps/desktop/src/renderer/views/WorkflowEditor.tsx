@@ -1,4 +1,5 @@
 import type { JSX } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
 import { useMemo, useRef, useState } from 'react'
 import { MiniMap, ReactFlowProvider, useEdgesState, useNodesState, type ReactFlowInstance } from 'reactflow'
 import { useApp } from '../store.js'
@@ -6,6 +7,10 @@ import { workflowsApi } from '../api/workflows.js'
 import { executionsApi } from '../api/executions.js'
 import { AddBackendModal } from '../components/modals/BackendsDialog.js'
 import { ConfirmModal } from '../components/modals/ConfirmModal.js'
+import { Button } from '../components/ui/button.js'
+import { DialogBody, DialogFooter, DialogHeader } from '../components/ui/dialog.js'
+import { parseWorkflowFile } from '../lib/workflow-io.js'
+import { notify } from '../lib/toast.js'
 import { GlassPanel } from '../components/ui/glass-panel.js'
 import { Page } from '../components/ui/page.js'
 import { LoadingState } from '../components/ui/spinner.js'
@@ -33,6 +38,8 @@ import { RunPanel } from './workflow-editor/RunPanel.js'
 import { RunStatus } from './workflow-editor/RunStatus.js'
 import { StepControlBar } from './workflow-editor/StepControlBar.js'
 import { NodeInspector } from './workflow-editor/NodeInspector.js'
+
+type ImportedWorkflow = NonNullable<ReturnType<typeof parseWorkflowFile>>
 
 interface WorkflowEditorProps {
   workflowId: string | 'new'
@@ -70,12 +77,14 @@ function Editor({ workflowId: initialWorkflowId, onBack }: WorkflowEditorProps):
   const [renaming, setRenaming] = useState(false)
   const [backendsOpen, setBackendsOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [pendingPaste, setPendingPaste] = useState<ImportedWorkflow | null>(null)
   const [showValidation, setShowValidation] = useState(false)
   // The AI workflow assistant panel, toggled from the toolbar.
   const [assistantOpen, setAssistantOpen] = useState(false)
 
   const rfRef = useRef<ReactFlowInstance | null>(null)
   const importRef = useRef<HTMLInputElement | null>(null)
+  const pasteTriggerRef = useRef<HTMLElement | null>(null)
   // Set true just before applying an undo/redo/reset snapshot so the history
   // recorder skips the resulting nodes/edges change (avoids re-recording it).
   const applyingHistory = useRef(false)
@@ -125,6 +134,38 @@ function Editor({ workflowId: initialWorkflowId, onBack }: WorkflowEditorProps):
   const newNodeIds = useNewIds(nodeIds, doc.canvasGen, doc.canvasGen !== null)
   const selected = nodes.find((n) => n.id === selectedId)
 
+  const importPastedWorkflow = (workflow: ImportedWorkflow): void => {
+    try {
+      doc.importWorkflow(workflow)
+      notify.success('Workflow imported. Save to keep it.')
+    } catch {
+      notify.error('Import failed. Could not import workflow JSON from the clipboard.')
+    }
+  }
+
+  const onPasteImport = async (): Promise<void> => {
+    pasteTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    try {
+      const text = window.executioner?.clipboardRead !== undefined
+        ? await window.executioner.clipboardRead()
+        : await navigator.clipboard.readText()
+      const parsed = parseWorkflowFile(text.replace(/^\uFEFF/, ''))
+      if (parsed === null) {
+        notify.error('Import failed. Expected workflow JSON with graph.nodes and graph.edges arrays.')
+        return
+      }
+      const canvasNodes = rfRef.current?.getNodes() ?? nodes
+      const canvasEdges = rfRef.current?.getEdges() ?? edges
+      if (canvasNodes.length > 0 || canvasEdges.length > 0) {
+        setPendingPaste(parsed)
+        return
+      }
+      importPastedWorkflow(parsed)
+    } catch {
+      notify.error('Import failed. Could not import workflow JSON from the clipboard.')
+    }
+  }
+
   return (
     <Page>
       <EditorToolbar
@@ -149,6 +190,7 @@ function Editor({ workflowId: initialWorkflowId, onBack }: WorkflowEditorProps):
         onDuplicateWorkflow={() => void doc.duplicateWorkflow()}
         onRequestDelete={() => setDeleteConfirm(true)}
         onExport={doc.exportWorkflow}
+        onPasteImport={() => void onPasteImport()}
         onImportFile={(e) => void doc.importFile(e)}
         onUndo={undo}
         onRedo={redo}
@@ -276,6 +318,42 @@ function Editor({ workflowId: initialWorkflowId, onBack }: WorkflowEditorProps):
       {backendsOpen && (
         <AddBackendModal client={client} onClose={() => setBackendsOpen(false)} onSaved={backend.reloadProfiles} />
       )}
+
+      <Dialog.Root open={pendingPaste !== null} onOpenChange={(open) => { if (!open) setPendingPaste(null) }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[75] bg-black/55 backdrop-blur-[2px]" />
+          <Dialog.Content
+            className="fixed left-1/2 top-1/2 z-[76] w-[420px] max-w-[92vw] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-panel border border-glass-border bg-popover text-popover-foreground shadow-floating outline-none"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              pasteTriggerRef.current?.focus()
+            }}
+          >
+            <DialogHeader title="Replace current workflow?" />
+            <DialogBody>
+              <Dialog.Description className="text-[13px] text-muted-foreground">
+                Pasting replaces the open canvas. Unsaved changes will be lost. This cannot be undone.
+              </Dialog.Description>
+            </DialogBody>
+            <DialogFooter>
+              <Dialog.Close asChild>
+                <Button variant="ghost" size="sm">Cancel</Button>
+              </Dialog.Close>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  if (pendingPaste === null) return
+                  importPastedWorkflow(pendingPaste)
+                  setPendingPaste(null)
+                }}
+              >
+                Replace workflow
+              </Button>
+            </DialogFooter>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {deleteConfirm && (
         <ConfirmModal

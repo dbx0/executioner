@@ -182,6 +182,13 @@ export function useWorkflowDocument({
     downloadJson(exportFileName(name), { name, graph: currentGraph() })
   }
 
+  const importWorkflow = (parsed: NonNullable<ReturnType<typeof parseWorkflowFile>>): void => {
+    const hydrated = hydrateGraph(parsed.graph, catalog)
+    setWorkflowId(undefined)
+    setName(parsed.name ?? 'Imported workflow')
+    replaceCanvas(hydrated.nodes, hydrated.edges)
+  }
+
   const importFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -193,10 +200,7 @@ export function useWorkflowDocument({
         notify.error('Import failed. Not a valid workflow file.')
         return
       }
-      const hydrated = hydrateGraph(parsed.graph, catalog)
-      setWorkflowId(undefined)
-      setName(parsed.name ?? 'Imported workflow')
-      replaceCanvas(hydrated.nodes, hydrated.edges)
+      importWorkflow(parsed)
     } catch {
       notify.error('Import failed. Could not read the file.')
     } finally {
@@ -221,5 +225,6 @@ export function useWorkflowDocument({
     duplicateWorkflow,
     exportWorkflow,
     importFile,
+    importWorkflow,
   }
 }

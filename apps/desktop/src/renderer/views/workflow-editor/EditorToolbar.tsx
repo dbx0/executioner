@@ -1,5 +1,5 @@
 import type { JSX, MutableRefObject, ReactNode } from 'react'
-import { Play, Save, Pencil, Network, Copy, Trash2, Download, Upload, Undo2, Redo2, ChevronLeft, Sparkles } from 'lucide-react'
+import { Play, Save, Pencil, Network, Copy, Trash2, Download, Upload, ClipboardPaste, Undo2, Redo2, ChevronLeft, Sparkles } from 'lucide-react'
 import { Button } from '../../components/ui/button.js'
 import { Input } from '../../components/ui/input.js'
 import { PageToolbar } from '../../components/ui/page.js'
@@ -85,6 +85,7 @@ export function EditorToolbar({
   onDuplicateWorkflow,
   onRequestDelete,
   onExport,
+  onPasteImport,
   onImportFile,
   onUndo,
   onRedo,
@@ -115,6 +116,7 @@ export function EditorToolbar({
   onDuplicateWorkflow: () => void
   onRequestDelete: () => void
   onExport: () => void
+  onPasteImport: () => void
   onImportFile: (e: React.ChangeEvent<HTMLInputElement>) => void
   onUndo: () => void
   onRedo: () => void
@@ -233,6 +235,9 @@ export function EditorToolbar({
         </CapsuleAction>
         <CapsuleAction label="Import workflow" pending={importing} onClick={() => importRef.current?.click()}>
           <Upload className="size-3.5" strokeWidth={1.75} />
+        </CapsuleAction>
+        <CapsuleAction label="Paste workflow JSON" onClick={onPasteImport}>
+          <ClipboardPaste className="size-3.5" strokeWidth={1.75} />
         </CapsuleAction>
       </Capsule>
       {/* Never shown: it only opens the system file dialog for Import. */}
